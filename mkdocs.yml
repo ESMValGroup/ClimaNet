@@ -1,0 +1,55 @@
+site_name: "eso4clima-wp1-prototype"
+repo_url: https://github.com/ESMValGroup/eso4clima-wp1-prototype/
+repo_name: eso4clima-wp1-prototype
+
+nav:
+  - Home: index.md
+  - API Reference:
+      - st_encoder_decoder.py: api/st_encoder_decoder.md
+      - utils.py: api/utils.md
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+      primary: blue
+      accent: white
+
+    # Palette toggle for dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+      primary: black
+      accent: pink
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - content.code.copy
+
+plugins:
+- search
+- mkdocstrings:
+    handlers:
+      python:
+        options:
+          docstring_style: numpy
+          docstring_options:
+            ignore_init_summary: no
+          merge_init_into_class: yes
+          show_submodules: no
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+
+extra:
+  generator: false
+  version:
+    provider: mike
