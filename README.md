@@ -1,5 +1,23 @@
 # eso4clima-wp1-prototype
 
+[![License](https://img.shields.io/github/license/ESMValGroup/eso4clima-wp1-prototype)](https://opensource.org/licenses/Apache-2.0)
+
+## Installation
+
+We recommend using `uv` to manage the dependencies needed. Please refer to the [uv documentation](https://docs.astral.sh/uv/getting-started/installation/) for installation instructions of `uv`.
+
+To run this workflow, first clone this repository. Inside the repository, run:
+
+```sh
+uv sync
+```
+
+This will create a virtual environment in the `.venv` folder with all the required dependencies. To activate the virtual environment, run:
+
+```sh
+source .venv/bin/activate
+```
+
 ## Spatio Temporal Model (class `SpatioTemporalModel`):
 
 **Summary:**
