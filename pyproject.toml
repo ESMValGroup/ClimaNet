@@ -1,0 +1,25 @@
+[project]
+name = "eso4clima-wp1-prototype"
+version = "0.1.0"
+description = "Machine Learning workflow predicting satellite observations from climate models."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "einops>=0.8.2",
+    "jupyterlab>=4.5.3",
+    "torch>=2.10.0",
+    "xarray>=2025.12.0",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.1",
+    "pytest>=9.0.2",
+    "ruff>=0.14.14",
+]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-jupyter>=0.25.1",
+    "mkdocs-material>=9.7.1",
+    "mkdocstrings[python]>=1.0.2",
+]
