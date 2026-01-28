@@ -23,6 +23,10 @@ authors:
     affiliation: Netherlands eScience Center
     email: o.ku@esciencecenter.nl
     orcid: 'https://orcid.org/0000-0002-5373-5209'
+  - given-names: Bouwe
+    family-names: Andela
+    email: b.andela@esciencecenter.nl
+    orcid: 'https://orcid.org/0000-0001-9005-8940'
 keywords:
   - ERA5
   - Climate model
