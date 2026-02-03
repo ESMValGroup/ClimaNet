@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "einops>=0.8.2",
     "jupyterlab>=4.5.3",
+    "netcdf4>=1.7.4",
     "torch>=2.10.0",
     "xarray>=2025.12.0",
 ]
