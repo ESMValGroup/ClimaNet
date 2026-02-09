@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 
 
-class SpatioTemporalPatchDataset(Dataset):
+class SSTDataset(Dataset):
     """Dataset for spatiotemporal patches from NetCDF files."""
 
     def __init__(
@@ -33,14 +33,23 @@ class SpatioTemporalPatchDataset(Dataset):
         self.transform = transform
 
         # Open datasets
-        daily_datasets = [xr.open_dataset(f) for f in daily_files]
-        self.daily_ds = xr.concat(daily_datasets, dim="time")
+        self.daily_ds = xr.open_mfdataset(
+            daily_files,
+            chunks={"time": 1, "lat": self.patch_size[0], "lon": self.patch_size[1]},
+        )
 
-        monthly_datasets = [xr.open_dataset(f) for f in monthly_files]
-        self.monthly_ds = xr.concat(monthly_datasets, dim="time")
+        self.monthly_ds = xr.open_mfdataset(
+            monthly_files,
+            chunks={"time": 1, "lat": self.patch_size[0], "lon": self.patch_size[1]},
+        )
 
         if mask_file:
             self.mask_ds = xr.open_dataset(mask_file)
+            # Mask should only have spatial dimensions, discard time if present
+            if "time" in self.mask_ds.dims:
+                self.mask_ds = self.mask_ds.isel(time=0)
+        else:
+            self.mask_ds = None
 
         # Apply spatial subset if provided
         if spatial_subset:
@@ -49,21 +58,19 @@ class SpatioTemporalPatchDataset(Dataset):
             if mask_file:
                 self.mask_ds = self.mask_ds.sel(**spatial_subset)
 
+        # Expand dimensions to include 'bands'
+        self.daily_ds = self.daily_ds.expand_dims("bands", axis=0)
+        self.monthly_ds = self.monthly_ds.expand_dims("bands", axis=0)
+
         # Calculate patch indices
         self.patches = self._compute_patch_indices()
-
-        # Load mask if available
-        if mask_file:
-            self.mask = self.mask_ds[mask_var].values
-        else:
-            self.mask = None
 
     def _compute_patch_indices(self):
         """Compute starting indices for all patches."""
         # Get spatial dimensions
-        lat_dim = self.daily_ds.dims["lat"]
-        lon_dim = self.daily_ds.dims["lon"]
-        time_dim = self.monthly_ds.dims["time"]  # Use monthly for samples
+        lat_dim = self.daily_ds.sizes["lat"]
+        lon_dim = self.daily_ds.sizes["lon"]
+        time_dim = self.monthly_ds.sizes["time"]  # Use monthly for samples
 
         patches = []
         stride = self.patch_size[0] - self.overlap
@@ -88,21 +95,25 @@ class SpatioTemporalPatchDataset(Dataset):
         # Get daily data (all days in month)
         # Assuming monthly timestamp corresponds to days in that month
         daily_patch = (
-            self.daily_ds[self.daily_var].isel(lat=lat_slice, lon=lon_slice).values
+            self.daily_ds[self.daily_var].isel(lat=lat_slice, lon=lon_slice).to_numpy()
         )
 
         # Get monthly target
         monthly_patch = (
             self.monthly_ds[self.monthly_var]
             .isel(time=t, lat=lat_slice, lon=lon_slice)
-            .values
+            .to_numpy()
         )
 
         # Get mask patch if available
-        if self.mask is not None:
-            mask_patch = self.mask[lat_slice, lon_slice]
+        if self.mask_ds is not None:
+            mask_patch = (
+                self.mask_ds[self.mask_var]
+                .isel(lat=lat_slice, lon=lon_slice)
+                .to_numpy()
+            )
         else:
-            mask_patch = np.ones_like(monthly_patch, dtype=bool)
+            mask_patch = np.ones_like(monthly_patch.isel(time=0), dtype=bool)
 
         # Convert to tensors
         sample = {
