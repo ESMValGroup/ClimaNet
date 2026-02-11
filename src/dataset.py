@@ -2,18 +2,17 @@ import xarray as xr
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from pathlib import Path
-from typing import List, Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict
 
 
 class SSTDataset(Dataset):
-    """Dataset for spatiotemporal patches from NetCDF files."""
+    """Dataset for spatiotemporal patches for Sea Surface Temperature (SST)."""
 
     def __init__(
         self,
-        daily_files: List[Path],
-        monthly_files: List[Path],
-        mask_file: Optional[Path] = None,
+        daily_ds: xr.Dataset,
+        monthly_ds: xr.Dataset,
+        mask_ds: xr.Dataset = None,
         daily_var: str = "ts",
         monthly_var: str = "ts",
         mask_var: str = "lsm",
@@ -22,9 +21,9 @@ class SSTDataset(Dataset):
         spatial_subset: Optional[Dict[str, slice]] = None,
         transform=None,
     ):
-        self.daily_files = daily_files
-        self.monthly_files = monthly_files
-        self.mask_file = mask_file
+        self.daily_ds = daily_ds
+        self.monthly_ds = monthly_ds
+        self.mask_ds = mask_ds
         self.daily_var = daily_var
         self.monthly_var = monthly_var
         self.mask_var = mask_var
@@ -32,61 +31,28 @@ class SSTDataset(Dataset):
         self.overlap = overlap
         self.transform = transform
 
-        # Open datasets
-        self.daily_ds = xr.open_mfdataset(
-            daily_files,
-            chunks={"time": 1, "lat": self.patch_size[0], "lon": self.patch_size[1]},
-        )
-
-        self.monthly_ds = xr.open_mfdataset(
-            monthly_files,
-            chunks={"time": 1, "lat": self.patch_size[0], "lon": self.patch_size[1]},
-        )
-
-        if mask_file:
-            self.mask_ds = xr.open_dataset(mask_file)
-            # Mask should only have spatial dimensions, discard time if present
-            if "time" in self.mask_ds.dims:
-                self.mask_ds = self.mask_ds.isel(time=0)
-        else:
-            self.mask_ds = None
-
-        # Apply spatial subset if provided
-        if spatial_subset:
-            self.daily_ds = self.daily_ds.sel(**spatial_subset)
-            self.monthly_ds = self.monthly_ds.sel(**spatial_subset)
-            if mask_file:
-                self.mask_ds = self.mask_ds.sel(**spatial_subset)
-
-        # Expand dimensions to include 'bands'
-        self.daily_ds = self.daily_ds.expand_dims("bands", axis=0)
-        self.monthly_ds = self.monthly_ds.expand_dims("bands", axis=0)
-
-        # Calculate patch indices
-        self.patches = self._compute_patch_indices()
-
-    def _compute_patch_indices(self):
-        """Compute starting indices for all patches."""
-        # Get spatial dimensions
+        # Precompute lazy index mapping for patches
         lat_dim = self.daily_ds.sizes["lat"]
         lon_dim = self.daily_ds.sizes["lon"]
-        time_dim = self.monthly_ds.sizes["time"]  # Use monthly for samples
+        self.time_dim = self.monthly_ds.sizes["time"]  # Use monthly for samples
 
-        patches = []
-        stride = self.patch_size[0] - self.overlap
-
-        for t in range(time_dim):
-            for i in range(0, lat_dim - self.patch_size[0] + 1, stride):
-                for j in range(0, lon_dim - self.patch_size[1] + 1, stride):
-                    patches.append((t, i, j))
-
-        return patches
+        self.stride = self.patch_size[0] - self.overlap
+        self.n_i = (lat_dim - self.patch_size[0]) // self.stride + 1
+        self.n_j = (lon_dim - self.patch_size[1]) // self.stride + 1
+        self.total_len = self.time_dim * self.n_i * self.n_j
 
     def __len__(self):
-        return len(self.patches)
+        return self.total_len
 
     def __getitem__(self, idx):
-        t, i, j = self.patches[idx]
+        if idx < 0 or idx >= self.total_len:
+            raise IndexError("Index out of range")
+
+        per_t = self.n_i * self.n_j
+        t, rem = divmod(idx, per_t)
+        i_idx, j_idx = divmod(rem, self.n_j)
+        i = i_idx * self.stride
+        j = j_idx * self.stride
 
         # Extract spatial patch
         lat_slice = slice(i, i + self.patch_size[0])
@@ -127,9 +93,3 @@ class SSTDataset(Dataset):
             sample = self.transform(sample)
 
         return sample
-
-    def close(self):
-        self.daily_ds.close()
-        self.monthly_ds.close()
-        if self.mask_file:
-            self.mask_ds.close()
