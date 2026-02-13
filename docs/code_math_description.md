@@ -1,6 +1,4 @@
-# eso4clima-wp1-prototype
-
-## Spatio Temporal Model (class `SpatioTemporalModel`):
+# Spatio Temporal Model (class `SpatioTemporalModel`)
 
 **Summary:**
 - Combines video encoder, temporal attention, spatial transformer, and decoder
@@ -15,31 +13,23 @@ The model takes daily SST (or similar) data in video format: `x ∈ ℝ^{B × 1 
 H × W}` and a `daily_mask` indicating missing pixels. It also takes
 `land_mask_patch` indicating land regions in the output.
 
-1. Patch embedding:
+```bash
+# 1. Patch embedding:
+X (VideoEncoder)---------> X_patch
 
-                `X (VideoEncoder)---------> X_patch`
+# 2. Add temporal encoding +
+# 3. Temporal aggregation:
+X_patch + PE (TemporalAttentionAggregator)---------> X_temp_agg
 
-2. Temporal aggregation:
+# 4. Add spatial encoding +
+# 5. Spatial transformer:
+X_temp_agg + PE (SpatialTransformer) ---------> X_mixed
 
-Temporal attention summarizes daily patches into a monthly token per spatial location:
+# 6. Decode to original resolution:
+X_mixed (MonthlyConvDecoder)---------> Output
+```
 
-                `X_patch (TemporalAttentionAggregator)---------> X_temp_agg`
-
-3. Add spatial encoding + spatial transformer:
-
-Spatial transformer mixes information across all spatial patches:
-
-               ` X_temp_agg + PE ---------> X_mixed`
-
-4. Decode to original resolution:
-
-Decoder upsamples tokens to full-resolution map, optionally masking land areas:
-
-                `X_mixed (MonthlyConvDecoder)---------> Output`
-
-## Step-by-step code description:
-
-1. Video Encoder (class `VideoEncoder`):
+## 1. Video Encoder (class `VideoEncoder`)
 
 **Summary:**
 
@@ -67,8 +57,8 @@ convolution, see
 Let the patch size be: `(Pt, Ph, Pw)`. The convolution uses: `kernel size = (Pt,
 Ph, Pw)`, `stride = (Pt, Ph, Pw)`. This means each convolution output
 corresponds to one patch and patches do not overlap. Resulting shape: `z ∈ R^{B
-× D × T' × H' × W'}` where: D = embed_dim, T' = T / Pt, H' = H / Ph, W' = W /
-Pw. Each (t', h', w') location is a patch embedding vector of length D.
+× D × T' × H' × W'}` where: `D = embed_dim`, `T' = T / Pt, H' = H / Ph, W' = W /
+Pw`. Each `(t', h', w')` location is a patch embedding vector of length D.
 
 We flatten the 3D grid of patches into a sequence: `N = T' × H' × W'`. So each
 video becomes a sequence of patch embeddings, just like tokens in a Transformer.
@@ -85,7 +75,7 @@ The final output is: `{B × N_patches × embed_dim}`. Each element
 represents a spatio-temporal video patch, enriched with: visual information,
 knowledge of which pixels were valid or missing.
 
-2. Temporal positional encoding (class `TemporalPositionalEncoding`):
+## 2. Temporal positional encoding (class `TemporalPositionalEncoding`)
 
 **Summary:**
 
@@ -112,7 +102,7 @@ requested temporal length `T`, we have `output = PE[0:T]` and resulting shape is
 `(T, embed_dim)`. No parameters are learned and no computation depends on input
 data.
 
-3. Temporal Attention Aggregator (class `TemporalAttentionAggregator`):
+## 3. Temporal Attention Aggregator (class `TemporalAttentionAggregator`)
 
 This is a temporal attention pooling over sequences of tokens.
 
@@ -161,7 +151,7 @@ represents importance of each temporal token for this patch.
 Then we aggregate temporal tokens by weighted sum over the temporal dimension.
 Result is one token per spatial patch.
 
-4. Spatial Positional Encoding (class `SpatialPositionalEncoding2D`):
+## 4. Spatial Positional Encoding (class `SpatialPositionalEncoding2D`)
 
 **Summary:**
 
@@ -181,7 +171,7 @@ encoding for each spatial location is a combination of sine and cosine functions
 of different frequencies along height and width. This allows the model to know
 the spatial position of each token when added to the spatial tokens.
 
-5. Spatial Transformer (class `SpatialTransformer`):
+## 5. Spatial Transformer (class `SpatialTransformer`)
 
 It mixes spatial patch tokens using multi-head self-attention.
 
@@ -208,7 +198,7 @@ feature interactions. This is useful for spatial data and allows:
 Then, `nn.TransformerEncoder` stacks multiple encoder layers sequentially; it's
 a container that repeats the same transformer block `depth` times.
 
-6. Monthly Convolution Decoder (class `MonthlyConvDecoder`):
+## 6. Monthly Convolution Decoder (class `MonthlyConvDecoder`)
 
 **Summary:**
 
@@ -249,7 +239,7 @@ A single `Conv2d(64, 1, kernel_size=1)` could work, but the extra layers provide
 Then we apply scale, bias, and (optional) land mask to get the final output (he
 reconstructed 2D map (e.g., SST) for each batch).
 
-## References:
+## References
 
 - [Attention is all you need](https://doi.org/10.48550/arXiv.1706.03762)
 - [VideoMAE: Masked Autoencoders are Data-Efficient Learners for Self-Supervised Video Pre-Training](https://doi.org/10.48550/arXiv.2203.12602)
