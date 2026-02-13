@@ -18,44 +18,46 @@ This will create a virtual environment in the `.venv` folder with all the requir
 source .venv/bin/activate
 ```
 
-## Spatio Temporal Model (class `SpatioTemporalModel`):
+<!-- start-spatio-temporal -->
+## Spatio Temporal Model Architecture
 
-**Summary:**
+![Model Architecture](docs/figs/thematic.png)
+
+The model takes daily SST (or similar) data in video format: `x ∈ ℝ^{B × 1 × T ×
+H × W}` and a `daily_mask` indicating missing pixels. It also takes
+`land_mask_patch` indicating land regions in the output. The model does of the
+ following tasks:
+
 - Combines video encoder, temporal attention, spatial transformer, and decoder
-- Encodes video into spatio-temporal patches
+- Encodes 3D data (space, time) into spatio-temporal patches
 - Aggregates temporal information per spatial patch
 - Mixes spatial features across patches
 - Decodes back to original spatial resolution
 
-**Detailed process:**
+The architecture consists of the following steps:
 
-The model takes daily SST (or similar) data in video format: `x ∈ ℝ^{B × 1 × T ×
-H × W}` and a `daily_mask` indicating missing pixels. It also takes
-`land_mask_patch` indicating land regions in the output.
+```bash
+# 1. Patch embedding:
+X (VideoEncoder)---------> X_patch
 
-1. Patch embedding:
+# 2. Add temporal encoding +
+# 3. Temporal aggregation:
+X_patch + PE (TemporalAttentionAggregator)---------> X_temp_agg
 
-                `X (VideoEncoder)---------> X_patch`
+# 4. Add spatial encoding +
+# 5. Spatial transformer:
+X_temp_agg + PE (SpatialTransformer) ---------> X_mixed
 
-2. Temporal aggregation:
+# 6. Decode to original resolution:
+X_mixed (MonthlyConvDecoder)---------> Output
+```
 
-Temporal attention summarizes daily patches into a monthly token per spatial location:
+## Model architecture description
 
-                `X_patch (TemporalAttentionAggregator)---------> X_temp_agg`
+We explain the model architecture in more detail in the [code and math
+description](docs/code_math_description.md) document.
 
-3. Add spatial encoding + spatial transformer:
-
-Spatial transformer mixes information across all spatial patches:
-
-               ` X_temp_agg + PE ---------> X_mixed`
-
-4. Decode to original resolution:
-
-Decoder upsamples tokens to full-resolution map, optionally masking land areas:
-
-                `X_mixed (MonthlyConvDecoder)---------> Output`
-
-## References:
+## References
 
 - [Attention is all you need](https://doi.org/10.48550/arXiv.1706.03762)
 - [VideoMAE: Masked Autoencoders are Data-Efficient Learners for Self-Supervised Video Pre-Training](https://doi.org/10.48550/arXiv.2203.12602)

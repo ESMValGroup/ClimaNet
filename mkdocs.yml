@@ -3,7 +3,8 @@ repo_url: https://github.com/ESMValGroup/eso4clima-wp1-prototype/
 repo_name: eso4clima-wp1-prototype
 
 nav:
-  - Home: index.md
+  - Introduction: index.md
+  - Examples: examples.md
   - API Reference:
       - st_encoder_decoder.py: api/st_encoder_decoder.md
       - utils.py: api/utils.md
@@ -31,8 +32,10 @@ theme:
     - navigation.tabs
     - navigation.tabs.sticky
     - content.code.copy
+    - content.tabs
 
 plugins:
+- include-markdown
 - search
 - mkdocstrings:
     handlers:
@@ -48,6 +51,7 @@ markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences
+  - admonition
 
 extra:
   generator: false
