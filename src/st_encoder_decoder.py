@@ -430,7 +430,7 @@ class SpatioTemporalModel(nn.Module):
         super().__init__()
         self.encoder = VideoEncoder(in_chans=in_chans, embed_dim=embed_dim, patch_size=patch_size)
         self.temporal = TemporalAttentionAggregator(embed_dim=embed_dim, max_T=max_T)
-        self.spatial_pe = SpatialPositionalEncoding2D(dim=embed_dim, max_H=max_H, max_W=max_W)
+        self.spatial_pe = SpatialPositionalEncoding2D(embed_dim=embed_dim, max_H=max_H, max_W=max_W)
         self.spatial_tr = SpatialTransformer(embed_dim=embed_dim, depth=spatial_depth, num_heads=spatial_heads)
         self.decoder = MonthlyConvDecoder(
             embed_dim=embed_dim, patch_h=patch_size[1], patch_w=patch_size[2], hidden=hidden, overlap=overlap
