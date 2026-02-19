@@ -7,6 +7,8 @@ import math
 import torch
 import torch.nn as nn
 from einops import rearrange
+import xarray as xr
+import numpy as np
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -125,43 +127,92 @@ class TemporalAttentionAggregator(nn.Module):
     For each spatial location, a weighted sum over time is performed to
     produce one aggregated token.
     """
-    def __init__(self, embed_dim=128, max_T=31):
+    def __init__(self, embed_dim=128, max_days=31, max_months=12):
         """Initialize the temporal attention aggregator.
 
         Args:
             embed_dim: Dimension of the embedding. The default is 128.
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
-            max_len: Maximum length of the temporal dimension to precompute
+            max_days: Maximum length of the temporal dimension to precompute
             encodings for. Default is 31, which is sufficient for a month of
             daily data.
+            max_months: Maximum number of months (temporal patches) to precompute
+            encodings for. Default is 12, which is sufficient for a year of monthly data.
         """
         super().__init__()
-        self.pos = TemporalPositionalEncoding(embed_dim, max_len=max_T)
-        self.scorer = nn.Sequential(
+
+        # Positional encodings for days and months
+        self.pos_days = TemporalPositionalEncoding(embed_dim, max_len=max_days)
+        self.pos_months = TemporalPositionalEncoding(embed_dim, max_len=max_months)
+
+        # Day scorer (within each month)
+        self.day_scorer = nn.Sequential(
             nn.LayerNorm(embed_dim),  # normalizing features
             nn.Linear(embed_dim, embed_dim),  # learns temporal feature transformation
             nn.GELU(),  # adds non-linearity to capture complex temporal patterns
             nn.Linear(embed_dim, 1),  # project to a single score
         )
 
-    def forward(self, x, T, H, W):
+        # Cross month mixing
+        self.month_ln = nn.LayerNorm(embed_dim)
+        self.month_attn = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=4,
+            dropout=0.0,
+            batch_first=True,
+        )
+        self.month_ffn = nn.Sequential(
+            nn.LayerNorm(embed_dim),
+            nn.Linear(embed_dim, 4 * embed_dim),  # 4 is a common factor in transformer feedforward layers
+            nn.GELU(),
+            nn.Linear(4 * embed_dim, embed_dim),
+        )
+
+    def forward(self, x, M, T, H, W, padded_days_mask=None):
         """
         Args:
-            x: (B, T*H*W, C) containing spatio-temporal tokens
-            T: number of temporal tokens per spatial location (here days)
-            H: spatial height after patching
-            W: spatial width after patching
+            x: (B, M*T*H*W, C) containing spatio-temporal tokens, where C is the embedding dimension.
+            M: number of months
+            T: number of temporal tokens per month after temporal patching (Tp)
+            H: spatial height after spatial patching
+            W: spatial width after spatial patching
+            padded_days_mask: Optional boolean tensor of shape (B, M, T), bool,
+                True indicating which day tokens are padded (because some months
+                have fewer days). This is used to mask out padded tokens in attention computation.
         Returns:
-            Tensor of shape (B, H*W, C) with one temporally aggregated token
-            per spatial location
+            Tensor of shape (B, M*H*W, C) with one temporally aggregated, where C is the embedding dimension.
         """
-        seq = rearrange(x, "b (t h w) c -> b (h w) t c", t=T, h=H, w=W)
-        pe = self.pos(T).to(seq.device).to(seq.dtype)
-        seq = seq + pe.unsqueeze(0).unsqueeze(0)
-        weights = torch.softmax(self.scorer(seq).squeeze(-1), dim=-1)
-        out = (seq * weights.unsqueeze(-1)).sum(dim=2)
-        return out
+        seq = rearrange(x, "b (m t h w) c -> b (h w) m t c", m=M, t=T, h=H, w=W)
+
+        pe_days = self.pos_days(T).to(seq.device).to(seq.dtype)  # (T, C)
+        pe_months = self.pos_months(M).to(seq.device).to(seq.dtype)  # (M, C)
+
+        seq = seq + pe_days[None, None, None, :, :]  # add day PE
+        seq = seq + pe_months[None, None, :, None, :]  # add month PE
+
+        # Day attention per month
+        day_logits = self.day_scorer(seq).squeeze(-1)  # (B, HW, M, T)
+
+        # padded_days_mask is (B, M, T) bool -> (B, HW, M, T)
+        if padded_days_mask is not None:
+            pad = padded_days_mask[:, None, :, :].expand(x.shape[0], H * W, M, T)
+            day_logits = day_logits.masked_fill(pad, float("-inf"))
+
+        day_w = torch.softmax(day_logits, dim=-1)
+        month_tokens = (seq * day_w.unsqueeze(-1)).sum(dim=3)  # (B, HW, M, C)
+
+        # Cross-month attention at each spatial location
+        z = rearrange(month_tokens, "b s m c -> (b s) m c")
+        z_ln = self.month_ln(z)
+        attn_out, _ = self.month_attn(z_ln, z_ln, z_ln, need_weights=False)
+        z = z + attn_out
+        z = z + self.month_ffn(z)
+
+        # Back to flattened tokens with month kept
+        z = rearrange(z, "(b s) m c -> b s m c", b=x.shape[0], s=H * W)
+        out = rearrange(z, "b (h w) m c -> b (m h w) c", h=H, w=W)
+        return out  # (B, M*H*W, C)  C: embedding dimension
 
 
 class MonthlyConvDecoder(nn.Module):
@@ -231,43 +282,45 @@ class MonthlyConvDecoder(nn.Module):
         self.scale = nn.Parameter(torch.ones(1))
         self.bias  = nn.Parameter(torch.zeros(1))
 
-    def forward(self, latent, out_H, out_W, land_mask=None):
+    def forward(self, latent, M, out_H, out_W, land_mask=None):
         """Reconstruct 2D maps from latent patch tokens.
         Args:
-            latent: Tensor of shape (B, H'*W', C), where H'*W' = out_H//patch_h * out_W//patch_w
+            latent: Tensor of shape (B, M*Hp*Wp, C) where C is the embedding dimension.
+            M: Number of months (temporal patches)
             out_H: Target output height (must be divisible by patch_h)
             out_W: Target output width (must be divisible by patch_w)
             land_mask: Optional boolean tensor of shape (out_H, out_W). Values set to True
                 will be masked out (set to 0) in the output (only ocean pixels exist).
         Returns:
-            Tensor of shape (B, out_H, out_W) representing the monthly SST.
+            Tensor of shape (B, M, out_H, out_W) representing the monthly variable e.g. SST.
         """
-        B, HW, C = latent.shape
+        B, MHW, C = latent.shape
         Hp = out_H // self.patch_h
         Wp = out_W // self.patch_w
-        assert Hp * Wp == HW, f"Token count mismatch: HW={HW}, Hp={Hp}, Wp={Wp}"
+        assert MHW == M * Hp * Wp, f"Token mismatch: got {MHW}, expected {M*Hp*Wp}"
 
         #transforms the latent tensor from sequence format to image format for
-        #convolution operations
-        out = latent.view(B, Hp, Wp, C).permute(0, 3, 1, 2).contiguous()  # (B, C, Hp, Wp)
+        #convolution operations; (B, M*Hp*Wp, C) -> (B*M, C, Hp, Wp)
+        out = latent.view(B, M, Hp, Wp, C).permute(0, 1, 4, 2, 3).contiguous()
+        out = out.view(B * M, C, Hp, Wp)
 
         # Apply 1x1 convolution to mix features
-        out = self.proj(out)        # (B, hidden, Hp, Wp)
+        out = self.proj(out)        # (B*M, hidden, Hp, Wp)
 
         # Use transposed convolution to upsample
-        out = self.deconv(out)      # (B, hidden//2, H, W)
+        out = self.deconv(out)      # (B*M, hidden//2, H, W)
 
         # Apply final conv head to get single channel output
-        out = self.head(out)        # (B, 1, H, W)
+        out = self.head(out)        # (B*M, 1, H, W)
 
         # Apply scale and bias
         out = out * self.scale + self.bias
-        out = out.squeeze(1)        # (B, H, W)
+        out = out.view(B, M, out_H, out_W)  # (B, M, H, W)
 
         # Mask out land areas if land_mask is provided
         if land_mask is not None:
-            out = out.masked_fill(land_mask.bool().unsqueeze(0), 0.0)
-        return out
+            out = out.masked_fill(land_mask.bool()[None, None, :, :], 0.0)
+        return out  # (B, M, out_H, out_W)
 
 
 class SpatialPositionalEncoding2D(nn.Module):
@@ -387,7 +440,7 @@ class SpatioTemporalModel(nn.Module):
     Processes daily data in a video-style format with shape (B, C, T, H, W):
         B: batch size
         C: number of channels (e.g., 1 for SST, can include additional channels like masks)
-        T: temporal dimension (number of days)
+        T: temporal dimension (number of days, e.g., 31 for a month)
         H: spatial height
         W: spatial width
 
@@ -398,14 +451,16 @@ class SpatioTemporalModel(nn.Module):
         4. Decode aggregated tokens into a full-resolution 2D map using MonthlyConvDecoder.
 
     Output:
-        - Reconstructed monthly SST map of shape (B, H, W)
+        - Reconstructed monthly (SST) map of shape (B, M, H, W)
     """
     def __init__(
             self,
             in_chans=1,
             embed_dim=128,
             patch_size=(1,4,4),
-            max_T=64, hidden=128,
+            max_days=31,
+            max_months=12,
+            hidden=128,
             overlap=1,
             max_H=1024,
             max_W=1024,
@@ -429,7 +484,7 @@ class SpatioTemporalModel(nn.Module):
         """
         super().__init__()
         self.encoder = VideoEncoder(in_chans=in_chans, embed_dim=embed_dim, patch_size=patch_size)
-        self.temporal = TemporalAttentionAggregator(embed_dim=embed_dim, max_T=max_T)
+        self.temporal = TemporalAttentionAggregator(embed_dim=embed_dim, max_days=max_days, max_months=max_months)
         self.spatial_pe = SpatialPositionalEncoding2D(embed_dim=embed_dim, max_H=max_H, max_W=max_W)
         self.spatial_tr = SpatialTransformer(embed_dim=embed_dim, depth=spatial_depth, num_heads=spatial_heads)
         self.decoder = MonthlyConvDecoder(
@@ -437,98 +492,118 @@ class SpatioTemporalModel(nn.Module):
         )
         self.patch_size = patch_size
 
-    def forward(self, daily_data, daily_mask, land_mask_patch):
+    def forward(self, daily_data, daily_mask, land_mask_patch, padded_days_mask=None):
         """
         Forward pass of the Spatio-Temporal model.
 
         Args:
-            daily_data: Tensor of shape (B, C, T, H, W) containing daily data
+            daily_data: Tensor of shape (B, C, M, T, H, W) containing daily
+                data, where C is the number of channels (e.g., 1 for SST)
             daily_mask: Boolean tensor of same shape as daily_data indicating missing values
             land_mask_patch: Boolean tensor of shape (H, W) to mask land areas in the output
-
+            padded_days_mask: Optional boolean tensor of shape (B, M, T) indicating which day tokens are padded
+                 (True for padded tokens). Used to mask out padded tokens in temporal attention.
         Returns:
-            monthly_pred: Tensor of shape (B, H, W) representing the reconstructed monthly map
+            monthly_pred: Tensor of shape (B, M, H, W) representing the reconstructed monthly map
         """
-        B, C, T, H, W = daily_data.shape
+        B, C, M, T, H, W = daily_data.shape
 
         # Step 1: Encode spatio-temporal patches
-        latent = self.encoder(daily_data, daily_mask)  # (B, T'*H'*W', C)
+        # each month independently by folding M into batch
+        daily_data_reshaped = daily_data.reshape(B * M, C, T, H, W)
+        daily_mask_reshaped = daily_mask.reshape(B * M, C, T, H, W)
+        latent = self.encoder(daily_data_reshaped, daily_mask_reshaped)  # (B*M, N_patches, embed_dim)
+
+        # Step 2: Aggregate temporal information for each spatial patch
         Tp = T // self.patch_size[0]
         Hp = H // self.patch_size[1]
         Wp = W // self.patch_size[2]
+        Np = Tp * Hp * Wp
 
-        # Step 2: Aggregate temporal information for each spatial patch
-        agg_latent = self.temporal(latent, Tp, Hp, Wp)
+        # latent -> (B, M*Np, embed_dim) to match the aggregator input x: (B, M*Tp*Hp*Wp, embed_dim)
+        latent = latent.reshape(B, M * Np, -1)
+
+        if padded_days_mask is not None and self.patch_size[0] > 1:
+            B, M, T_days = padded_days_mask.shape
+            if T_days % self.patch_size[0] != 0:
+                raise ValueError(f"T_days={T_days} must be divisible by patch_size[0]={self.patch_size[0]}")
+            padded_days_mask = padded_days_mask.view(B, M, T_days // self.patch_size[0], self.patch_size[0]).all(dim=-1)  # (B, M, Tp)
+
+        agg_latent = self.temporal(latent, M, Tp, Hp, Wp, padded_days_mask=padded_days_mask) # (B, M*Hp*Wp, embed_dim)
 
         # Step 3: Add spatial positional encodings and mix spatial features
-        pe = self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)  # (Hp*Wp, C)
-        x = agg_latent + pe.unsqueeze(0)
+        E = agg_latent.shape[-1]
+        agg_latent = agg_latent.view(B, M, Hp * Wp, E)
+        pe = self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)  # (Hp*Wp, E)
+        x = agg_latent + pe[None, None, :, :]
 
         # Step 4: Spatial mixing with Transformer
-        x = self.spatial_tr(x)  # (B, Hp*Wp, C)
+        x = x.view(B * M, Hp * Wp, E)
+        x = self.spatial_tr(x)  # (B*M, Hp*Wp, E)
+        x = x.view(B, M * Hp * Wp, E)  # back to (B, M*Hp*Wp, E)
 
         # Step 5: Decode to full-resolution 2D map
-        monthly_pred = self.decoder(x, H, W, land_mask_patch)
+        monthly_pred = self.decoder(x, M, H, W, land_mask_patch)  # (B, M, H, W)
         return monthly_pred
 
 
 def make_daily_mask(daily_ts, land_mask):
     """ mask True only for missing ocean pixels
 
-    daily_ts: (T,H,W) float tensor
+    daily_ts: (M, T,H,W) float tensor
     land_mask: (H,W) or (1,H,W) bool, True=land
     """
     isnan = torch.isnan(daily_ts)
 
-    # normalize land_mask to (H,W) and broadcast to (T,H,W)
-    land2d = land_mask.squeeze(0) if land_mask.dim() == 3 else land_mask
-    land2d = land2d.bool()
-    land3d = land2d.unsqueeze(0).expand(daily_ts.size(0), -1, -1)
+    land = land_mask.squeeze(0) if land_mask.dim() == 3 else land_mask
 
-    mask = isnan & (~land3d)    # True only at ocean-missing
-    return mask
+    # Expand land to (M, T, H, W)
+    ocean = ~land  # True = ocean
+    ocean_expanded = ocean.unsqueeze(0).unsqueeze(0).expand_as(daily_ts)  # (M, T, H, W)
+
+    mask = isnan & ocean_expanded    # True only at ocean-missing
+    return mask  # (M, T,H,W)
 
 
 def prepare_spatiotemporal_batch(
-    daily_ts,      # (T,H,W) float32, may contain NaNs
-    monthly_ts,    # (1,H,W) or (H,W) float32
-    land_mask,     # (1,H,W) or (H,W) bool, True=land
+    daily_ts,      # (M,T,H,W)
+    monthly_ts,    # (M,H,W)
+    land_mask,     # (M=1,H,W)
+    padded_days_mask, # (M, T)
     patch_size=(1,4,4),
 ):
 
     # convert to tensors
-    daily_ts = torch.tensor(daily_ts, dtype=torch.float32, device=device)  # shape: (31, H, W)
-    monthly_ts = torch.tensor(monthly_ts, dtype=torch.float32, device=device)  # shape: (1, H, W)
-    land_mask = torch.tensor(land_mask, dtype=torch.bool, device=device) # shape (1, H, W), True = land
+    daily_ts = torch.tensor(daily_ts, dtype=torch.float32, device=device)  # shape: (T, H, W)
+    monthly_ts = torch.tensor(monthly_ts, dtype=torch.float32, device=device)  # shape: (M, H, W)
+    land_mask = torch.tensor(land_mask, dtype=torch.bool, device=device) # shape (M=1, H, W), True=land
+    land_mask = land_mask.squeeze(0) # (H,W)
 
-    # sanitize inputs
-    assert daily_ts.dim() == 3, f"daily_ts must be (T,H,W), got {daily_ts.shape}"
+    padded_days_mask = torch.tensor(padded_days_mask, dtype=torch.bool, device=device)  # (M, T), True=padded
 
     daily_mask = make_daily_mask(daily_ts, land_mask)  # (T,H,W) bool
-
-    monthly = monthly_ts.squeeze(0) if monthly_ts.dim() == 3 else monthly_ts
-    land = land_mask.squeeze(0) if land_mask.dim() == 3 else land_mask
 
     # replace NaNs in daily data; keep mask as source of truth
     daily_ts = torch.nan_to_num(daily_ts, nan=0.0)
 
-    T, H, W = daily_ts.shape
+    M, T, H, W = daily_ts.shape
     pt, ph, pw = patch_size
     assert T % pt == 0, f"T={T} not divisible by pt={pt}"
     assert H % ph == 0, f"H={H} not divisible by ph={ph}"
     assert W % pw == 0, f"W={W} not divisible by pw={pw}"
 
     return {
-        "daily_data": daily_ts.unsqueeze(0).unsqueeze(0),   # (B=1,C=1,T,H,W),
-        "daily_mask": daily_mask.unsqueeze(0).unsqueeze(0),  # (B=1,C=1,T,H,W),
-        "monthly_target": monthly.unsqueeze(0),
-        "land_mask": land,
+        "daily_data": daily_ts.unsqueeze(0).unsqueeze(0),   # (B=1,C=1, M, T,H,W),
+        "daily_mask": daily_mask.unsqueeze(0).unsqueeze(0),  # (B=1,C=1, M, T,H,W),
+        "monthly_target": monthly_ts.unsqueeze(0), # (B=1,M, H,W)
+        "land_mask": land_mask, # (H,W) bool, True=land
+        "padded_days_mask": padded_days_mask.unsqueeze(0), # (B=1, M, T) bool, True=day is padded
     }
 
 
 def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
     """
-    pred: (B,H_pad,W_pad) or (B, H, W) torch tensor
+    pred: (B, M, H_pad,W_pad) or (B, H, W) torch tensor
     orig_H/W: original sizes before padding (optional)
     land_mask: (H_pad,W_pad) or (H,W) bool; if given, land will be set to NaN
     returns: (H,W) numpy array
@@ -542,6 +617,6 @@ def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
     # set land to NaN (broadcast mask across batch)
     if land_mask is not None:
         pred = pred.clone().to(torch.float32)
-        pred[:, land_mask.bool()] = float('nan')
+        pred[:, :, land_mask.bool()] = float('nan')
 
     return pred.detach().cpu().numpy()
