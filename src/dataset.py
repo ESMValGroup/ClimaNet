@@ -6,31 +6,46 @@ from typing import Tuple
 
 
 class SSTDataset(Dataset):
-    """Dataset for spatiotemporal patches for Sea Surface Temperature (SST)."""
+    """Dataset for spatiotemporal patches."""
 
     def __init__(
         self,
-        daily_ds: xr.Dataset,
-        monthly_ds: xr.Dataset,
-        mask_da: xr.DataArray = None,
+        daily_ds: xr.DataArray,
+        monthly_ds: DataArray,
+        land_mask: xr.DataArray = None,
         daily_var: str = "ts",
         monthly_var: str = "ts",
         mask_var: str = "lsm",
+        time_dim: str = "time",
+        spatial_dims: Tuple[str, str] = ("lat", "lon"),
         patch_size: Tuple[int, int] = (16, 16),
         overlap: int = 0,
     ):
         self.daily_ds = daily_ds
         self.monthly_ds = monthly_ds
-        self.mask_da = mask_da
-        self.daily_var = daily_var
-        self.monthly_var = monthly_var
+        self.land_mask = land_mask
+        self.time_dim = time_dim
+        self.spatial_dims = spatial_dims
         self.patch_size = patch_size
         self.overlap = overlap
 
+        # Group daily data# Create "YYYY-MM" string labels
+        daily_labels = self.daily_ds[time_dim].dt.strftime("%Y-%m")
+        monthly_labels = self.monthly_ds[time_dim].dt.strftime("%Y-%m")
+
+        # Group daily indices by month label
+        daily_groups = daily_labels.groupby(daily_labels).groups
+
+        self.month_to_days = {}
+        for month_idx, period in enumerate(monthly_labels.values):
+            self.month_to_days[month_idx] = daily_groups.get(period, [])
+            if len(self.month_to_days[month_idx]) == 0:
+                raise ValueError(f"No daily data found for month index {month_idx}")
         # Precompute lazy index mapping for patches
-        lat_dim = self.daily_ds.sizes["lat"]
-        lon_dim = self.daily_ds.sizes["lon"]
-        self.time_dim = self.monthly_ds.sizes["time"]  # Use monthly for samples
+        dim_y, dim_x = self.spatial_dims
+        lat_dim = self.daily_ds.sizes[dim_y]
+        lon_dim = self.daily_ds.sizes[dim_x]
+      
 
         self.stride = self.patch_size[0] - self.overlap
         self.n_i = (
@@ -39,7 +54,7 @@ class SSTDataset(Dataset):
         self.n_j = (
             lon_dim - self.patch_size[1]
         ) // self.stride + 1  # number of vertical patches
-        self.total_len = self.time_dim * self.n_i * self.n_j
+        self.total_len = len(self.monthly_ds[time_dim]) * self.n_i * self.n_j
 
     def __len__(self):
         return self.total_len
@@ -49,6 +64,7 @@ class SSTDataset(Dataset):
         if idx < 0 or idx >= self.total_len:
             raise IndexError("Index out of range")
 
+        dim_y, dim_x = self.spatial_dims
         per_t = self.n_i * self.n_j
         t, rem = divmod(idx, per_t)
         i_idx, j_idx = divmod(rem, self.n_j)
@@ -56,37 +72,45 @@ class SSTDataset(Dataset):
         j = j_idx * self.stride
 
         # Extract spatial patch
-        lat_slice = slice(i, i + self.patch_size[0])
-        lon_slice = slice(j, j + self.patch_size[1])
+        y_slice = slice(i, i + self.patch_size[0])
+        x_slice = slice(j, j + self.patch_size[1])
 
         # Get daily data (all days in month)
         # Assuming monthly timestamp corresponds to days in that month
-        daily_patch = (
-            self.daily_ds[self.daily_var].isel(lat=lat_slice, lon=lon_slice).to_numpy()
-        )
-        # Add a band dimension for daily data to accommodate model input shape
-        daily_patch = daily_patch[np.newaxis, ...]
+        daily_patch = self.daily_ds.isel(
+            {self.time_dim: self.month_to_days[t], dim_y: y_slice, dim_x: x_slice,}
+            ).to_numpy()  # shape: (T, H, W)
+
+        # Add channel dim → (C=1, T, H, W)
+        daily_patch = torch.from_numpy(daily_patch).float().unsqueeze(0)
 
         # Get monthly target
-        monthly_patch = (
-            self.monthly_ds[self.monthly_var]
-            .isel(time=t, lat=lat_slice, lon=lon_slice)
-            .to_numpy()
-        )
-        # Add a band dimension for monthly data
-        monthly_patch = monthly_patch[np.newaxis, ...]
+        # Get monthly target
+        monthly_patch = self.monthly_ds.isel({
+                self.time_dim: t, dim_y: y_slice, dim_x: x_slice,
+            }).to_numpy()
+        monthly_patch = torch.from_numpy(monthly_patch).float()
 
-        # Get mask patch if available
-        if self.mask_da is not None:
-            mask_patch = self.mask_da.isel(lat=lat_slice, lon=lon_slice).to_numpy()
+
+        if self.land_mask is not None:
+            land_mask_patch = self.land_mask.isel({dim_y: y_slice, dim_x: x_slice}).to_numpy()
+            land_mask_patch = torch.from_numpy(land_mask_patch).bool() # (H,W)
         else:
-            mask_patch = np.ones_like(monthly_patch.isel(time=0), dtype=bool)
+            # No land mask → all ocean (False)
+            land_mask_patch = torch.zeros(self.patch_size[0], self.patch_size[1], dtype=torch.bool)
+
+        daily_mask_patch = torch.isnan(daily_patch) & (~land_mask_patch)
+
+        # Replace NaNs in daily data with zeros (after creating mask)
+        daily_patch = torch.nan_to_num(daily_patch, nan=0.0)
+
 
         # Convert to tensors
         sample = {
-            "daily": torch.from_numpy(daily_patch).float(),
-            "monthly": torch.from_numpy(monthly_patch).float(),
-            "mask": torch.from_numpy(mask_patch).bool(),
+            "daily_patch": daily_patch,  # (C=1, T, H, W)
+            "monthly_patch": monthly_patch,  # (H, W)
+            "daily_mask_patch": daily_mask_patch,  # (C=1, T, H, W)
+            "land_mask_patch": land_mask_patch.squeeze(),  # (H,W)
             "coords": (t, i, j),
         }
 
