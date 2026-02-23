@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 from typing import Tuple
 
 
-class SSTDataset(Dataset):
+class STDataset(Dataset):
     """Dataset for spatiotemporal patches."""
 
     def __init__(

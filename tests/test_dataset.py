@@ -3,7 +3,7 @@ import pytest
 import torch
 import xarray as xr
 
-from dataset import SSTDataset
+from dataset import STDataset
 
 
 def _make_datasets():
@@ -50,7 +50,7 @@ def _make_datasets():
 
 def test_len_and_shapes():
     daily_da, monthly_da, land_mask = _make_datasets()
-    dataset = SSTDataset(
+    dataset = STDataset(
         daily_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
@@ -72,7 +72,7 @@ def test_len_and_shapes():
 
 def test_index_bounds():
     daily_da, monthly_da, land_mask = _make_datasets()
-    dataset = SSTDataset(
+    dataset = STDataset(
         daily_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
@@ -89,7 +89,7 @@ def test_index_bounds():
 
 def test_index_mapping_and_mask_values():
     daily_da, monthly_da, land_mask = _make_datasets()
-    dataset = SSTDataset(
+    dataset = STDataset(
         daily_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
