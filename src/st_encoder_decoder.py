@@ -13,6 +13,7 @@ import numpy as np
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+
 class VideoEncoder(nn.Module):
     """Video Encoder with spatio-temporal patch embedding.
 
@@ -27,7 +28,8 @@ class VideoEncoder(nn.Module):
     The output is a sequence of patch embeddings, as used in VideoMAE:
     https://arxiv.org/abs/2203.12602
     """
-    def __init__(self, in_chans=1, embed_dim=128, patch_size=(1,4,4), drop=0.0):
+
+    def __init__(self, in_chans=1, embed_dim=128, patch_size=(1, 4, 4), drop=0.0):
         """
         Args:
             in_chans: Number of input channels (1 for SST)
@@ -43,7 +45,9 @@ class VideoEncoder(nn.Module):
 
         # proj is a Conv3d with kernel and stride = patch_size to create non-overlapping patches
         # 2 * in_chans because we add a validity channel
-        self.proj = nn.Conv3d(2*in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv3d(
+            2 * in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
+        )
 
         # norm is LayerNorm over the embedding dimension to normalize patch embeddings
         self.norm = nn.LayerNorm(embed_dim)
@@ -52,7 +56,7 @@ class VideoEncoder(nn.Module):
         self.drop = nn.Dropout(drop)
 
     def forward(self, x, mask):
-        """ Forward pass with masking support via an additional validity channel.
+        """Forward pass with masking support via an additional validity channel.
         Args:
             x: Input video tensor of shape (B, C, T, H, W)
             mask: Boolean mask tensor of shape (B, C, T, H, W), where True
@@ -78,7 +82,7 @@ class VideoEncoder(nn.Module):
 
 
 class TemporalPositionalEncoding(nn.Module):
-    """ Temporal Positional Encoding using sine and cosine functions.
+    """Temporal Positional Encoding using sine and cosine functions.
 
     This module generates fixed (non-learnable) sinusoidal positional encodings
     for the temporal dimension, following the formulation in
@@ -87,8 +91,9 @@ class TemporalPositionalEncoding(nn.Module):
     The returned positional encodings are intended to be added to temporal
     embeddings by the caller, but this module itself does not perform the addition.
     """
+
     def __init__(self, embed_dim=128, max_len=31):
-        """ Initialize the temporal positional encoding.
+        """Initialize the temporal positional encoding.
         Args:
             embed_dim: Dimension of the embedding.The default is 128.
                 Many vision transformers use embedding dimensions that are multiples
@@ -100,7 +105,9 @@ class TemporalPositionalEncoding(nn.Module):
         super().__init__()
         pe = torch.zeros(max_len, embed_dim)
         position = torch.arange(0, max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim))
+        div_term = torch.exp(
+            torch.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim)
+        )
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         self.register_buffer("pe", pe)  # (max_len, embeddim)
@@ -224,6 +231,7 @@ class MonthlyConvDecoder(nn.Module):
         - Applies a small convolutional head to produce the final single-channel output.
         - Optionally masks out land regions using a boolean mask.
     """
+
     def __init__(self, embed_dim=128, patch_h=4, patch_w=4, hidden=128, overlap=1):
         """
         Args:
@@ -264,7 +272,7 @@ class MonthlyConvDecoder(nn.Module):
             stride=(patch_h, patch_w),
             padding=overlap,
             output_padding=0,
-            bias=True
+            bias=True,
         )
 
         # Final conv head to get single channel output kernel_size=3 is the most
@@ -280,7 +288,7 @@ class MonthlyConvDecoder(nn.Module):
 
         # Learnable scale and bias (mean and std) to improve predictions
         self.scale = nn.Parameter(torch.ones(1))
-        self.bias  = nn.Parameter(torch.zeros(1))
+        self.bias = nn.Parameter(torch.zeros(1))
 
     def forward(self, latent, M, out_H, out_W, land_mask=None):
         """Reconstruct 2D maps from latent patch tokens.
@@ -332,8 +340,9 @@ class SpatialPositionalEncoding2D(nn.Module):
     The returned positional encodings are intended to be added to spatial tokens
     by the caller. The encodings are **not learnable**.
     """
+
     def __init__(self, embed_dim=128, max_H=1024, max_W=1024):
-        """ Initialize the positional encoding.
+        """Initialize the positional encoding.
         Args:
             embed_dim: Dimension of the embedding, it must be even. The default is 128.
                 Embedding dimensions are usually multiples of 64 (e.g., 64, 128,
@@ -345,11 +354,13 @@ class SpatialPositionalEncoding2D(nn.Module):
         self.embed_dim = embed_dim
         self.max_H = max_H
         self.max_W = max_W
-        self.register_buffer("pe", self.build_pe(max_H, max_W, embed_dim), persistent=False)
+        self.register_buffer(
+            "pe", self.build_pe(max_H, max_W, embed_dim), persistent=False
+        )
 
     @staticmethod
     def build_pe(H, W, embed_dim):
-        """ Build the 2D positional encoding encoding tensor.
+        """Build the 2D positional encoding encoding tensor.
         Args:
             H: Height of the grid
             W: Width of the grid
@@ -364,26 +375,28 @@ class SpatialPositionalEncoding2D(nn.Module):
         pe_w = torch.zeros(W, embed_dim // 2)
         pos_h = torch.arange(H).unsqueeze(1)
         pos_w = torch.arange(W).unsqueeze(1)
-        div = torch.exp(torch.arange(0, embed_dim // 2, 2) * (-math.log(10000.0) / (embed_dim // 2)))
+        div = torch.exp(
+            torch.arange(0, embed_dim // 2, 2) * (-math.log(10000.0) / (embed_dim // 2))
+        )
         pe_h[:, 0::2] = torch.sin(pos_h * div)
         pe_h[:, 1::2] = torch.cos(pos_h * div)
         pe_w[:, 0::2] = torch.sin(pos_w * div)
         pe_w[:, 1::2] = torch.cos(pos_w * div)
-        pe_2d = (pe_h.unsqueeze(1) + pe_w.unsqueeze(0))  # (H, W, embed_dim/2)
+        pe_2d = pe_h.unsqueeze(1) + pe_w.unsqueeze(0)  # (H, W, embed_dim/2)
         # concatenate to reach embed_dim
         pe = torch.cat([pe_2d, pe_2d], dim=-1)  # (H, W, embed_dim)
         return pe  # not learned
 
     def forward(self, Hp, Wp):
-        """ Get positional encoding for size (Hp, Wp).
+        """Get positional encoding for size (Hp, Wp).
         Args:
             Hp: Height after patching (≤ max_H)
             Wp: Width after patching (≤ max_W)
         Returns:
-            Tensor of shape (Hp*Wp, dim) containing positional encodings
+            Tensor of shape (Hp*Wp, embed_dim) containing positional encodings
             flattened in row-major order (height * width).
         """
-        # returns (Hp*Wp, dim)
+        # returns (Hp*Wp, embed_dim)
         pe_hw = self.pe[:Hp, :Wp, :].reshape(Hp * Wp, -1)
         return pe_hw
 
@@ -398,8 +411,9 @@ class SpatialTransformer(nn.Module):
         - Uses multi-head self-attention and feedforward layers.
         - Designed to operate on flattened spatial tokens.
     """
+
     def __init__(self, embed_dim=128, depth=2, num_heads=4, mlp_ratio=4.0, dropout=0.0):
-        """ Initialize the spatial transformer.
+        """Initialize the spatial transformer.
         Args:
             embed_dim: Dimension of the embedding. Default is 128.
                 The embedding dimensions are multiples of 64 (e.g., 64, 128,
@@ -416,15 +430,18 @@ class SpatialTransformer(nn.Module):
         # a single Transformer encoder block that
         # performs self-attention and feedforward processing
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=embed_dim, nhead=num_heads,
+            d_model=embed_dim,
+            nhead=num_heads,
             dim_feedforward=int(embed_dim * mlp_ratio),
-            batch_first=True, dropout=dropout, activation="gelu"
+            batch_first=True,
+            dropout=dropout,
+            activation="gelu",
         )
         # stack multiple layers to form the full encoder
         self.enc = nn.TransformerEncoder(encoder_layer, num_layers=depth)
 
     def forward(self, x):
-        """ Forward pass of the spatial transformer.
+        """Forward pass of the spatial transformer.
         Args:
             x: Input tensor of shape (B, N, C), where N = number of spatial tokens (H'*W') and
                 C = embedding dimension
@@ -453,34 +470,35 @@ class SpatioTemporalModel(nn.Module):
     Output:
         - Reconstructed monthly (SST) map of shape (B, M, H, W)
     """
+
     def __init__(
-            self,
-            in_chans=1,
-            embed_dim=128,
-            patch_size=(1,4,4),
-            max_days=31,
-            max_months=12,
-            hidden=128,
-            overlap=1,
-            max_H=1024,
-            max_W=1024,
-            spatial_depth=2,
-            spatial_heads=4,
-        ):
+        self,
+        in_chans=1,
+        embed_dim=128,
+        patch_size=(1, 4, 4),
+        max_days=31,
+        max_months=12,
+        hidden=128,
+        overlap=1,
+        max_H=1024,
+        max_W=1024,
+        spatial_depth=2,
+        spatial_heads=4,
+    ):
         """Initialize the Spatio-Temporal Model.
 
         Args:
             in_chans: Number of input channels (e.g., 1 for SST, additional channels possible)
             embed_dim: Dimension of the patch embedding
             patch_size: Tuple of (T, H, W) patch sizes for temporal and spatial patching
-            max_T: Maximum temporal length for temporal positional encoding
+            max_days: Maximum number of days for temporal positional encoding
+            max_months: Maximum number of months for temporal positional encoding
             hidden: Hidden dimension used in the decoder
             overlap: Overlap for deconvolution in the decoder
             max_H: Maximum spatial height for 2D positional encoding
             max_W: Maximum spatial width for 2D positional encoding
             spatial_depth: Number of layers in the spatial Transformer
             spatial_heads: Number of attention heads in the spatial Transformer
-
         """
         super().__init__()
         self.encoder = VideoEncoder(in_chans=in_chans, embed_dim=embed_dim, patch_size=patch_size)
@@ -488,13 +506,16 @@ class SpatioTemporalModel(nn.Module):
         self.spatial_pe = SpatialPositionalEncoding2D(embed_dim=embed_dim, max_H=max_H, max_W=max_W)
         self.spatial_tr = SpatialTransformer(embed_dim=embed_dim, depth=spatial_depth, num_heads=spatial_heads)
         self.decoder = MonthlyConvDecoder(
-            embed_dim=embed_dim, patch_h=patch_size[1], patch_w=patch_size[2], hidden=hidden, overlap=overlap
+            embed_dim=embed_dim,
+            patch_h=patch_size[1],
+            patch_w=patch_size[2],
+            hidden=hidden,
+            overlap=overlap,
         )
         self.patch_size = patch_size
 
     def forward(self, daily_data, daily_mask, land_mask_patch, padded_days_mask=None):
-        """
-        Forward pass of the Spatio-Temporal model.
+        """Forward pass of the Spatio-Temporal model.
 
         Args:
             daily_data: Tensor of shape (B, C, M, T, H, W) containing daily
@@ -548,7 +569,7 @@ class SpatioTemporalModel(nn.Module):
 
 
 def make_daily_mask(daily_ts, land_mask):
-    """ mask True only for missing ocean pixels
+    """mask True only for missing ocean pixels
 
     daily_ts: (M, T,H,W) float tensor
     land_mask: (H,W) or (1,H,W) bool, True=land
@@ -563,42 +584,6 @@ def make_daily_mask(daily_ts, land_mask):
 
     mask = isnan & ocean_expanded    # True only at ocean-missing
     return mask  # (M, T,H,W)
-
-
-def prepare_spatiotemporal_batch(
-    daily_ts,      # (M,T,H,W)
-    monthly_ts,    # (M,H,W)
-    land_mask,     # (M=1,H,W)
-    padded_days_mask, # (M, T)
-    patch_size=(1,4,4),
-):
-
-    # convert to tensors
-    daily_ts = torch.tensor(daily_ts, dtype=torch.float32, device=device)  # shape: (T, H, W)
-    monthly_ts = torch.tensor(monthly_ts, dtype=torch.float32, device=device)  # shape: (M, H, W)
-    land_mask = torch.tensor(land_mask, dtype=torch.bool, device=device) # shape (M=1, H, W), True=land
-    land_mask = land_mask.squeeze(0) # (H,W)
-
-    padded_days_mask = torch.tensor(padded_days_mask, dtype=torch.bool, device=device)  # (M, T), True=padded
-
-    daily_mask = make_daily_mask(daily_ts, land_mask)  # (T,H,W) bool
-
-    # replace NaNs in daily data; keep mask as source of truth
-    daily_ts = torch.nan_to_num(daily_ts, nan=0.0)
-
-    M, T, H, W = daily_ts.shape
-    pt, ph, pw = patch_size
-    assert T % pt == 0, f"T={T} not divisible by pt={pt}"
-    assert H % ph == 0, f"H={H} not divisible by ph={ph}"
-    assert W % pw == 0, f"W={W} not divisible by pw={pw}"
-
-    return {
-        "daily_data": daily_ts.unsqueeze(0).unsqueeze(0),   # (B=1,C=1, M, T,H,W),
-        "daily_mask": daily_mask.unsqueeze(0).unsqueeze(0),  # (B=1,C=1, M, T,H,W),
-        "monthly_target": monthly_ts.unsqueeze(0), # (B=1,M, H,W)
-        "land_mask": land_mask, # (H,W) bool, True=land
-        "padded_days_mask": padded_days_mask.unsqueeze(0), # (B=1, M, T) bool, True=day is padded
-    }
 
 
 def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
