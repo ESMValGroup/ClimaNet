@@ -1,5 +1,6 @@
 import numpy as np
 import xarray as xr
+import torch
 
 def regrid_to_boundary_centered_grid(
     da: xr.DataArray,
@@ -74,13 +75,16 @@ def regrid_to_boundary_centered_grid(
     return da_regridded
 
 
-
 def add_month_day_dims(
     daily_ts: xr.DataArray,    # (time, H, W) daily
     monthly_ts: xr.DataArray,  # (time, H, W) monthly
     time_dim: str = "time",
 ):
-    """
+    """ Reshape daily and monthly data to have explicit month (M) and day (T) dimensions.
+
+    Here we assume maximum 31 days in a month, and invalid day entries will be
+    padded with NaN.
+
     Returns
     -------
     daily_m : xr.DataArray - dims: (M, T=31, H, W)
@@ -120,26 +124,6 @@ def add_month_day_dims(
     )
 
     return daily_indexed, monthly_m, padded_days_mask
-
-
-
-
-def make_daily_mask(daily_ts, land_mask):
-    """mask True only for missing ocean pixels
-
-    daily_ts: (M, T,H,W) float tensor
-    land_mask: (H,W) or (1,H,W) bool, True=land
-    """
-    isnan = torch.isnan(daily_ts)
-
-    land = land_mask.squeeze(0) if land_mask.dim() == 3 else land_mask
-
-    # Expand land to (M, T, H, W)
-    ocean = ~land  # True = ocean
-    ocean_expanded = ocean.unsqueeze(0).unsqueeze(0).expand_as(daily_ts)  # (M, T, H, W)
-
-    mask = isnan & ocean_expanded  # True only at ocean-missing
-    return mask  # (M, T,H,W)
 
 
 def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
