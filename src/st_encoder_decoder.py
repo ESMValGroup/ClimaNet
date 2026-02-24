@@ -89,6 +89,7 @@ class TemporalPositionalEncoding(nn.Module):
     The returned positional encodings are intended to be added to temporal
     embeddings by the caller, but this module itself does not perform the addition.
     """
+
     def __init__(self, embed_dim=128, max_len=31):
         """Initialize the temporal positional encoding.
         Args:
@@ -102,7 +103,9 @@ class TemporalPositionalEncoding(nn.Module):
         super().__init__()
         pe = torch.zeros(max_len, embed_dim)
         position = torch.arange(0, max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim))
+        div_term = torch.exp(
+            torch.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim)
+        )
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         self.register_buffer("pe", pe)  # (max_len, embeddim)
@@ -129,6 +132,7 @@ class TemporalAttentionAggregator(nn.Module):
     For each spatial location, a weighted sum over time is performed to
     produce one aggregated token.
     """
+
     def __init__(self, embed_dim=128, max_T=31):
         """Initialize the temporal attention aggregator.
 
@@ -177,6 +181,7 @@ class MonthlyConvDecoder(nn.Module):
         - Applies a small convolutional head to produce the final single-channel output.
         - Optionally masks out land regions using a boolean mask.
     """
+
     def __init__(self, embed_dim=128, patch_h=4, patch_w=4, hidden=128, overlap=1):
         """
         Args:
@@ -217,7 +222,7 @@ class MonthlyConvDecoder(nn.Module):
             stride=(patch_h, patch_w),
             padding=overlap,
             output_padding=0,
-            bias=True
+            bias=True,
         )
 
         # Final conv head to get single channel output kernel_size=3 is the most
@@ -251,22 +256,24 @@ class MonthlyConvDecoder(nn.Module):
         Wp = out_W // self.patch_w
         assert Hp * Wp == HW, f"Token count mismatch: HW={HW}, Hp={Hp}, Wp={Wp}"
 
-        #transforms the latent tensor from sequence format to image format for
-        #convolution operations
-        out = latent.view(B, Hp, Wp, C).permute(0, 3, 1, 2).contiguous()  # (B, C, Hp, Wp)
+        # transforms the latent tensor from sequence format to image format for
+        # convolution operations
+        out = (
+            latent.view(B, Hp, Wp, C).permute(0, 3, 1, 2).contiguous()
+        )  # (B, C, Hp, Wp)
 
         # Apply 1x1 convolution to mix features
-        out = self.proj(out)        # (B, hidden, Hp, Wp)
+        out = self.proj(out)  # (B, hidden, Hp, Wp)
 
         # Use transposed convolution to upsample
-        out = self.deconv(out)      # (B, hidden//2, H, W)
+        out = self.deconv(out)  # (B, hidden//2, H, W)
 
         # Apply final conv head to get single channel output
-        out = self.head(out)        # (B, 1, H, W)
+        out = self.head(out)  # (B, 1, H, W)
 
         # Apply scale and bias
         out = out * self.scale + self.bias
-        out = out.squeeze(1)        # (B, H, W)
+        out = out.squeeze(1)  # (B, H, W)
 
         # Mask out land areas if land_mask is provided
         if land_mask is not None:
@@ -283,6 +290,7 @@ class SpatialPositionalEncoding2D(nn.Module):
     The returned positional encodings are intended to be added to spatial tokens
     by the caller. The encodings are **not learnable**.
     """
+
     def __init__(self, embed_dim=128, max_H=1024, max_W=1024):
         """Initialize the positional encoding.
         Args:
@@ -296,7 +304,9 @@ class SpatialPositionalEncoding2D(nn.Module):
         self.embed_dim = embed_dim
         self.max_H = max_H
         self.max_W = max_W
-        self.register_buffer("pe", self.build_pe(max_H, max_W, embed_dim), persistent=False)
+        self.register_buffer(
+            "pe", self.build_pe(max_H, max_W, embed_dim), persistent=False
+        )
 
     @staticmethod
     def build_pe(H, W, embed_dim):
@@ -315,12 +325,14 @@ class SpatialPositionalEncoding2D(nn.Module):
         pe_w = torch.zeros(W, embed_dim // 2)
         pos_h = torch.arange(H).unsqueeze(1)
         pos_w = torch.arange(W).unsqueeze(1)
-        div = torch.exp(torch.arange(0, embed_dim // 2, 2) * (-math.log(10000.0) / (embed_dim // 2)))
+        div = torch.exp(
+            torch.arange(0, embed_dim // 2, 2) * (-math.log(10000.0) / (embed_dim // 2))
+        )
         pe_h[:, 0::2] = torch.sin(pos_h * div)
         pe_h[:, 1::2] = torch.cos(pos_h * div)
         pe_w[:, 0::2] = torch.sin(pos_w * div)
         pe_w[:, 1::2] = torch.cos(pos_w * div)
-        pe_2d = (pe_h.unsqueeze(1) + pe_w.unsqueeze(0))  # (H, W, embed_dim/2)
+        pe_2d = pe_h.unsqueeze(1) + pe_w.unsqueeze(0)  # (H, W, embed_dim/2)
         # concatenate to reach embed_dim
         pe = torch.cat([pe_2d, pe_2d], dim=-1)  # (H, W, embed_dim)
         return pe  # not learned
@@ -413,7 +425,7 @@ class SpatioTemporalModel(nn.Module):
         self,
         in_chans=1,
         embed_dim=128,
-        patch_size=(1,4,4),
+        patch_size=(1, 4, 4),
         max_T=64,
         hidden=128,
         overlap=1,
@@ -442,8 +454,12 @@ class SpatioTemporalModel(nn.Module):
             in_chans=in_chans, embed_dim=embed_dim, patch_size=patch_size
         )
         self.temporal = TemporalAttentionAggregator(embed_dim=embed_dim, max_T=max_T)
-        self.spatial_pe = SpatialPositionalEncoding2D(embed_dim=embed_dim, max_H=max_H, max_W=max_W)
-        self.spatial_tr = SpatialTransformer(embed_dim=embed_dim, depth=spatial_depth, num_heads=spatial_heads)
+        self.spatial_pe = SpatialPositionalEncoding2D(
+            embed_dim=embed_dim, max_H=max_H, max_W=max_W
+        )
+        self.spatial_tr = SpatialTransformer(
+            embed_dim=embed_dim, depth=spatial_depth, num_heads=spatial_heads
+        )
         self.decoder = MonthlyConvDecoder(
             embed_dim=embed_dim,
             patch_h=patch_size[1],
@@ -467,7 +483,7 @@ class SpatioTemporalModel(nn.Module):
         B, C, T, H, W = daily_data.shape
 
         # Step 1: Encode spatio-temporal patches
-        latent = self.encoder(daily_data, daily_mask)  #(B, T'*H'*W', C)
+        latent = self.encoder(daily_data, daily_mask)  # (B, T'*H'*W', C)
         Tp = T // self.patch_size[0]
         Hp = H // self.patch_size[1]
         Wp = W // self.patch_size[2]
@@ -476,11 +492,13 @@ class SpatioTemporalModel(nn.Module):
         agg_latent = self.temporal(latent, Tp, Hp, Wp)
 
         # Step 3: Add spatial positional encodings and mix spatial features
-        pe = self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)  #(Hp*Wp, C)
+        pe = (
+            self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)
+        )  # (Hp*Wp, C)
         x = agg_latent + pe.unsqueeze(0)
 
         # Step 4: Spatial mixing with Transformer
-        x = self.spatial_tr(x)  #(B, Hp*Wp, C)
+        x = self.spatial_tr(x)  # (B, Hp*Wp, C)
 
         # Step 5: Decode to full-resolution 2D map
         monthly_pred = self.decoder(x, H, W, land_mask_patch)
