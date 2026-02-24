@@ -7,8 +7,6 @@ import math
 import torch
 import torch.nn as nn
 from einops import rearrange
-import xarray as xr
-import numpy as np
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -134,6 +132,7 @@ class TemporalAttentionAggregator(nn.Module):
     For each spatial location, a weighted sum over time is performed to
     produce one aggregated token.
     """
+
     def __init__(self, embed_dim=128, max_days=31, max_months=12):
         """Initialize the temporal attention aggregator.
 
@@ -171,7 +170,9 @@ class TemporalAttentionAggregator(nn.Module):
         )
         self.month_ffn = nn.Sequential(
             nn.LayerNorm(embed_dim),
-            nn.Linear(embed_dim, 4 * embed_dim),  # 4 is a common factor in transformer feedforward layers
+            nn.Linear(
+                embed_dim, 4 * embed_dim
+            ),  # 4 is a common factor in transformer feedforward layers
             nn.GELU(),
             nn.Linear(4 * embed_dim, embed_dim),
         )
@@ -305,21 +306,21 @@ class MonthlyConvDecoder(nn.Module):
         B, MHW, C = latent.shape
         Hp = out_H // self.patch_h
         Wp = out_W // self.patch_w
-        assert MHW == M * Hp * Wp, f"Token mismatch: got {MHW}, expected {M*Hp*Wp}"
+        assert MHW == M * Hp * Wp, f"Token mismatch: got {MHW}, expected {M * Hp * Wp}"
 
-        #transforms the latent tensor from sequence format to image format for
-        #convolution operations; (B, M*Hp*Wp, C) -> (B*M, C, Hp, Wp)
+        # transforms the latent tensor from sequence format to image format for
+        # convolution operations; (B, M*Hp*Wp, C) -> (B*M, C, Hp, Wp)
         out = latent.view(B, M, Hp, Wp, C).permute(0, 1, 4, 2, 3).contiguous()
         out = out.view(B * M, C, Hp, Wp)
 
         # Apply 1x1 convolution to mix features
-        out = self.proj(out)        # (B*M, hidden, Hp, Wp)
+        out = self.proj(out)  # (B*M, hidden, Hp, Wp)
 
         # Use transposed convolution to upsample
-        out = self.deconv(out)      # (B*M, hidden//2, H, W)
+        out = self.deconv(out)  # (B*M, hidden//2, H, W)
 
         # Apply final conv head to get single channel output
-        out = self.head(out)        # (B*M, 1, H, W)
+        out = self.head(out)  # (B*M, 1, H, W)
 
         # Apply scale and bias
         out = out * self.scale + self.bias
@@ -501,10 +502,18 @@ class SpatioTemporalModel(nn.Module):
             spatial_heads: Number of attention heads in the spatial Transformer
         """
         super().__init__()
-        self.encoder = VideoEncoder(in_chans=in_chans, embed_dim=embed_dim, patch_size=patch_size)
-        self.temporal = TemporalAttentionAggregator(embed_dim=embed_dim, max_days=max_days, max_months=max_months)
-        self.spatial_pe = SpatialPositionalEncoding2D(embed_dim=embed_dim, max_H=max_H, max_W=max_W)
-        self.spatial_tr = SpatialTransformer(embed_dim=embed_dim, depth=spatial_depth, num_heads=spatial_heads)
+        self.encoder = VideoEncoder(
+            in_chans=in_chans, embed_dim=embed_dim, patch_size=patch_size
+        )
+        self.temporal = TemporalAttentionAggregator(
+            embed_dim=embed_dim, max_days=max_days, max_months=max_months
+        )
+        self.spatial_pe = SpatialPositionalEncoding2D(
+            embed_dim=embed_dim, max_H=max_H, max_W=max_W
+        )
+        self.spatial_tr = SpatialTransformer(
+            embed_dim=embed_dim, depth=spatial_depth, num_heads=spatial_heads
+        )
         self.decoder = MonthlyConvDecoder(
             embed_dim=embed_dim,
             patch_h=patch_size[1],
@@ -533,7 +542,9 @@ class SpatioTemporalModel(nn.Module):
         # each month independently by folding M into batch
         daily_data_reshaped = daily_data.reshape(B * M, C, T, H, W)
         daily_mask_reshaped = daily_mask.reshape(B * M, C, T, H, W)
-        latent = self.encoder(daily_data_reshaped, daily_mask_reshaped)  # (B*M, N_patches, embed_dim)
+        latent = self.encoder(
+            daily_data_reshaped, daily_mask_reshaped
+        )  # (B*M, N_patches, embed_dim)
 
         # Step 2: Aggregate temporal information for each spatial patch
         Tp = T // self.patch_size[0]
@@ -547,15 +558,23 @@ class SpatioTemporalModel(nn.Module):
         if padded_days_mask is not None and self.patch_size[0] > 1:
             B, M, T_days = padded_days_mask.shape
             if T_days % self.patch_size[0] != 0:
-                raise ValueError(f"T_days={T_days} must be divisible by patch_size[0]={self.patch_size[0]}")
-            padded_days_mask = padded_days_mask.view(B, M, T_days // self.patch_size[0], self.patch_size[0]).all(dim=-1)  # (B, M, Tp)
+                raise ValueError(
+                    f"T_days={T_days} must be divisible by patch_size[0]={self.patch_size[0]}"
+                )
+            padded_days_mask = padded_days_mask.view(
+                B, M, T_days // self.patch_size[0], self.patch_size[0]
+            ).all(dim=-1)  # (B, M, Tp)
 
-        agg_latent = self.temporal(latent, M, Tp, Hp, Wp, padded_days_mask=padded_days_mask) # (B, M*Hp*Wp, embed_dim)
+        agg_latent = self.temporal(
+            latent, M, Tp, Hp, Wp, padded_days_mask=padded_days_mask
+        )  # (B, M*Hp*Wp, embed_dim)
 
         # Step 3: Add spatial positional encodings and mix spatial features
         E = agg_latent.shape[-1]
         agg_latent = agg_latent.view(B, M, Hp * Wp, E)
-        pe = self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)  # (Hp*Wp, E)
+        pe = (
+            self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)
+        )  # (Hp*Wp, E)
         x = agg_latent + pe[None, None, :, :]
 
         # Step 4: Spatial mixing with Transformer
@@ -582,7 +601,7 @@ def make_daily_mask(daily_ts, land_mask):
     ocean = ~land  # True = ocean
     ocean_expanded = ocean.unsqueeze(0).unsqueeze(0).expand_as(daily_ts)  # (M, T, H, W)
 
-    mask = isnan & ocean_expanded    # True only at ocean-missing
+    mask = isnan & ocean_expanded  # True only at ocean-missing
     return mask  # (M, T,H,W)
 
 
@@ -602,6 +621,6 @@ def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
     # set land to NaN (broadcast mask across batch)
     if land_mask is not None:
         pred = pred.clone().to(torch.float32)
-        pred[:, :, land_mask.bool()] = float('nan')
+        pred[:, :, land_mask.bool()] = float("nan")
 
     return pred.detach().cpu().numpy()
