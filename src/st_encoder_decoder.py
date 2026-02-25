@@ -538,6 +538,16 @@ class SpatioTemporalModel(nn.Module):
         """
         B, C, M, T, H, W = daily_data.shape
 
+        Tp = T // self.patch_size[0]
+        Hp = H // self.patch_size[1]
+        Wp = W // self.patch_size[2]
+        Np = Tp * Hp * Wp
+
+        # check shape and patch compatibility
+        assert daily_mask.shape == daily_data.shape, "daily_mask must have the same shape as daily_data"
+        assert H % self.patch_size[1] == 0 and W % self.patch_size[2] == 0, "H and W must be divisible by patch size"
+        assert T % self.patch_size[0] == 0, "T must be divisible by patch size"
+
         # Step 1: Encode spatio-temporal patches
         # each month independently by folding M into batch
         daily_data_reshaped = daily_data.reshape(B * M, C, T, H, W)
@@ -547,11 +557,6 @@ class SpatioTemporalModel(nn.Module):
         )  # (B*M, N_patches, embed_dim)
 
         # Step 2: Aggregate temporal information for each spatial patch
-        Tp = T // self.patch_size[0]
-        Hp = H // self.patch_size[1]
-        Wp = W // self.patch_size[2]
-        Np = Tp * Hp * Wp
-
         # latent -> (B, M*Np, embed_dim) to match the aggregator input x: (B, M*Tp*Hp*Wp, embed_dim)
         latent = latent.reshape(B, M * Np, -1)
 
