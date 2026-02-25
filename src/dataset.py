@@ -23,6 +23,13 @@ class STDataset(Dataset):
         self.patch_size = patch_size
         self.overlap = overlap
 
+        # Check that the input data has the expected dimensions
+        if time_dim not in daily_da.dims or time_dim not in monthly_da.dims:
+            raise ValueError(f"Time dimension '{time_dim}' not found in input data")
+        for dim in spatial_dims:
+            if dim not in daily_da.dims or dim not in monthly_da.dims:
+                raise ValueError(f"Spatial dimension '{dim}' not found in input data")
+
         # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
         # and get padded_days_mask → (M, T=31)
         daily_mt, monthly_m, padded_days_mask = add_month_day_dims(
