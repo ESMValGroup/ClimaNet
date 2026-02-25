@@ -233,7 +233,9 @@ class MonthlyConvDecoder(nn.Module):
         - Optionally masks out land regions using a boolean mask.
     """
 
-    def __init__(self, embed_dim=128, patch_h=4, patch_w=4, hidden=128, overlap=1, num_months=12):
+    def __init__(
+        self, embed_dim=128, patch_h=4, patch_w=4, hidden=128, overlap=1, num_months=12
+    ):
         """
         Args:
             embed_dim: Dimension of the patch embedding.The default is 128.
@@ -334,8 +336,8 @@ class MonthlyConvDecoder(nn.Module):
         out = self.head(out)  # (B*M, 1, H, W)
 
         # Apply scale and bias per month to improve predictions; reshape to (B*M, 1, 1, 1) for broadcasting
-        scale = self.scale[:M].unsqueeze(0).expand(B, M).reshape(B*M, 1, 1, 1)
-        bias  = self.bias[:M].unsqueeze(0).expand(B, M).reshape(B*M, 1, 1, 1)
+        scale = self.scale[:M].unsqueeze(0).expand(B, M).reshape(B * M, 1, 1, 1)
+        bias = self.bias[:M].unsqueeze(0).expand(B, M).reshape(B * M, 1, 1, 1)
         out = out * scale + bias
         out = out.view(B, M, out_H, out_W)  # (B, M, H, W)
 
@@ -558,8 +560,12 @@ class SpatioTemporalModel(nn.Module):
         Np = Tp * Hp * Wp
 
         # check shape and patch compatibility
-        assert daily_mask.shape == daily_data.shape, "daily_mask must have the same shape as daily_data"
-        assert H % self.patch_size[1] == 0 and W % self.patch_size[2] == 0, "H and W must be divisible by patch size"
+        assert daily_mask.shape == daily_data.shape, (
+            "daily_mask must have the same shape as daily_data"
+        )
+        assert H % self.patch_size[1] == 0 and W % self.patch_size[2] == 0, (
+            "H and W must be divisible by patch size"
+        )
         assert T % self.patch_size[0] == 0, "T must be divisible by patch size"
 
         # Step 1: Encode spatio-temporal patches
