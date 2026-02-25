@@ -1,6 +1,6 @@
-site_name: "eso4clima-wp1-prototype"
-repo_url: https://github.com/ESMValGroup/eso4clima-wp1-prototype/
-repo_name: eso4clima-wp1-prototype
+site_name: "ClimaNet"
+repo_url: https://github.com/ESMValGroup/ClimaNet/
+repo_name: ClimaNet
 
 nav:
   - Introduction: index.md
