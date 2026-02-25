@@ -27,3 +27,6 @@ docs = [
     "mkdocstrings[python]>=1.0.2",
     "mkdocs-include-markdown-plugin",
 ]
+
+[tool.setuptools]
+packages = ["climanet"]
