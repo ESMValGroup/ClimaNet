@@ -281,12 +281,19 @@ class MonthlyConvDecoder(nn.Module):
         # common choice for spatial convolutions; it's the smallest kernel that
         # captures spatial context in all directions
         in_channels, out_channels = hidden // 2, hidden // 2
-        self.head = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+
+        # Refinement block: a small conv layers to smooth patch boundaries
+        self.refine = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.GELU(),
-            nn.Conv2d(out_channels, 1, kernel_size=1),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU(),
         )
+
+        # Final conv head to map to single-channel output
+        self.head = nn.Conv2d(out_channels, 1, kernel_size=1)
 
         # Learnable scale and bias (mean and std) to improve predictions
         self.scale = nn.Parameter(torch.ones(num_months))
@@ -319,6 +326,9 @@ class MonthlyConvDecoder(nn.Module):
 
         # Use transposed convolution to upsample
         out = self.deconv(out)  # (B*M, hidden//2, H, W)
+
+        # Refinement CNN to smooth boundaries
+        out = self.refine(out)  # (B*M, hidden//2, H, W)
 
         # Apply final conv head to get single channel output
         out = self.head(out)  # (B*M, 1, H, W)
