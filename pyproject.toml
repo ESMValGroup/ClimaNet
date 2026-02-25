@@ -1,5 +1,5 @@
 [project]
-name = "eso4clima-wp1-prototype"
+name = "ClimaNet"
 version = "0.1.0"
 description = "Machine Learning workflow predicting satellite observations from climate models."
 readme = "README.md"
