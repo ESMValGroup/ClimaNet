@@ -82,24 +82,31 @@ class STDataset(Dataset):
         ph, pw = self.patch_size
 
         # Extract spatial patch via numpy slicing — faster than xarray indexing
-        daily_patch = self.daily_np[:, :, i:i+ph, j:j+pw]  # (M, T, H, W)
-        monthly_patch = self.monthly_np[:, i:i+ph, j:j+pw]  # (M, H, W)
-        daily_nan_mask = self.daily_nan_mask[:, :, i:i+ph, j:j+pw]  # (M, T, H, W)
+        daily_patch = self.daily_np[:, :, i : i + ph, j : j + pw]  # (M, T, H, W)
+        monthly_patch = self.monthly_np[:, i : i + ph, j : j + pw]  # (M, H, W)
+        daily_nan_mask = self.daily_nan_mask[
+            :, :, i : i + ph, j : j + pw
+        ]  # (M, T, H, W)
 
         if self.land_mask_np is not None:
-            land_patch = self.land_mask_np[i:i+ph, j:j+pw]  # (H, W)
+            land_patch = self.land_mask_np[i : i + ph, j : j + pw]  # (H, W)
             land_tensor = torch.from_numpy(land_patch.copy()).bool()
         else:
             land_tensor = torch.zeros(ph, pw, dtype=torch.bool)
 
         # Convert to tensors (from_numpy is zero-copy on contiguous arrays)
-        daily_tensor = torch.from_numpy(daily_patch).float().unsqueeze(0)   # (1, M, T, H, W)
-        monthly_tensor = torch.from_numpy(monthly_patch).float()            # (M, H, W)
-        daily_nan_mask = torch.from_numpy(daily_nan_mask).unsqueeze(0)     # (1, M, T, H, W)
+        # (1, M, T, H, W)
+        daily_tensor = torch.from_numpy(daily_patch).float().unsqueeze(0)
+        # (M, H, W)
+        monthly_tensor = torch.from_numpy(monthly_patch).float()
+        # (1, M, T, H, W)
+        daily_nan_mask = torch.from_numpy(daily_nan_mask).unsqueeze(0)
 
         # daily_mask: NaN locations that are NOT land
         # Reshape land_tensor for broadcasting: (H, W) → (1, 1, 1, H, W)
-        daily_mask_tensor = daily_nan_mask & (~land_tensor.unsqueeze(0).unsqueeze(0).unsqueeze(0))
+        daily_mask_tensor = daily_nan_mask & (
+            ~land_tensor.unsqueeze(0).unsqueeze(0).unsqueeze(0)
+        )
 
         # Convert to tensors
         return {
@@ -107,6 +114,6 @@ class STDataset(Dataset):
             "monthly_patch": monthly_tensor,  # (M, H, W)
             "daily_mask_patch": daily_mask_tensor,  # (C=1, M, T=31, H, W)
             "land_mask_patch": land_tensor,  # (H,W) True=Land
-            "padded_days_mask": self.padded_days_tensor, # (M, T=31) True=padded
+            "padded_days_mask": self.padded_days_tensor,  # (M, T=31) True=padded
             "coords": (i, j),
         }
