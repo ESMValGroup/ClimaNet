@@ -202,7 +202,7 @@ class TemporalAttentionAggregator(nn.Module):
         # Day attention per month
         day_logits = self.day_scorer(seq).squeeze(-1)  # (B, HW, M, T)
 
-        # padded_days_mask is (B, M, T) bool -> (B, HW, M, T)
+        # padded_days_mask is (B, M, T) true=padded, -> (B, HW, M, T)
         if padded_days_mask is not None:
             pad = padded_days_mask[:, None, :, :].expand(x.shape[0], H * W, M, T)
             day_logits = day_logits.masked_fill(pad, float("-inf"))
@@ -233,7 +233,7 @@ class MonthlyConvDecoder(nn.Module):
         - Optionally masks out land regions using a boolean mask.
     """
 
-    def __init__(self, embed_dim=128, patch_h=4, patch_w=4, hidden=128, overlap=1):
+    def __init__(self, embed_dim=128, patch_h=4, patch_w=4, hidden=128, overlap=1, num_months=12):
         """
         Args:
             embed_dim: Dimension of the patch embedding.The default is 128.
@@ -245,6 +245,7 @@ class MonthlyConvDecoder(nn.Module):
                 The default is 128, which can be tuned.
             overlap: Overlap size for deconvolution. It creates smooth blending
                 between adjacent upsampled patches. Default is 1, no overlap at edges.
+            num_months: Number of months. Default is 12.
         """
         super().__init__()
         self.patch_h = patch_h
@@ -288,8 +289,8 @@ class MonthlyConvDecoder(nn.Module):
         )
 
         # Learnable scale and bias (mean and std) to improve predictions
-        self.scale = nn.Parameter(torch.ones(1))
-        self.bias = nn.Parameter(torch.zeros(1))
+        self.scale = nn.Parameter(torch.ones(num_months))
+        self.bias = nn.Parameter(torch.zeros(num_months))
 
     def forward(self, latent, M, out_H, out_W, land_mask=None):
         """Reconstruct 2D maps from latent patch tokens.
@@ -322,8 +323,10 @@ class MonthlyConvDecoder(nn.Module):
         # Apply final conv head to get single channel output
         out = self.head(out)  # (B*M, 1, H, W)
 
-        # Apply scale and bias
-        out = out * self.scale + self.bias
+        # Apply scale and bias per month to improve predictions; reshape to (B*M, 1, 1, 1) for broadcasting
+        scale = self.scale[:M].unsqueeze(0).expand(B, M).reshape(B*M, 1, 1, 1)
+        bias  = self.bias[:M].unsqueeze(0).expand(B, M).reshape(B*M, 1, 1, 1)
+        out = out * scale + bias
         out = out.view(B, M, out_H, out_W)  # (B, M, H, W)
 
         # Mask out land areas if land_mask is provided
@@ -520,6 +523,7 @@ class SpatioTemporalModel(nn.Module):
             patch_w=patch_size[2],
             hidden=hidden,
             overlap=overlap,
+            num_months=max_months,
         )
         self.patch_size = patch_size
 

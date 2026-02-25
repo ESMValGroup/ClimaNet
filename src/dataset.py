@@ -106,7 +106,7 @@ class STDataset(Dataset):
             "daily_patch": daily_tensor,  # (C=1, M, T=31, H, W)
             "monthly_patch": monthly_tensor,  # (M, H, W)
             "daily_mask_patch": daily_mask_tensor,  # (C=1, M, T=31, H, W)
-            "land_mask_patch": land_tensor,  # (H,W)
+            "land_mask_patch": land_tensor,  # (H,W) True=Land
             "padded_days_mask": self.padded_days_tensor, # (M, T=31) True=padded
             "coords": (i, j),
         }

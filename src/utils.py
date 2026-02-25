@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import xarray as xr
 import torch
@@ -79,6 +81,7 @@ def add_month_day_dims(
     daily_ts: xr.DataArray,    # (time, H, W) daily
     monthly_ts: xr.DataArray,  # (time, H, W) monthly
     time_dim: str = "time",
+    spatial_dims: Tuple[str, str] = ("lat", "lon")
 ):
     """ Reshape daily and monthly data to have explicit month (M) and day (T) dimensions.
 
@@ -87,9 +90,9 @@ def add_month_day_dims(
 
     Returns
     -------
-    daily_m : xr.DataArray - dims: (M, T=31, H, W)
+    daily_m : xr.DataArray - dims: (M, T, H, W)
     monthly_m : xr.DataArray - dims: (M, H, W)
-    padded_days_mask : xr.DataArray - dims: (M, T), bool, True where day is padded
+    padded_days_mask : xr.DataArray - dims: (M, T=31), bool, True where day is padded
     """
     # Month key as integer YYYYMM
     dkey = daily_ts[time_dim].dt.year * 100 + daily_ts[time_dim].dt.month
@@ -112,7 +115,7 @@ def add_month_day_dims(
     daily_indexed = daily_indexed.transpose("M", "T", *other_dims)
 
     # Build padded days mask from daily_indexed (NaN locations)
-    padded_days_mask = daily_indexed.isnull().isel({d: 0 for d in daily_indexed.dims if d not in ("M", "T")})
+    padded_days_mask = ~daily_indexed.notnull().any(dim=spatial_dims)
 
     # Align monthly data to same month keys/order
     monthly_m = (
