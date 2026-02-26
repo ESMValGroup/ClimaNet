@@ -1,7 +1,5 @@
 # ClimaNet: A Climate Aware Spatio Temporal Encoder Decoder
 
-<img src="docs/figs/logo.png" alt="logo" width="50%" />
-
 [![License](https://img.shields.io/github/license/ESMValGroup/ClimaNet)](https://opensource.org/licenses/Apache-2.0)
 
 ## Installation
