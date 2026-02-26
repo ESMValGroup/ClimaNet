@@ -111,9 +111,8 @@ This is a temporal attention pooling over sequences of tokens.
 For each spatial patch (h, w):
 
 - Collect its T temporal tokens: each spatial patch (h, w) has T temporal tokens
-- Add temporal positional encoding
-- Compute a learned scalar score per time step: the model learns which time
-  steps are important for this patch
+- Add temporal positional encoding for days within a month and for months within a year.
+- Compute a learned scalar score per time step
 - Apply softmax over time: it ensures the weights form a probability
   distribution over time.
 - Compute a weighted temporal sum: output is a temporal summary vector for each
@@ -121,14 +120,14 @@ For each spatial patch (h, w):
 
 **Detailed process:**
 
-We start with: `x ∈ ℝ^{B × (T·H·W) × C}`, where `B` = batch size, `T` = number
-of temporal tokens per spatial patch, `H`, `W` = number of spatial patches along
-height and width, `C` = embedding dimension. We can reshape it to group by
-spatial patch where each spatial patch has its temporal sequence of length `T`.
+We start with: `x ∈ ℝ^{B × (M.T·H·W) × C}`, where `B` = batch size, `M`= number
+of months, `T` = number of temporal tokens per spatial patch, `H`, `W` = number
+of spatial patches along height and width, `C` = embedding dimension. We can
+reshape it to group by spatial patch where each spatial patch has its temporal
+sequence of length `T`.
 
 Then we add temporal positional encoding `pe` from `TemporalPositionalEncoding`.
-Add it to each temporal token `seq = seq + pe`. This injects time information
-into each patch’s token sequence.
+Add it to each temporal token `seq = seq + pe`. This injects time information (for days and for months) into each patch’s token sequence.
 
 Then we compute temporal attention weights by applying `nn.Sequential` to get a
 scalar score, see
@@ -145,11 +144,17 @@ Here the explanation over each module in the sequential is as follows:
 see [torch.nn](https://docs.pytorch.org/docs/stable/nn.html) for more details on
 each module.
 
-Then, we convert scores into attention weights using softmax over time that
-represents importance of each temporal token for this patch.
+We apply the mask `padded_days_mask` where padded days (beyond the actual number
+of days in a month) are masked out. This ensures that the model does not attend
+to padded tokens that do not correspond to real data.Then, we convert scores
+into attention weights using softmax over time that represents importance of
+each temporal token for this patch. Then we aggregate temporal tokens by
+weighted sum over the temporal dimension. Result is one token per spatial patch.
 
-Then we aggregate temporal tokens by weighted sum over the temporal dimension.
-Result is one token per spatial patch.
+Then we apply cross month mixing using `nn.MultiheadAttention`. This allows
+tokens from different months to attend to each other, which can capture seasonal patterns. The attention is computed across the temporal dimension for each spatial patch. See [torch.nn.MultiheadAttention](https://docs.pytorch.org/docs/stable/generated/torch.nn.MultiheadAttention.html#multiheadattention) for details on how multi-head attention works.
+
+Then we apply `nn.Sequential` again to the output of attention to get a final scalar score for each time step. The explanation for each module is the same as before: LayerNorm, Linear, GELU, Linear to 1 scalar. This gives us a score for each time step in the temporal sequence of each spatial patch.
 
 ## 4. Spatial Positional Encoding (class `SpatialPositionalEncoding2D`)
 
@@ -205,6 +210,7 @@ a container that repeats the same transformer block `depth` times.
 - Reshape latent tokens
 - Apply 1x1 convolution to mix features
 - Use transposed convolution to upsample to original spatial size
+- Applies a convolutional refinement block to smooth patch boundaries.
 - Apply convolutional head for final output
 - Optionally mask out land regions
 - Add scale and bias to output
@@ -223,21 +229,27 @@ original pixel grid. It converts the low-resolution patch grid back to the
 original image resolution. The padding is set to the overlap, which allows for
 smooth upsampling and some overlap between patches.
 
-Finally, using `nn.Sequential`, we convert the upsampled features into a single-channel output. This processing block contains:
+Then we apply a convolutional refinement block to smooth out any artifacts from
+the deconvolution. Deconvolution can sometimes produce blocky outputs, so this
+refinement helps to smooth patch boundaries and improve spatial coherence. This
+block consists of a `nn.Sequential`. This processing block contains:
 
-- `Conv2d`: 3×3 Convolution with padding=1 to refines spatial details after upsampling.
+- `Conv2d`: Convolution to mix features and reduce artifacts.
 - `BatchNorm2d`: Normalizes the features to stabilize training.
 - `GELU`: Non-linear activation to allow complex feature interactions.
-- `Conv2d(1×1)`: Final 1×1 convolution to reduce channels to 1, producing the final output map.
+- `Conv2d(1×1)`: Final 1×1 convolution for deeper feature refinement.
+- `BatchNorm2d`: Re-normalizes the features to stabilize training.
+- `GELU`: Another non-linear activation to allow complex feature interactions.
 
-A single `Conv2d(64, 1, kernel_size=1)` could work, but the extra layers provide:
+A single `Conv2d(..., 1, kernel_size=1)` could work, but the extra layers provide:
 
 - Spatial refinement after deconvolution (which can produce artifacts)
 - Non-linearity for more expressive power
 - Better gradient flow during training
 
-Then we apply scale, bias, and (optional) land mask to get the final output (he
-reconstructed 2D map (e.g., SST) for each batch).
+Finally, we apply a small convolutional head to produce the final single-channel
+output. Then we apply scale, bias, and (optional) land mask to get the final
+output (he reconstructed 2D map (e.g., SST) for each batch).
 
 ## References
 
