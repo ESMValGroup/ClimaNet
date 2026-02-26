@@ -3,7 +3,7 @@ import pytest
 import torch
 import xarray as xr
 
-from dataset import STDataset
+from climanet import STDataset
 
 
 def _make_datasets():
