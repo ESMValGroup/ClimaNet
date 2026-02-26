@@ -1,4 +1,4 @@
-# ClimaNet
+# ClimaNet: A Climate Aware Spatio Temporal Encoder Decoder
 
 <img src="docs/figs/logo.png" alt="logo" width="50%" />
 
