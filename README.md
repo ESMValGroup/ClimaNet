@@ -1,6 +1,6 @@
-# eso4clima-wp1-prototype
+# ClimaNet: A Climate Aware Spatio Temporal Encoder Decoder
 
-[![License](https://img.shields.io/github/license/ESMValGroup/eso4clima-wp1-prototype)](https://opensource.org/licenses/Apache-2.0)
+[![License](https://img.shields.io/github/license/ESMValGroup/ClimaNet)](https://opensource.org/licenses/Apache-2.0)
 
 ## Installation
 
