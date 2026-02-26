@@ -123,14 +123,19 @@ class TemporalPositionalEncoding(nn.Module):
 class TemporalAttentionAggregator(nn.Module):
     """Temporal attention-based aggregator.
 
-    This module aggregates temporal tokens into a single token per spatial patch
-    by computing learned attention weights over the temporal dimension. Temporal
-    positional encodings are added before computing the attention weights. Then,
-    temporal attention weights are calculated by applying `nn.Sequential` to get
-    a scalar score.
+    This module aggregates temporal information for each spatial patch by
+    applying attention across the temporal dimension. It consists of two main
+    steps:
+    1. Day attention: For each month, it computes attention weights across the
+    temporal tokens (days) and performs a weighted sum to get one token per
+    spatial location for each month.
+    2. Cross-month mixing: After temporal aggregation, it applies a Transformer
+    encoder layer to mix information across months at each spatial location.
 
-    For each spatial location, a weighted sum over time is performed to
-    produce one aggregated token.
+    For each spatial location, the day attention allows the model to learn which
+    days are most important for predicting the monthly average, while the
+    cross-month mixing allows the model to learn interactions between different
+    months.
     """
 
     def __init__(self, embed_dim=128, max_days=31, max_months=12):
@@ -229,6 +234,7 @@ class MonthlyConvDecoder(nn.Module):
     The MonthlyConvDecoder converts latent patch tokens back to pixel space:
         - Applies a 1*1 convolution to mix features on the patch grid.
         - Uses a transposed convolution (deconvolution) to upsample tokens to the original spatial resolution.
+        - Applies a convolutional refinement block to smooth patch boundaries.
         - Applies a small convolutional head to produce the final single-channel output.
         - Optionally masks out land regions using a boolean mask.
     """
@@ -289,7 +295,7 @@ class MonthlyConvDecoder(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.GELU(),
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.GELU(),
         )
