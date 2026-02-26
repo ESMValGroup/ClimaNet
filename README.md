@@ -65,5 +65,3 @@ description](docs/code_math_description.md) document.
 https://doi.org/10.48550/arXiv.2205.09113)
 - [MAESSTRO: Masked Autoencoders for Sea Surface Temperature Reconstruction under Occlusion- 2024](https://doi.org/10.5194/os-20-1309-2024
 )
-
-Logo created by ChatGPT-4.
