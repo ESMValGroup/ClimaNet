@@ -1,5 +1,5 @@
 import numpy as np
-from utils import add_month_day_dims
+from .utils import add_month_day_dims
 import xarray as xr
 import torch
 from torch.utils.data import Dataset
