@@ -212,7 +212,7 @@ class TemporalAttentionAggregator(nn.Module):
             pad = padded_days_mask[:, None, :, :].expand(x.shape[0], H * W, M, T)
             day_logits = day_logits.masked_fill(pad, float("-inf"))
 
-        day_w = torch.softmax(day_logits, dim=-1)
+        day_w = torch.softmax(day_logits, dim=-1)  # turns inf to 0
         month_tokens = (seq * day_w.unsqueeze(-1)).sum(dim=3)  # (B, HW, M, C)
 
         # Cross-month attention at each spatial location
@@ -314,7 +314,7 @@ class MonthlyConvDecoder(nn.Module):
             M: Number of months (temporal patches)
             out_H: Target output height (must be divisible by patch_h)
             out_W: Target output width (must be divisible by patch_w)
-            land_mask: Optional boolean tensor of shape (out_H, out_W). Values set to True
+            land_mask: Optional boolean tensor of shape (B, out_H, out_W). Values set to True
                 will be masked out (set to 0) in the output (only ocean pixels exist).
         Returns:
             Tensor of shape (B, M, out_H, out_W) representing the monthly variable e.g. SST.
@@ -349,7 +349,7 @@ class MonthlyConvDecoder(nn.Module):
 
         # Mask out land areas if land_mask is provided
         if land_mask is not None:
-            out = out.masked_fill(land_mask.bool()[None, None, :, :], 0.0)
+            out = out.masked_fill(land_mask.bool()[:, None, :, :], 0.0)
         return out  # (B, M, out_H, out_W)
 
 
@@ -500,10 +500,11 @@ class SpatioTemporalModel(nn.Module):
         patch_size=(1, 4, 4),
         max_days=31,
         max_months=12,
-        hidden=128,
+        num_months=12,
+        hidden=256,
         overlap=1,
-        max_H=1024,
-        max_W=1024,
+        max_H=256,
+        max_W=256,
         spatial_depth=2,
         spatial_heads=4,
     ):
@@ -515,6 +516,7 @@ class SpatioTemporalModel(nn.Module):
             patch_size: Tuple of (T, H, W) patch sizes for temporal and spatial patching
             max_days: Maximum number of days for temporal positional encoding
             max_months: Maximum number of months for temporal positional encoding
+            num_months: Number of months to predict (output channels in decoder)
             hidden: Hidden dimension used in the decoder
             overlap: Overlap for deconvolution in the decoder
             max_H: Maximum spatial height for 2D positional encoding
@@ -541,7 +543,7 @@ class SpatioTemporalModel(nn.Module):
             patch_w=patch_size[2],
             hidden=hidden,
             overlap=overlap,
-            num_months=max_months,
+            num_months=num_months,
         )
         self.patch_size = patch_size
 
@@ -552,7 +554,7 @@ class SpatioTemporalModel(nn.Module):
             daily_data: Tensor of shape (B, C, M, T, H, W) containing daily
                 data, where C is the number of channels (e.g., 1 for SST)
             daily_mask: Boolean tensor of same shape as daily_data indicating missing values
-            land_mask_patch: Boolean tensor of shape (H, W) to mask land areas in the output
+            land_mask_patch: Boolean tensor of shape (B, H, W) to mask land areas in the output
             padded_days_mask: Optional boolean tensor of shape (B, M, T) indicating which day tokens are padded
                  (True for padded tokens). Used to mask out padded tokens in temporal attention.
         Returns:
