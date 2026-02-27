@@ -1,0 +1,2801 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../../examples/">
+      
+      
+        <link rel="next" href="../utils/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+    
+    
+      
+        <title>st_encoder_decoder.py - ClimaNet</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="white">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#climanet.st_encoder_decoder" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ClimaNet" class="md-header__button md-logo" aria-label="ClimaNet" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ClimaNet
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              st_encoder_decoder.py
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="white"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="pink"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/ESMValGroup/ClimaNet/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ClimaNet
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Introduction
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../examples/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ClimaNet" class="md-nav__button md-logo" aria-label="ClimaNet" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ClimaNet
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ESMValGroup/ClimaNet/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ClimaNet
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    st_encoder_decoder.py
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    st_encoder_decoder.py
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        st_encoder_decoder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.MonthlyConvDecoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MonthlyConvDecoder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MonthlyConvDecoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.MonthlyConvDecoder.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatialPositionalEncoding2D" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SpatialPositionalEncoding2D
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SpatialPositionalEncoding2D">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatialPositionalEncoding2D.build_pe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_pe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatialPositionalEncoding2D.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatialTransformer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SpatialTransformer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SpatialTransformer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatialTransformer.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatioTemporalModel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SpatioTemporalModel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SpatioTemporalModel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatioTemporalModel.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.TemporalAttentionAggregator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TemporalAttentionAggregator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TemporalAttentionAggregator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.TemporalAttentionAggregator.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.TemporalPositionalEncoding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TemporalPositionalEncoding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TemporalPositionalEncoding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.TemporalPositionalEncoding.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.VideoEncoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VideoEncoder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="VideoEncoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.VideoEncoder.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    utils.py
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        st_encoder_decoder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.MonthlyConvDecoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MonthlyConvDecoder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MonthlyConvDecoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.MonthlyConvDecoder.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatialPositionalEncoding2D" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SpatialPositionalEncoding2D
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SpatialPositionalEncoding2D">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatialPositionalEncoding2D.build_pe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_pe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatialPositionalEncoding2D.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatialTransformer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SpatialTransformer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SpatialTransformer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatialTransformer.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatioTemporalModel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SpatioTemporalModel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SpatioTemporalModel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.SpatioTemporalModel.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.TemporalAttentionAggregator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TemporalAttentionAggregator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TemporalAttentionAggregator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.TemporalAttentionAggregator.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.TemporalPositionalEncoding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TemporalPositionalEncoding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TemporalPositionalEncoding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.TemporalPositionalEncoding.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.VideoEncoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VideoEncoder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="VideoEncoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climanet.st_encoder_decoder.VideoEncoder.forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+  <h1>st_encoder_decoder.py</h1>
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="climanet.st_encoder_decoder"></a>
+    <div class="doc doc-contents first">
+
+        <p>Spatio-Temporal encoder-decoder for Monthly Prediction.
+The main model class is SpatioTemporalModel.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="climanet.st_encoder_decoder.MonthlyConvDecoder" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">MonthlyConvDecoder</span><span class="p">(</span><span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">patch_h</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">patch_w</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">hidden</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_months</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
+
+
+
+        <p>Decoder to reconstruct 2D maps from patch tokens.</p>
+<p>The MonthlyConvDecoder converts latent patch tokens back to pixel space:
+    - Applies a 1*1 convolution to mix features on the patch grid.
+    - Uses a transposed convolution (deconvolution) to upsample tokens to the original spatial resolution.
+    - Applies a convolutional refinement block to smooth patch boundaries.
+    - Applies a small convolutional head to produce the final single-channel output.
+    - Optionally masks out land regions using a boolean mask.</p>
+
+        <p>Args:
+    embed_dim: Dimension of the patch embedding.The default is 128.
+        Many vision transformers use embedding dimensions that are
+        multiples of 64 (e.g., 64, 128, 256). This can be tuned.
+    patch_h: Patch height
+    patch_w: Patch width
+    hidden: Hidden dimension in the decoder for mixing channel features.
+        The default is 128, which can be tuned.
+    overlap: Overlap size for deconvolution. It creates smooth blending
+        between adjacent upsampled patches. Default is 1, no overlap at edges.
+    num_months: Number of months. Default is 12.</p>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-242">242</a></span>
+<span class="normal"><a href="#__codelineno-0-243">243</a></span>
+<span class="normal"><a href="#__codelineno-0-244">244</a></span>
+<span class="normal"><a href="#__codelineno-0-245">245</a></span>
+<span class="normal"><a href="#__codelineno-0-246">246</a></span>
+<span class="normal"><a href="#__codelineno-0-247">247</a></span>
+<span class="normal"><a href="#__codelineno-0-248">248</a></span>
+<span class="normal"><a href="#__codelineno-0-249">249</a></span>
+<span class="normal"><a href="#__codelineno-0-250">250</a></span>
+<span class="normal"><a href="#__codelineno-0-251">251</a></span>
+<span class="normal"><a href="#__codelineno-0-252">252</a></span>
+<span class="normal"><a href="#__codelineno-0-253">253</a></span>
+<span class="normal"><a href="#__codelineno-0-254">254</a></span>
+<span class="normal"><a href="#__codelineno-0-255">255</a></span>
+<span class="normal"><a href="#__codelineno-0-256">256</a></span>
+<span class="normal"><a href="#__codelineno-0-257">257</a></span>
+<span class="normal"><a href="#__codelineno-0-258">258</a></span>
+<span class="normal"><a href="#__codelineno-0-259">259</a></span>
+<span class="normal"><a href="#__codelineno-0-260">260</a></span>
+<span class="normal"><a href="#__codelineno-0-261">261</a></span>
+<span class="normal"><a href="#__codelineno-0-262">262</a></span>
+<span class="normal"><a href="#__codelineno-0-263">263</a></span>
+<span class="normal"><a href="#__codelineno-0-264">264</a></span>
+<span class="normal"><a href="#__codelineno-0-265">265</a></span>
+<span class="normal"><a href="#__codelineno-0-266">266</a></span>
+<span class="normal"><a href="#__codelineno-0-267">267</a></span>
+<span class="normal"><a href="#__codelineno-0-268">268</a></span>
+<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span>
+<span class="normal"><a href="#__codelineno-0-276">276</a></span>
+<span class="normal"><a href="#__codelineno-0-277">277</a></span>
+<span class="normal"><a href="#__codelineno-0-278">278</a></span>
+<span class="normal"><a href="#__codelineno-0-279">279</a></span>
+<span class="normal"><a href="#__codelineno-0-280">280</a></span>
+<span class="normal"><a href="#__codelineno-0-281">281</a></span>
+<span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span>
+<span class="normal"><a href="#__codelineno-0-286">286</a></span>
+<span class="normal"><a href="#__codelineno-0-287">287</a></span>
+<span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span>
+<span class="normal"><a href="#__codelineno-0-290">290</a></span>
+<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+<span class="normal"><a href="#__codelineno-0-292">292</a></span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span>
+<span class="normal"><a href="#__codelineno-0-294">294</a></span>
+<span class="normal"><a href="#__codelineno-0-295">295</a></span>
+<span class="normal"><a href="#__codelineno-0-296">296</a></span>
+<span class="normal"><a href="#__codelineno-0-297">297</a></span>
+<span class="normal"><a href="#__codelineno-0-298">298</a></span>
+<span class="normal"><a href="#__codelineno-0-299">299</a></span>
+<span class="normal"><a href="#__codelineno-0-300">300</a></span>
+<span class="normal"><a href="#__codelineno-0-301">301</a></span>
+<span class="normal"><a href="#__codelineno-0-302">302</a></span>
+<span class="normal"><a href="#__codelineno-0-303">303</a></span>
+<span class="normal"><a href="#__codelineno-0-304">304</a></span>
+<span class="normal"><a href="#__codelineno-0-305">305</a></span>
+<span class="normal"><a href="#__codelineno-0-306">306</a></span>
+<span class="normal"><a href="#__codelineno-0-307">307</a></span>
+<span class="normal"><a href="#__codelineno-0-308">308</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a>    <span class="bp">self</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">patch_h</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">patch_w</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">hidden</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_months</span><span class="o">=</span><span class="mi">12</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="p">):</span>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">        embed_dim: Dimension of the patch embedding.The default is 128.</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">            Many vision transformers use embedding dimensions that are</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">            multiples of 64 (e.g., 64, 128, 256). This can be tuned.</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">        patch_h: Patch height</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">        patch_w: Patch width</span>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a><span class="sd">        hidden: Hidden dimension in the decoder for mixing channel features.</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">            The default is 128, which can be tuned.</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">        overlap: Overlap size for deconvolution. It creates smooth blending</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a><span class="sd">            between adjacent upsampled patches. Default is 1, no overlap at edges.</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a><span class="sd">        num_months: Number of months. Default is 12.</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">patch_h</span> <span class="o">=</span> <span class="n">patch_h</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">patch_w</span> <span class="o">=</span> <span class="n">patch_w</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">overlap</span> <span class="o">=</span> <span class="n">overlap</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a>    <span class="c1"># Mix channel features on the patch grid (Hp, Wp)</span>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a>    <span class="c1"># Input shape: (B, embed_dim, Hp, Wp) → Output shape: (B, hidden, Hp, Wp)</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a>    <span class="c1"># here kernel_size=1 means we are mixing features at each patch location</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a>    <span class="c1"># without spatial interaction</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a>    <span class="n">in_channels</span><span class="p">,</span> <span class="n">out_channels</span> <span class="o">=</span> <span class="n">embed_dim</span><span class="p">,</span> <span class="n">hidden</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">proj</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">in_channels</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a>    <span class="c1"># Upsample to full resolution</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a>    <span class="c1"># With kernel = stride + 2*overlap and padding=overlap,</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="c1"># output size is exact: H = Hp*patch_h, W = Wp*patch_w (no output_padding needed).</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a>    <span class="n">k_h</span> <span class="o">=</span> <span class="n">patch_h</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">overlap</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a>    <span class="n">k_w</span> <span class="o">=</span> <span class="n">patch_w</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">overlap</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a>    <span class="c1"># As spatial size increases, channel count decreases to keep computation</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a>    <span class="c1"># manageable; here  hidden // 2 is a design choice.</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a>    <span class="n">in_channels</span><span class="p">,</span> <span class="n">out_channels</span> <span class="o">=</span> <span class="n">hidden</span><span class="p">,</span> <span class="n">hidden</span> <span class="o">//</span> <span class="mi">2</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">deconv</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ConvTranspose2d</span><span class="p">(</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a>        <span class="n">in_channels</span><span class="p">,</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a>        <span class="n">out_channels</span><span class="p">,</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>        <span class="n">kernel_size</span><span class="o">=</span><span class="p">(</span><span class="n">k_h</span><span class="p">,</span> <span class="n">k_w</span><span class="p">),</span>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a>        <span class="n">stride</span><span class="o">=</span><span class="p">(</span><span class="n">patch_h</span><span class="p">,</span> <span class="n">patch_w</span><span class="p">),</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>        <span class="n">padding</span><span class="o">=</span><span class="n">overlap</span><span class="p">,</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>        <span class="n">output_padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a>        <span class="n">bias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a>    <span class="p">)</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>    <span class="c1"># Final conv head to get single channel output kernel_size=3 is the most</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a>    <span class="c1"># common choice for spatial convolutions; it&#39;s the smallest kernel that</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a>    <span class="c1"># captures spatial context in all directions</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a>    <span class="n">in_channels</span><span class="p">,</span> <span class="n">out_channels</span> <span class="o">=</span> <span class="n">hidden</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">hidden</span> <span class="o">//</span> <span class="mi">2</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="c1"># Refinement block: a small conv layers to smooth patch boundaries</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">refine</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">in_channels</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="n">out_channels</span><span class="p">),</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(),</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">out_channels</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="n">out_channels</span><span class="p">),</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(),</span>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a>    <span class="p">)</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a>    <span class="c1"># Final conv head to map to single-channel output</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">head</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">out_channels</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a>    <span class="c1"># Learnable scale and bias (mean and std) to improve predictions</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">num_months</span><span class="p">))</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">bias</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">num_months</span><span class="p">))</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="climanet.st_encoder_decoder.MonthlyConvDecoder.forward" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">forward</span><span class="p">(</span><span class="n">latent</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">out_H</span><span class="p">,</span> <span class="n">out_W</span><span class="p">,</span> <span class="n">land_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Reconstruct 2D maps from latent patch tokens.
+Args:
+    latent: Tensor of shape (B, M<em>Hp</em>Wp, C) where C is the embedding dimension.
+    M: Number of months (temporal patches)
+    out_H: Target output height (must be divisible by patch_h)
+    out_W: Target output width (must be divisible by patch_w)
+    land_mask: Optional boolean tensor of shape (out_H, out_W). Values set to True
+        will be masked out (set to 0) in the output (only ocean pixels exist).
+Returns:
+    Tensor of shape (B, M, out_H, out_W) representing the monthly variable e.g. SST.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-310">310</a></span>
+<span class="normal"><a href="#__codelineno-0-311">311</a></span>
+<span class="normal"><a href="#__codelineno-0-312">312</a></span>
+<span class="normal"><a href="#__codelineno-0-313">313</a></span>
+<span class="normal"><a href="#__codelineno-0-314">314</a></span>
+<span class="normal"><a href="#__codelineno-0-315">315</a></span>
+<span class="normal"><a href="#__codelineno-0-316">316</a></span>
+<span class="normal"><a href="#__codelineno-0-317">317</a></span>
+<span class="normal"><a href="#__codelineno-0-318">318</a></span>
+<span class="normal"><a href="#__codelineno-0-319">319</a></span>
+<span class="normal"><a href="#__codelineno-0-320">320</a></span>
+<span class="normal"><a href="#__codelineno-0-321">321</a></span>
+<span class="normal"><a href="#__codelineno-0-322">322</a></span>
+<span class="normal"><a href="#__codelineno-0-323">323</a></span>
+<span class="normal"><a href="#__codelineno-0-324">324</a></span>
+<span class="normal"><a href="#__codelineno-0-325">325</a></span>
+<span class="normal"><a href="#__codelineno-0-326">326</a></span>
+<span class="normal"><a href="#__codelineno-0-327">327</a></span>
+<span class="normal"><a href="#__codelineno-0-328">328</a></span>
+<span class="normal"><a href="#__codelineno-0-329">329</a></span>
+<span class="normal"><a href="#__codelineno-0-330">330</a></span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span>
+<span class="normal"><a href="#__codelineno-0-333">333</a></span>
+<span class="normal"><a href="#__codelineno-0-334">334</a></span>
+<span class="normal"><a href="#__codelineno-0-335">335</a></span>
+<span class="normal"><a href="#__codelineno-0-336">336</a></span>
+<span class="normal"><a href="#__codelineno-0-337">337</a></span>
+<span class="normal"><a href="#__codelineno-0-338">338</a></span>
+<span class="normal"><a href="#__codelineno-0-339">339</a></span>
+<span class="normal"><a href="#__codelineno-0-340">340</a></span>
+<span class="normal"><a href="#__codelineno-0-341">341</a></span>
+<span class="normal"><a href="#__codelineno-0-342">342</a></span>
+<span class="normal"><a href="#__codelineno-0-343">343</a></span>
+<span class="normal"><a href="#__codelineno-0-344">344</a></span>
+<span class="normal"><a href="#__codelineno-0-345">345</a></span>
+<span class="normal"><a href="#__codelineno-0-346">346</a></span>
+<span class="normal"><a href="#__codelineno-0-347">347</a></span>
+<span class="normal"><a href="#__codelineno-0-348">348</a></span>
+<span class="normal"><a href="#__codelineno-0-349">349</a></span>
+<span class="normal"><a href="#__codelineno-0-350">350</a></span>
+<span class="normal"><a href="#__codelineno-0-351">351</a></span>
+<span class="normal"><a href="#__codelineno-0-352">352</a></span>
+<span class="normal"><a href="#__codelineno-0-353">353</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">out_H</span><span class="p">,</span> <span class="n">out_W</span><span class="p">,</span> <span class="n">land_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Reconstruct 2D maps from latent patch tokens.</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">        latent: Tensor of shape (B, M*Hp*Wp, C) where C is the embedding dimension.</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">        M: Number of months (temporal patches)</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">        out_H: Target output height (must be divisible by patch_h)</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">        out_W: Target output width (must be divisible by patch_w)</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">        land_mask: Optional boolean tensor of shape (out_H, out_W). Values set to True</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">            will be masked out (set to 0) in the output (only ocean pixels exist).</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">        Tensor of shape (B, M, out_H, out_W) representing the monthly variable e.g. SST.</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a>    <span class="n">B</span><span class="p">,</span> <span class="n">MHW</span><span class="p">,</span> <span class="n">C</span> <span class="o">=</span> <span class="n">latent</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a>    <span class="n">Hp</span> <span class="o">=</span> <span class="n">out_H</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_h</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a>    <span class="n">Wp</span> <span class="o">=</span> <span class="n">out_W</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_w</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a>    <span class="k">assert</span> <span class="n">MHW</span> <span class="o">==</span> <span class="n">M</span> <span class="o">*</span> <span class="n">Hp</span> <span class="o">*</span> <span class="n">Wp</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Token mismatch: got </span><span class="si">{</span><span class="n">MHW</span><span class="si">}</span><span class="s2">, expected </span><span class="si">{</span><span class="n">M</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">Hp</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">Wp</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>    <span class="c1"># transforms the latent tensor from sequence format to image format for</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a>    <span class="c1"># convolution operations; (B, M*Hp*Wp, C) -&gt; (B*M, C, Hp, Wp)</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">latent</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">Hp</span><span class="p">,</span> <span class="n">Wp</span><span class="p">,</span> <span class="n">C</span><span class="p">)</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">M</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">Hp</span><span class="p">,</span> <span class="n">Wp</span><span class="p">)</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a>    <span class="c1"># Apply 1x1 convolution to mix features</span>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a>    <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>  <span class="c1"># (B*M, hidden, Hp, Wp)</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a>    <span class="c1"># Use transposed convolution to upsample</span>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a>    <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">deconv</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>  <span class="c1"># (B*M, hidden//2, H, W)</span>
+<a id="__codelineno-0-337" name="__codelineno-0-337"></a>
+<a id="__codelineno-0-338" name="__codelineno-0-338"></a>    <span class="c1"># Refinement CNN to smooth boundaries</span>
+<a id="__codelineno-0-339" name="__codelineno-0-339"></a>    <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">refine</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>  <span class="c1"># (B*M, hidden//2, H, W)</span>
+<a id="__codelineno-0-340" name="__codelineno-0-340"></a>
+<a id="__codelineno-0-341" name="__codelineno-0-341"></a>    <span class="c1"># Apply final conv head to get single channel output</span>
+<a id="__codelineno-0-342" name="__codelineno-0-342"></a>    <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>  <span class="c1"># (B*M, 1, H, W)</span>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a>
+<a id="__codelineno-0-344" name="__codelineno-0-344"></a>    <span class="c1"># Apply scale and bias per month to improve predictions; reshape to (B*M, 1, 1, 1) for broadcasting</span>
+<a id="__codelineno-0-345" name="__codelineno-0-345"></a>    <span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="p">[:</span><span class="n">M</span><span class="p">]</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">M</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">M</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-346" name="__codelineno-0-346"></a>    <span class="n">bias</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span><span class="p">[:</span><span class="n">M</span><span class="p">]</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">M</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">M</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-347" name="__codelineno-0-347"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">out</span> <span class="o">*</span> <span class="n">scale</span> <span class="o">+</span> <span class="n">bias</span>
+<a id="__codelineno-0-348" name="__codelineno-0-348"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">out_H</span><span class="p">,</span> <span class="n">out_W</span><span class="p">)</span>  <span class="c1"># (B, M, H, W)</span>
+<a id="__codelineno-0-349" name="__codelineno-0-349"></a>
+<a id="__codelineno-0-350" name="__codelineno-0-350"></a>    <span class="c1"># Mask out land areas if land_mask is provided</span>
+<a id="__codelineno-0-351" name="__codelineno-0-351"></a>    <span class="k">if</span> <span class="n">land_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-352" name="__codelineno-0-352"></a>        <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">masked_fill</span><span class="p">(</span><span class="n">land_mask</span><span class="o">.</span><span class="n">bool</span><span class="p">()[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:],</span> <span class="mf">0.0</span><span class="p">)</span>
+<a id="__codelineno-0-353" name="__codelineno-0-353"></a>    <span class="k">return</span> <span class="n">out</span>  <span class="c1"># (B, M, out_H, out_W)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="climanet.st_encoder_decoder.SpatialPositionalEncoding2D" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">SpatialPositionalEncoding2D</span><span class="p">(</span><span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">max_H</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span> <span class="n">max_W</span><span class="o">=</span><span class="mi">1024</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
+
+
+
+        <p>2D Spatial Positional Encoding using sine and cosine functions.</p>
+<p>This module generates fixed sinusoidal positional encodings for a 2D spatial
+grid, following the formulation in "Attention Is All You Need" (Vaswani et al., 2017).</p>
+<p>The returned positional encodings are intended to be added to spatial tokens
+by the caller. The encodings are <strong>not learnable</strong>.</p>
+
+        <p>Initialize the positional encoding.
+Args:
+    embed_dim: Dimension of the embedding, it must be even. The default is 128.
+        Embedding dimensions are usually multiples of 64 (e.g., 64, 128,
+        256). This can be tuned.
+    max_H: Maximum height. Default is 1024, which should be sufficient.
+    max_W: Maximum width. Default is 1024, which should be sufficient.</p>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-366">366</a></span>
+<span class="normal"><a href="#__codelineno-0-367">367</a></span>
+<span class="normal"><a href="#__codelineno-0-368">368</a></span>
+<span class="normal"><a href="#__codelineno-0-369">369</a></span>
+<span class="normal"><a href="#__codelineno-0-370">370</a></span>
+<span class="normal"><a href="#__codelineno-0-371">371</a></span>
+<span class="normal"><a href="#__codelineno-0-372">372</a></span>
+<span class="normal"><a href="#__codelineno-0-373">373</a></span>
+<span class="normal"><a href="#__codelineno-0-374">374</a></span>
+<span class="normal"><a href="#__codelineno-0-375">375</a></span>
+<span class="normal"><a href="#__codelineno-0-376">376</a></span>
+<span class="normal"><a href="#__codelineno-0-377">377</a></span>
+<span class="normal"><a href="#__codelineno-0-378">378</a></span>
+<span class="normal"><a href="#__codelineno-0-379">379</a></span>
+<span class="normal"><a href="#__codelineno-0-380">380</a></span>
+<span class="normal"><a href="#__codelineno-0-381">381</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-366" name="__codelineno-0-366"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">max_H</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span> <span class="n">max_W</span><span class="o">=</span><span class="mi">1024</span><span class="p">):</span>
+<a id="__codelineno-0-367" name="__codelineno-0-367"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Initialize the positional encoding.</span>
+<a id="__codelineno-0-368" name="__codelineno-0-368"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-369" name="__codelineno-0-369"></a><span class="sd">        embed_dim: Dimension of the embedding, it must be even. The default is 128.</span>
+<a id="__codelineno-0-370" name="__codelineno-0-370"></a><span class="sd">            Embedding dimensions are usually multiples of 64 (e.g., 64, 128,</span>
+<a id="__codelineno-0-371" name="__codelineno-0-371"></a><span class="sd">            256). This can be tuned.</span>
+<a id="__codelineno-0-372" name="__codelineno-0-372"></a><span class="sd">        max_H: Maximum height. Default is 1024, which should be sufficient.</span>
+<a id="__codelineno-0-373" name="__codelineno-0-373"></a><span class="sd">        max_W: Maximum width. Default is 1024, which should be sufficient.</span>
+<a id="__codelineno-0-374" name="__codelineno-0-374"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-375" name="__codelineno-0-375"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<a id="__codelineno-0-376" name="__codelineno-0-376"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">embed_dim</span> <span class="o">=</span> <span class="n">embed_dim</span>
+<a id="__codelineno-0-377" name="__codelineno-0-377"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">max_H</span> <span class="o">=</span> <span class="n">max_H</span>
+<a id="__codelineno-0-378" name="__codelineno-0-378"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">max_W</span> <span class="o">=</span> <span class="n">max_W</span>
+<a id="__codelineno-0-379" name="__codelineno-0-379"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span>
+<a id="__codelineno-0-380" name="__codelineno-0-380"></a>        <span class="s2">&quot;pe&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">build_pe</span><span class="p">(</span><span class="n">max_H</span><span class="p">,</span> <span class="n">max_W</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">),</span> <span class="n">persistent</span><span class="o">=</span><span class="kc">False</span>
+<a id="__codelineno-0-381" name="__codelineno-0-381"></a>    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="climanet.st_encoder_decoder.SpatialPositionalEncoding2D.build_pe" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">build_pe</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Build the 2D positional encoding encoding tensor.
+Args:
+    H: Height of the grid
+    W: Width of the grid
+    embed_dim: Dimension of the embedding (must be even)
+Returns:
+    Tensor of shape (H, W, embed_dim) containing fixed positional encodings.
+    Encodings are constructed by combining sine/cosine encodings along
+    height and width. Not learnable.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-383">383</a></span>
+<span class="normal"><a href="#__codelineno-0-384">384</a></span>
+<span class="normal"><a href="#__codelineno-0-385">385</a></span>
+<span class="normal"><a href="#__codelineno-0-386">386</a></span>
+<span class="normal"><a href="#__codelineno-0-387">387</a></span>
+<span class="normal"><a href="#__codelineno-0-388">388</a></span>
+<span class="normal"><a href="#__codelineno-0-389">389</a></span>
+<span class="normal"><a href="#__codelineno-0-390">390</a></span>
+<span class="normal"><a href="#__codelineno-0-391">391</a></span>
+<span class="normal"><a href="#__codelineno-0-392">392</a></span>
+<span class="normal"><a href="#__codelineno-0-393">393</a></span>
+<span class="normal"><a href="#__codelineno-0-394">394</a></span>
+<span class="normal"><a href="#__codelineno-0-395">395</a></span>
+<span class="normal"><a href="#__codelineno-0-396">396</a></span>
+<span class="normal"><a href="#__codelineno-0-397">397</a></span>
+<span class="normal"><a href="#__codelineno-0-398">398</a></span>
+<span class="normal"><a href="#__codelineno-0-399">399</a></span>
+<span class="normal"><a href="#__codelineno-0-400">400</a></span>
+<span class="normal"><a href="#__codelineno-0-401">401</a></span>
+<span class="normal"><a href="#__codelineno-0-402">402</a></span>
+<span class="normal"><a href="#__codelineno-0-403">403</a></span>
+<span class="normal"><a href="#__codelineno-0-404">404</a></span>
+<span class="normal"><a href="#__codelineno-0-405">405</a></span>
+<span class="normal"><a href="#__codelineno-0-406">406</a></span>
+<span class="normal"><a href="#__codelineno-0-407">407</a></span>
+<span class="normal"><a href="#__codelineno-0-408">408</a></span>
+<span class="normal"><a href="#__codelineno-0-409">409</a></span>
+<span class="normal"><a href="#__codelineno-0-410">410</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-383" name="__codelineno-0-383"></a><span class="nd">@staticmethod</span>
+<a id="__codelineno-0-384" name="__codelineno-0-384"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_pe</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">):</span>
+<a id="__codelineno-0-385" name="__codelineno-0-385"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Build the 2D positional encoding encoding tensor.</span>
+<a id="__codelineno-0-386" name="__codelineno-0-386"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-387" name="__codelineno-0-387"></a><span class="sd">        H: Height of the grid</span>
+<a id="__codelineno-0-388" name="__codelineno-0-388"></a><span class="sd">        W: Width of the grid</span>
+<a id="__codelineno-0-389" name="__codelineno-0-389"></a><span class="sd">        embed_dim: Dimension of the embedding (must be even)</span>
+<a id="__codelineno-0-390" name="__codelineno-0-390"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-391" name="__codelineno-0-391"></a><span class="sd">        Tensor of shape (H, W, embed_dim) containing fixed positional encodings.</span>
+<a id="__codelineno-0-392" name="__codelineno-0-392"></a><span class="sd">        Encodings are constructed by combining sine/cosine encodings along</span>
+<a id="__codelineno-0-393" name="__codelineno-0-393"></a><span class="sd">        height and width. Not learnable.</span>
+<a id="__codelineno-0-394" name="__codelineno-0-394"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-395" name="__codelineno-0-395"></a>    <span class="k">assert</span> <span class="n">embed_dim</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;embed_dim must be even&quot;</span>
+<a id="__codelineno-0-396" name="__codelineno-0-396"></a>    <span class="n">pe_h</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">embed_dim</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-0-397" name="__codelineno-0-397"></a>    <span class="n">pe_w</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">embed_dim</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-0-398" name="__codelineno-0-398"></a>    <span class="n">pos_h</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">H</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-399" name="__codelineno-0-399"></a>    <span class="n">pos_w</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">W</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-400" name="__codelineno-0-400"></a>    <span class="n">div</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span>
+<a id="__codelineno-0-401" name="__codelineno-0-401"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">embed_dim</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">10000.0</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">embed_dim</span> <span class="o">//</span> <span class="mi">2</span><span class="p">))</span>
+<a id="__codelineno-0-402" name="__codelineno-0-402"></a>    <span class="p">)</span>
+<a id="__codelineno-0-403" name="__codelineno-0-403"></a>    <span class="n">pe_h</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">::</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">pos_h</span> <span class="o">*</span> <span class="n">div</span><span class="p">)</span>
+<a id="__codelineno-0-404" name="__codelineno-0-404"></a>    <span class="n">pe_h</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">::</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">pos_h</span> <span class="o">*</span> <span class="n">div</span><span class="p">)</span>
+<a id="__codelineno-0-405" name="__codelineno-0-405"></a>    <span class="n">pe_w</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">::</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">pos_w</span> <span class="o">*</span> <span class="n">div</span><span class="p">)</span>
+<a id="__codelineno-0-406" name="__codelineno-0-406"></a>    <span class="n">pe_w</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">::</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">pos_w</span> <span class="o">*</span> <span class="n">div</span><span class="p">)</span>
+<a id="__codelineno-0-407" name="__codelineno-0-407"></a>    <span class="n">pe_2d</span> <span class="o">=</span> <span class="n">pe_h</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">pe_w</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># (H, W, embed_dim/2)</span>
+<a id="__codelineno-0-408" name="__codelineno-0-408"></a>    <span class="c1"># concatenate to reach embed_dim</span>
+<a id="__codelineno-0-409" name="__codelineno-0-409"></a>    <span class="n">pe</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">pe_2d</span><span class="p">,</span> <span class="n">pe_2d</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (H, W, embed_dim)</span>
+<a id="__codelineno-0-410" name="__codelineno-0-410"></a>    <span class="k">return</span> <span class="n">pe</span>  <span class="c1"># not learned</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="climanet.st_encoder_decoder.SpatialPositionalEncoding2D.forward" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">forward</span><span class="p">(</span><span class="n">Hp</span><span class="p">,</span> <span class="n">Wp</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Get positional encoding for size (Hp, Wp).
+Args:
+    Hp: Height after patching (≤ max_H)
+    Wp: Width after patching (≤ max_W)
+Returns:
+    Tensor of shape (Hp*Wp, embed_dim) containing positional encodings
+    flattened in row-major order (height * width).</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-412">412</a></span>
+<span class="normal"><a href="#__codelineno-0-413">413</a></span>
+<span class="normal"><a href="#__codelineno-0-414">414</a></span>
+<span class="normal"><a href="#__codelineno-0-415">415</a></span>
+<span class="normal"><a href="#__codelineno-0-416">416</a></span>
+<span class="normal"><a href="#__codelineno-0-417">417</a></span>
+<span class="normal"><a href="#__codelineno-0-418">418</a></span>
+<span class="normal"><a href="#__codelineno-0-419">419</a></span>
+<span class="normal"><a href="#__codelineno-0-420">420</a></span>
+<span class="normal"><a href="#__codelineno-0-421">421</a></span>
+<span class="normal"><a href="#__codelineno-0-422">422</a></span>
+<span class="normal"><a href="#__codelineno-0-423">423</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-412" name="__codelineno-0-412"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Hp</span><span class="p">,</span> <span class="n">Wp</span><span class="p">):</span>
+<a id="__codelineno-0-413" name="__codelineno-0-413"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Get positional encoding for size (Hp, Wp).</span>
+<a id="__codelineno-0-414" name="__codelineno-0-414"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-415" name="__codelineno-0-415"></a><span class="sd">        Hp: Height after patching (≤ max_H)</span>
+<a id="__codelineno-0-416" name="__codelineno-0-416"></a><span class="sd">        Wp: Width after patching (≤ max_W)</span>
+<a id="__codelineno-0-417" name="__codelineno-0-417"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-418" name="__codelineno-0-418"></a><span class="sd">        Tensor of shape (Hp*Wp, embed_dim) containing positional encodings</span>
+<a id="__codelineno-0-419" name="__codelineno-0-419"></a><span class="sd">        flattened in row-major order (height * width).</span>
+<a id="__codelineno-0-420" name="__codelineno-0-420"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-421" name="__codelineno-0-421"></a>    <span class="c1"># returns (Hp*Wp, embed_dim)</span>
+<a id="__codelineno-0-422" name="__codelineno-0-422"></a>    <span class="n">pe_hw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pe</span><span class="p">[:</span><span class="n">Hp</span><span class="p">,</span> <span class="p">:</span><span class="n">Wp</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">Hp</span> <span class="o">*</span> <span class="n">Wp</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-423" name="__codelineno-0-423"></a>    <span class="k">return</span> <span class="n">pe_hw</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="climanet.st_encoder_decoder.SpatialTransformer" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">SpatialTransformer</span><span class="p">(</span><span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">num_heads</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">mlp_ratio</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span> <span class="n">dropout</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
+
+
+
+        <p>Spatial Transformer for spatial feature mixing.</p>
+<p>This module applies a standard Transformer encoder to a sequence of spatial tokens
+(patch embeddings), allowing information to be mixed across all spatial locations.</p>
+<p>Key points:
+    - Uses multi-head self-attention and feedforward layers.
+    - Designed to operate on flattened spatial tokens.</p>
+
+        <p>Initialize the spatial transformer.
+Args:
+    embed_dim: Dimension of the embedding. Default is 128.
+        The embedding dimensions are multiples of 64 (e.g., 64, 128,
+        256). This can be tuned.
+    depth: Number of transformer encoder layers. Default is 2. This can be
+        increased for more complex spatial mixing.
+    num_heads: Number of attention heads in each layer. Default is 4.
+        When embed_dim is 128, 4 heads is a common choice.
+    mlp_ratio: Ratio of feedforward hidden dimension to embed_dim. Default is 4.0.
+    dropout: Dropout rate applied to attention and feedforward layers. Default is 0.0.</p>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-437">437</a></span>
+<span class="normal"><a href="#__codelineno-0-438">438</a></span>
+<span class="normal"><a href="#__codelineno-0-439">439</a></span>
+<span class="normal"><a href="#__codelineno-0-440">440</a></span>
+<span class="normal"><a href="#__codelineno-0-441">441</a></span>
+<span class="normal"><a href="#__codelineno-0-442">442</a></span>
+<span class="normal"><a href="#__codelineno-0-443">443</a></span>
+<span class="normal"><a href="#__codelineno-0-444">444</a></span>
+<span class="normal"><a href="#__codelineno-0-445">445</a></span>
+<span class="normal"><a href="#__codelineno-0-446">446</a></span>
+<span class="normal"><a href="#__codelineno-0-447">447</a></span>
+<span class="normal"><a href="#__codelineno-0-448">448</a></span>
+<span class="normal"><a href="#__codelineno-0-449">449</a></span>
+<span class="normal"><a href="#__codelineno-0-450">450</a></span>
+<span class="normal"><a href="#__codelineno-0-451">451</a></span>
+<span class="normal"><a href="#__codelineno-0-452">452</a></span>
+<span class="normal"><a href="#__codelineno-0-453">453</a></span>
+<span class="normal"><a href="#__codelineno-0-454">454</a></span>
+<span class="normal"><a href="#__codelineno-0-455">455</a></span>
+<span class="normal"><a href="#__codelineno-0-456">456</a></span>
+<span class="normal"><a href="#__codelineno-0-457">457</a></span>
+<span class="normal"><a href="#__codelineno-0-458">458</a></span>
+<span class="normal"><a href="#__codelineno-0-459">459</a></span>
+<span class="normal"><a href="#__codelineno-0-460">460</a></span>
+<span class="normal"><a href="#__codelineno-0-461">461</a></span>
+<span class="normal"><a href="#__codelineno-0-462">462</a></span>
+<span class="normal"><a href="#__codelineno-0-463">463</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">num_heads</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">mlp_ratio</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span> <span class="n">dropout</span><span class="o">=</span><span class="mf">0.0</span><span class="p">):</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Initialize the spatial transformer.</span>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">        embed_dim: Dimension of the embedding. Default is 128.</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">            The embedding dimensions are multiples of 64 (e.g., 64, 128,</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a><span class="sd">            256). This can be tuned.</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a><span class="sd">        depth: Number of transformer encoder layers. Default is 2. This can be</span>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">            increased for more complex spatial mixing.</span>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">        num_heads: Number of attention heads in each layer. Default is 4.</span>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a><span class="sd">            When embed_dim is 128, 4 heads is a common choice.</span>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a><span class="sd">        mlp_ratio: Ratio of feedforward hidden dimension to embed_dim. Default is 4.0.</span>
+<a id="__codelineno-0-448" name="__codelineno-0-448"></a><span class="sd">        dropout: Dropout rate applied to attention and feedforward layers. Default is 0.0.</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a>    <span class="c1"># a single Transformer encoder block that</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a>    <span class="c1"># performs self-attention and feedforward processing</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a>    <span class="n">encoder_layer</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">TransformerEncoderLayer</span><span class="p">(</span>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a>        <span class="n">d_model</span><span class="o">=</span><span class="n">embed_dim</span><span class="p">,</span>
+<a id="__codelineno-0-456" name="__codelineno-0-456"></a>        <span class="n">nhead</span><span class="o">=</span><span class="n">num_heads</span><span class="p">,</span>
+<a id="__codelineno-0-457" name="__codelineno-0-457"></a>        <span class="n">dim_feedforward</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">embed_dim</span> <span class="o">*</span> <span class="n">mlp_ratio</span><span class="p">),</span>
+<a id="__codelineno-0-458" name="__codelineno-0-458"></a>        <span class="n">batch_first</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a>        <span class="n">dropout</span><span class="o">=</span><span class="n">dropout</span><span class="p">,</span>
+<a id="__codelineno-0-460" name="__codelineno-0-460"></a>        <span class="n">activation</span><span class="o">=</span><span class="s2">&quot;gelu&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-461" name="__codelineno-0-461"></a>    <span class="p">)</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a>    <span class="c1"># stack multiple layers to form the full encoder</span>
+<a id="__codelineno-0-463" name="__codelineno-0-463"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">enc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">TransformerEncoder</span><span class="p">(</span><span class="n">encoder_layer</span><span class="p">,</span> <span class="n">num_layers</span><span class="o">=</span><span class="n">depth</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="climanet.st_encoder_decoder.SpatialTransformer.forward" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">forward</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Forward pass of the spatial transformer.
+Args:
+    x: Input tensor of shape (B, N, C), where N = number of spatial tokens (H'*W') and
+        C = embedding dimension
+Returns:
+    Tensor of shape (B, N, C) with spatially mixed features across patches</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-465">465</a></span>
+<span class="normal"><a href="#__codelineno-0-466">466</a></span>
+<span class="normal"><a href="#__codelineno-0-467">467</a></span>
+<span class="normal"><a href="#__codelineno-0-468">468</a></span>
+<span class="normal"><a href="#__codelineno-0-469">469</a></span>
+<span class="normal"><a href="#__codelineno-0-470">470</a></span>
+<span class="normal"><a href="#__codelineno-0-471">471</a></span>
+<span class="normal"><a href="#__codelineno-0-472">472</a></span>
+<span class="normal"><a href="#__codelineno-0-473">473</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-465" name="__codelineno-0-465"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-0-466" name="__codelineno-0-466"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Forward pass of the spatial transformer.</span>
+<a id="__codelineno-0-467" name="__codelineno-0-467"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="sd">        x: Input tensor of shape (B, N, C), where N = number of spatial tokens (H&#39;*W&#39;) and</span>
+<a id="__codelineno-0-469" name="__codelineno-0-469"></a><span class="sd">            C = embedding dimension</span>
+<a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="sd">        Tensor of shape (B, N, C) with spatially mixed features across patches</span>
+<a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-473" name="__codelineno-0-473"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">enc</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="climanet.st_encoder_decoder.SpatioTemporalModel" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">SpatioTemporalModel</span><span class="p">(</span><span class="n">in_chans</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">patch_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">max_days</span><span class="o">=</span><span class="mi">31</span><span class="p">,</span> <span class="n">max_months</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">hidden</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_H</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span> <span class="n">max_W</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span> <span class="n">spatial_depth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">spatial_heads</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
+
+
+
+        <p>Spatio-Temporal Model for Monthly Prediction.</p>
+<p>Processes daily data in a video-style format with shape (B, C, T, H, W):
+    B: batch size
+    C: number of channels (e.g., 1 for SST, can include additional channels like masks)
+    T: temporal dimension (number of days, e.g., 31 for a month)
+    H: spatial height
+    W: spatial width</p>
+<p>The model pipeline:
+    1. Encode spatio-temporal patches using VideoEncoder.
+    2. Aggregate temporal information for each spatial patch via TemporalAttentionAggregator.
+    3. Add 2D spatial positional encodings and mix spatial features with SpatialTransformer.
+    4. Decode aggregated tokens into a full-resolution 2D map using MonthlyConvDecoder.</p>
+<p>Output:
+    - Reconstructed monthly (SST) map of shape (B, M, H, W)</p>
+
+        <p>Initialize the Spatio-Temporal Model.</p>
+<p>Args:
+    in_chans: Number of input channels (e.g., 1 for SST, additional channels possible)
+    embed_dim: Dimension of the patch embedding
+    patch_size: Tuple of (T, H, W) patch sizes for temporal and spatial patching
+    max_days: Maximum number of days for temporal positional encoding
+    max_months: Maximum number of months for temporal positional encoding
+    hidden: Hidden dimension used in the decoder
+    overlap: Overlap for deconvolution in the decoder
+    max_H: Maximum spatial height for 2D positional encoding
+    max_W: Maximum spatial width for 2D positional encoding
+    spatial_depth: Number of layers in the spatial Transformer
+    spatial_heads: Number of attention heads in the spatial Transformer</p>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-496">496</a></span>
+<span class="normal"><a href="#__codelineno-0-497">497</a></span>
+<span class="normal"><a href="#__codelineno-0-498">498</a></span>
+<span class="normal"><a href="#__codelineno-0-499">499</a></span>
+<span class="normal"><a href="#__codelineno-0-500">500</a></span>
+<span class="normal"><a href="#__codelineno-0-501">501</a></span>
+<span class="normal"><a href="#__codelineno-0-502">502</a></span>
+<span class="normal"><a href="#__codelineno-0-503">503</a></span>
+<span class="normal"><a href="#__codelineno-0-504">504</a></span>
+<span class="normal"><a href="#__codelineno-0-505">505</a></span>
+<span class="normal"><a href="#__codelineno-0-506">506</a></span>
+<span class="normal"><a href="#__codelineno-0-507">507</a></span>
+<span class="normal"><a href="#__codelineno-0-508">508</a></span>
+<span class="normal"><a href="#__codelineno-0-509">509</a></span>
+<span class="normal"><a href="#__codelineno-0-510">510</a></span>
+<span class="normal"><a href="#__codelineno-0-511">511</a></span>
+<span class="normal"><a href="#__codelineno-0-512">512</a></span>
+<span class="normal"><a href="#__codelineno-0-513">513</a></span>
+<span class="normal"><a href="#__codelineno-0-514">514</a></span>
+<span class="normal"><a href="#__codelineno-0-515">515</a></span>
+<span class="normal"><a href="#__codelineno-0-516">516</a></span>
+<span class="normal"><a href="#__codelineno-0-517">517</a></span>
+<span class="normal"><a href="#__codelineno-0-518">518</a></span>
+<span class="normal"><a href="#__codelineno-0-519">519</a></span>
+<span class="normal"><a href="#__codelineno-0-520">520</a></span>
+<span class="normal"><a href="#__codelineno-0-521">521</a></span>
+<span class="normal"><a href="#__codelineno-0-522">522</a></span>
+<span class="normal"><a href="#__codelineno-0-523">523</a></span>
+<span class="normal"><a href="#__codelineno-0-524">524</a></span>
+<span class="normal"><a href="#__codelineno-0-525">525</a></span>
+<span class="normal"><a href="#__codelineno-0-526">526</a></span>
+<span class="normal"><a href="#__codelineno-0-527">527</a></span>
+<span class="normal"><a href="#__codelineno-0-528">528</a></span>
+<span class="normal"><a href="#__codelineno-0-529">529</a></span>
+<span class="normal"><a href="#__codelineno-0-530">530</a></span>
+<span class="normal"><a href="#__codelineno-0-531">531</a></span>
+<span class="normal"><a href="#__codelineno-0-532">532</a></span>
+<span class="normal"><a href="#__codelineno-0-533">533</a></span>
+<span class="normal"><a href="#__codelineno-0-534">534</a></span>
+<span class="normal"><a href="#__codelineno-0-535">535</a></span>
+<span class="normal"><a href="#__codelineno-0-536">536</a></span>
+<span class="normal"><a href="#__codelineno-0-537">537</a></span>
+<span class="normal"><a href="#__codelineno-0-538">538</a></span>
+<span class="normal"><a href="#__codelineno-0-539">539</a></span>
+<span class="normal"><a href="#__codelineno-0-540">540</a></span>
+<span class="normal"><a href="#__codelineno-0-541">541</a></span>
+<span class="normal"><a href="#__codelineno-0-542">542</a></span>
+<span class="normal"><a href="#__codelineno-0-543">543</a></span>
+<span class="normal"><a href="#__codelineno-0-544">544</a></span>
+<span class="normal"><a href="#__codelineno-0-545">545</a></span>
+<span class="normal"><a href="#__codelineno-0-546">546</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-496" name="__codelineno-0-496"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<a id="__codelineno-0-497" name="__codelineno-0-497"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-498" name="__codelineno-0-498"></a>    <span class="n">in_chans</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-0-499" name="__codelineno-0-499"></a>    <span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span>
+<a id="__codelineno-0-500" name="__codelineno-0-500"></a>    <span class="n">patch_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+<a id="__codelineno-0-501" name="__codelineno-0-501"></a>    <span class="n">max_days</span><span class="o">=</span><span class="mi">31</span><span class="p">,</span>
+<a id="__codelineno-0-502" name="__codelineno-0-502"></a>    <span class="n">max_months</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span>
+<a id="__codelineno-0-503" name="__codelineno-0-503"></a>    <span class="n">hidden</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span>
+<a id="__codelineno-0-504" name="__codelineno-0-504"></a>    <span class="n">overlap</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-0-505" name="__codelineno-0-505"></a>    <span class="n">max_H</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
+<a id="__codelineno-0-506" name="__codelineno-0-506"></a>    <span class="n">max_W</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
+<a id="__codelineno-0-507" name="__codelineno-0-507"></a>    <span class="n">spatial_depth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-0-508" name="__codelineno-0-508"></a>    <span class="n">spatial_heads</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="p">):</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Initialize the Spatio-Temporal Model.</span>
+<a id="__codelineno-0-511" name="__codelineno-0-511"></a>
+<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">        in_chans: Number of input channels (e.g., 1 for SST, additional channels possible)</span>
+<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">        embed_dim: Dimension of the patch embedding</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515"></a><span class="sd">        patch_size: Tuple of (T, H, W) patch sizes for temporal and spatial patching</span>
+<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">        max_days: Maximum number of days for temporal positional encoding</span>
+<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">        max_months: Maximum number of months for temporal positional encoding</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="sd">        hidden: Hidden dimension used in the decoder</span>
+<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">        overlap: Overlap for deconvolution in the decoder</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520"></a><span class="sd">        max_H: Maximum spatial height for 2D positional encoding</span>
+<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">        max_W: Maximum spatial width for 2D positional encoding</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">        spatial_depth: Number of layers in the spatial Transformer</span>
+<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">        spatial_heads: Number of attention heads in the spatial Transformer</span>
+<a id="__codelineno-0-524" name="__codelineno-0-524"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-525" name="__codelineno-0-525"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<a id="__codelineno-0-526" name="__codelineno-0-526"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span> <span class="o">=</span> <span class="n">VideoEncoder</span><span class="p">(</span>
+<a id="__codelineno-0-527" name="__codelineno-0-527"></a>        <span class="n">in_chans</span><span class="o">=</span><span class="n">in_chans</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="n">embed_dim</span><span class="p">,</span> <span class="n">patch_size</span><span class="o">=</span><span class="n">patch_size</span>
+<a id="__codelineno-0-528" name="__codelineno-0-528"></a>    <span class="p">)</span>
+<a id="__codelineno-0-529" name="__codelineno-0-529"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">temporal</span> <span class="o">=</span> <span class="n">TemporalAttentionAggregator</span><span class="p">(</span>
+<a id="__codelineno-0-530" name="__codelineno-0-530"></a>        <span class="n">embed_dim</span><span class="o">=</span><span class="n">embed_dim</span><span class="p">,</span> <span class="n">max_days</span><span class="o">=</span><span class="n">max_days</span><span class="p">,</span> <span class="n">max_months</span><span class="o">=</span><span class="n">max_months</span>
+<a id="__codelineno-0-531" name="__codelineno-0-531"></a>    <span class="p">)</span>
+<a id="__codelineno-0-532" name="__codelineno-0-532"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">spatial_pe</span> <span class="o">=</span> <span class="n">SpatialPositionalEncoding2D</span><span class="p">(</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533"></a>        <span class="n">embed_dim</span><span class="o">=</span><span class="n">embed_dim</span><span class="p">,</span> <span class="n">max_H</span><span class="o">=</span><span class="n">max_H</span><span class="p">,</span> <span class="n">max_W</span><span class="o">=</span><span class="n">max_W</span>
+<a id="__codelineno-0-534" name="__codelineno-0-534"></a>    <span class="p">)</span>
+<a id="__codelineno-0-535" name="__codelineno-0-535"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">spatial_tr</span> <span class="o">=</span> <span class="n">SpatialTransformer</span><span class="p">(</span>
+<a id="__codelineno-0-536" name="__codelineno-0-536"></a>        <span class="n">embed_dim</span><span class="o">=</span><span class="n">embed_dim</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="n">spatial_depth</span><span class="p">,</span> <span class="n">num_heads</span><span class="o">=</span><span class="n">spatial_heads</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537"></a>    <span class="p">)</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">decoder</span> <span class="o">=</span> <span class="n">MonthlyConvDecoder</span><span class="p">(</span>
+<a id="__codelineno-0-539" name="__codelineno-0-539"></a>        <span class="n">embed_dim</span><span class="o">=</span><span class="n">embed_dim</span><span class="p">,</span>
+<a id="__codelineno-0-540" name="__codelineno-0-540"></a>        <span class="n">patch_h</span><span class="o">=</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+<a id="__codelineno-0-541" name="__codelineno-0-541"></a>        <span class="n">patch_w</span><span class="o">=</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+<a id="__codelineno-0-542" name="__codelineno-0-542"></a>        <span class="n">hidden</span><span class="o">=</span><span class="n">hidden</span><span class="p">,</span>
+<a id="__codelineno-0-543" name="__codelineno-0-543"></a>        <span class="n">overlap</span><span class="o">=</span><span class="n">overlap</span><span class="p">,</span>
+<a id="__codelineno-0-544" name="__codelineno-0-544"></a>        <span class="n">num_months</span><span class="o">=</span><span class="n">max_months</span><span class="p">,</span>
+<a id="__codelineno-0-545" name="__codelineno-0-545"></a>    <span class="p">)</span>
+<a id="__codelineno-0-546" name="__codelineno-0-546"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span> <span class="o">=</span> <span class="n">patch_size</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="climanet.st_encoder_decoder.SpatioTemporalModel.forward" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">forward</span><span class="p">(</span><span class="n">daily_data</span><span class="p">,</span> <span class="n">daily_mask</span><span class="p">,</span> <span class="n">land_mask_patch</span><span class="p">,</span> <span class="n">padded_days_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Forward pass of the Spatio-Temporal model.</p>
+<p>Args:
+    daily_data: Tensor of shape (B, C, M, T, H, W) containing daily
+        data, where C is the number of channels (e.g., 1 for SST)
+    daily_mask: Boolean tensor of same shape as daily_data indicating missing values
+    land_mask_patch: Boolean tensor of shape (H, W) to mask land areas in the output
+    padded_days_mask: Optional boolean tensor of shape (B, M, T) indicating which day tokens are padded
+         (True for padded tokens). Used to mask out padded tokens in temporal attention.
+Returns:
+    monthly_pred: Tensor of shape (B, M, H, W) representing the reconstructed monthly map</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-548">548</a></span>
+<span class="normal"><a href="#__codelineno-0-549">549</a></span>
+<span class="normal"><a href="#__codelineno-0-550">550</a></span>
+<span class="normal"><a href="#__codelineno-0-551">551</a></span>
+<span class="normal"><a href="#__codelineno-0-552">552</a></span>
+<span class="normal"><a href="#__codelineno-0-553">553</a></span>
+<span class="normal"><a href="#__codelineno-0-554">554</a></span>
+<span class="normal"><a href="#__codelineno-0-555">555</a></span>
+<span class="normal"><a href="#__codelineno-0-556">556</a></span>
+<span class="normal"><a href="#__codelineno-0-557">557</a></span>
+<span class="normal"><a href="#__codelineno-0-558">558</a></span>
+<span class="normal"><a href="#__codelineno-0-559">559</a></span>
+<span class="normal"><a href="#__codelineno-0-560">560</a></span>
+<span class="normal"><a href="#__codelineno-0-561">561</a></span>
+<span class="normal"><a href="#__codelineno-0-562">562</a></span>
+<span class="normal"><a href="#__codelineno-0-563">563</a></span>
+<span class="normal"><a href="#__codelineno-0-564">564</a></span>
+<span class="normal"><a href="#__codelineno-0-565">565</a></span>
+<span class="normal"><a href="#__codelineno-0-566">566</a></span>
+<span class="normal"><a href="#__codelineno-0-567">567</a></span>
+<span class="normal"><a href="#__codelineno-0-568">568</a></span>
+<span class="normal"><a href="#__codelineno-0-569">569</a></span>
+<span class="normal"><a href="#__codelineno-0-570">570</a></span>
+<span class="normal"><a href="#__codelineno-0-571">571</a></span>
+<span class="normal"><a href="#__codelineno-0-572">572</a></span>
+<span class="normal"><a href="#__codelineno-0-573">573</a></span>
+<span class="normal"><a href="#__codelineno-0-574">574</a></span>
+<span class="normal"><a href="#__codelineno-0-575">575</a></span>
+<span class="normal"><a href="#__codelineno-0-576">576</a></span>
+<span class="normal"><a href="#__codelineno-0-577">577</a></span>
+<span class="normal"><a href="#__codelineno-0-578">578</a></span>
+<span class="normal"><a href="#__codelineno-0-579">579</a></span>
+<span class="normal"><a href="#__codelineno-0-580">580</a></span>
+<span class="normal"><a href="#__codelineno-0-581">581</a></span>
+<span class="normal"><a href="#__codelineno-0-582">582</a></span>
+<span class="normal"><a href="#__codelineno-0-583">583</a></span>
+<span class="normal"><a href="#__codelineno-0-584">584</a></span>
+<span class="normal"><a href="#__codelineno-0-585">585</a></span>
+<span class="normal"><a href="#__codelineno-0-586">586</a></span>
+<span class="normal"><a href="#__codelineno-0-587">587</a></span>
+<span class="normal"><a href="#__codelineno-0-588">588</a></span>
+<span class="normal"><a href="#__codelineno-0-589">589</a></span>
+<span class="normal"><a href="#__codelineno-0-590">590</a></span>
+<span class="normal"><a href="#__codelineno-0-591">591</a></span>
+<span class="normal"><a href="#__codelineno-0-592">592</a></span>
+<span class="normal"><a href="#__codelineno-0-593">593</a></span>
+<span class="normal"><a href="#__codelineno-0-594">594</a></span>
+<span class="normal"><a href="#__codelineno-0-595">595</a></span>
+<span class="normal"><a href="#__codelineno-0-596">596</a></span>
+<span class="normal"><a href="#__codelineno-0-597">597</a></span>
+<span class="normal"><a href="#__codelineno-0-598">598</a></span>
+<span class="normal"><a href="#__codelineno-0-599">599</a></span>
+<span class="normal"><a href="#__codelineno-0-600">600</a></span>
+<span class="normal"><a href="#__codelineno-0-601">601</a></span>
+<span class="normal"><a href="#__codelineno-0-602">602</a></span>
+<span class="normal"><a href="#__codelineno-0-603">603</a></span>
+<span class="normal"><a href="#__codelineno-0-604">604</a></span>
+<span class="normal"><a href="#__codelineno-0-605">605</a></span>
+<span class="normal"><a href="#__codelineno-0-606">606</a></span>
+<span class="normal"><a href="#__codelineno-0-607">607</a></span>
+<span class="normal"><a href="#__codelineno-0-608">608</a></span>
+<span class="normal"><a href="#__codelineno-0-609">609</a></span>
+<span class="normal"><a href="#__codelineno-0-610">610</a></span>
+<span class="normal"><a href="#__codelineno-0-611">611</a></span>
+<span class="normal"><a href="#__codelineno-0-612">612</a></span>
+<span class="normal"><a href="#__codelineno-0-613">613</a></span>
+<span class="normal"><a href="#__codelineno-0-614">614</a></span>
+<span class="normal"><a href="#__codelineno-0-615">615</a></span>
+<span class="normal"><a href="#__codelineno-0-616">616</a></span>
+<span class="normal"><a href="#__codelineno-0-617">617</a></span>
+<span class="normal"><a href="#__codelineno-0-618">618</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-548" name="__codelineno-0-548"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">daily_data</span><span class="p">,</span> <span class="n">daily_mask</span><span class="p">,</span> <span class="n">land_mask_patch</span><span class="p">,</span> <span class="n">padded_days_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<a id="__codelineno-0-549" name="__codelineno-0-549"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Forward pass of the Spatio-Temporal model.</span>
+<a id="__codelineno-0-550" name="__codelineno-0-550"></a>
+<a id="__codelineno-0-551" name="__codelineno-0-551"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-552" name="__codelineno-0-552"></a><span class="sd">        daily_data: Tensor of shape (B, C, M, T, H, W) containing daily</span>
+<a id="__codelineno-0-553" name="__codelineno-0-553"></a><span class="sd">            data, where C is the number of channels (e.g., 1 for SST)</span>
+<a id="__codelineno-0-554" name="__codelineno-0-554"></a><span class="sd">        daily_mask: Boolean tensor of same shape as daily_data indicating missing values</span>
+<a id="__codelineno-0-555" name="__codelineno-0-555"></a><span class="sd">        land_mask_patch: Boolean tensor of shape (H, W) to mask land areas in the output</span>
+<a id="__codelineno-0-556" name="__codelineno-0-556"></a><span class="sd">        padded_days_mask: Optional boolean tensor of shape (B, M, T) indicating which day tokens are padded</span>
+<a id="__codelineno-0-557" name="__codelineno-0-557"></a><span class="sd">             (True for padded tokens). Used to mask out padded tokens in temporal attention.</span>
+<a id="__codelineno-0-558" name="__codelineno-0-558"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-559" name="__codelineno-0-559"></a><span class="sd">        monthly_pred: Tensor of shape (B, M, H, W) representing the reconstructed monthly map</span>
+<a id="__codelineno-0-560" name="__codelineno-0-560"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-561" name="__codelineno-0-561"></a>    <span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">daily_data</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-0-562" name="__codelineno-0-562"></a>
+<a id="__codelineno-0-563" name="__codelineno-0-563"></a>    <span class="n">Tp</span> <span class="o">=</span> <span class="n">T</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-0-564" name="__codelineno-0-564"></a>    <span class="n">Hp</span> <span class="o">=</span> <span class="n">H</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-565" name="__codelineno-0-565"></a>    <span class="n">Wp</span> <span class="o">=</span> <span class="n">W</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-0-566" name="__codelineno-0-566"></a>    <span class="n">Np</span> <span class="o">=</span> <span class="n">Tp</span> <span class="o">*</span> <span class="n">Hp</span> <span class="o">*</span> <span class="n">Wp</span>
+<a id="__codelineno-0-567" name="__codelineno-0-567"></a>
+<a id="__codelineno-0-568" name="__codelineno-0-568"></a>    <span class="c1"># check shape and patch compatibility</span>
+<a id="__codelineno-0-569" name="__codelineno-0-569"></a>    <span class="k">assert</span> <span class="n">daily_mask</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">daily_data</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="p">(</span>
+<a id="__codelineno-0-570" name="__codelineno-0-570"></a>        <span class="s2">&quot;daily_mask must have the same shape as daily_data&quot;</span>
+<a id="__codelineno-0-571" name="__codelineno-0-571"></a>    <span class="p">)</span>
+<a id="__codelineno-0-572" name="__codelineno-0-572"></a>    <span class="k">assert</span> <span class="n">H</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">W</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="p">(</span>
+<a id="__codelineno-0-573" name="__codelineno-0-573"></a>        <span class="s2">&quot;H and W must be divisible by patch size&quot;</span>
+<a id="__codelineno-0-574" name="__codelineno-0-574"></a>    <span class="p">)</span>
+<a id="__codelineno-0-575" name="__codelineno-0-575"></a>    <span class="k">assert</span> <span class="n">T</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;T must be divisible by patch size&quot;</span>
+<a id="__codelineno-0-576" name="__codelineno-0-576"></a>
+<a id="__codelineno-0-577" name="__codelineno-0-577"></a>    <span class="c1"># Step 1: Encode spatio-temporal patches</span>
+<a id="__codelineno-0-578" name="__codelineno-0-578"></a>    <span class="c1"># each month independently by folding M into batch</span>
+<a id="__codelineno-0-579" name="__codelineno-0-579"></a>    <span class="n">daily_data_reshaped</span> <span class="o">=</span> <span class="n">daily_data</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">M</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">)</span>
+<a id="__codelineno-0-580" name="__codelineno-0-580"></a>    <span class="n">daily_mask_reshaped</span> <span class="o">=</span> <span class="n">daily_mask</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">M</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">)</span>
+<a id="__codelineno-0-581" name="__codelineno-0-581"></a>    <span class="n">latent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span><span class="p">(</span>
+<a id="__codelineno-0-582" name="__codelineno-0-582"></a>        <span class="n">daily_data_reshaped</span><span class="p">,</span> <span class="n">daily_mask_reshaped</span>
+<a id="__codelineno-0-583" name="__codelineno-0-583"></a>    <span class="p">)</span>  <span class="c1"># (B*M, N_patches, embed_dim)</span>
+<a id="__codelineno-0-584" name="__codelineno-0-584"></a>
+<a id="__codelineno-0-585" name="__codelineno-0-585"></a>    <span class="c1"># Step 2: Aggregate temporal information for each spatial patch</span>
+<a id="__codelineno-0-586" name="__codelineno-0-586"></a>    <span class="c1"># latent -&gt; (B, M*Np, embed_dim) to match the aggregator input x: (B, M*Tp*Hp*Wp, embed_dim)</span>
+<a id="__codelineno-0-587" name="__codelineno-0-587"></a>    <span class="n">latent</span> <span class="o">=</span> <span class="n">latent</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">M</span> <span class="o">*</span> <span class="n">Np</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-588" name="__codelineno-0-588"></a>
+<a id="__codelineno-0-589" name="__codelineno-0-589"></a>    <span class="k">if</span> <span class="n">padded_days_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+<a id="__codelineno-0-590" name="__codelineno-0-590"></a>        <span class="n">B</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">T_days</span> <span class="o">=</span> <span class="n">padded_days_mask</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-0-591" name="__codelineno-0-591"></a>        <span class="k">if</span> <span class="n">T_days</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-0-592" name="__codelineno-0-592"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-593" name="__codelineno-0-593"></a>                <span class="sa">f</span><span class="s2">&quot;T_days=</span><span class="si">{</span><span class="n">T_days</span><span class="si">}</span><span class="s2"> must be divisible by patch_size[0]=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-594" name="__codelineno-0-594"></a>            <span class="p">)</span>
+<a id="__codelineno-0-595" name="__codelineno-0-595"></a>        <span class="n">padded_days_mask</span> <span class="o">=</span> <span class="n">padded_days_mask</span><span class="o">.</span><span class="n">view</span><span class="p">(</span>
+<a id="__codelineno-0-596" name="__codelineno-0-596"></a>            <span class="n">B</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">T_days</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-0-597" name="__codelineno-0-597"></a>        <span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (B, M, Tp)</span>
+<a id="__codelineno-0-598" name="__codelineno-0-598"></a>
+<a id="__codelineno-0-599" name="__codelineno-0-599"></a>    <span class="n">agg_latent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">temporal</span><span class="p">(</span>
+<a id="__codelineno-0-600" name="__codelineno-0-600"></a>        <span class="n">latent</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">Tp</span><span class="p">,</span> <span class="n">Hp</span><span class="p">,</span> <span class="n">Wp</span><span class="p">,</span> <span class="n">padded_days_mask</span><span class="o">=</span><span class="n">padded_days_mask</span>
+<a id="__codelineno-0-601" name="__codelineno-0-601"></a>    <span class="p">)</span>  <span class="c1"># (B, M*Hp*Wp, embed_dim)</span>
+<a id="__codelineno-0-602" name="__codelineno-0-602"></a>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a>    <span class="c1"># Step 3: Add spatial positional encodings and mix spatial features</span>
+<a id="__codelineno-0-604" name="__codelineno-0-604"></a>    <span class="n">E</span> <span class="o">=</span> <span class="n">agg_latent</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-605" name="__codelineno-0-605"></a>    <span class="n">agg_latent</span> <span class="o">=</span> <span class="n">agg_latent</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">Hp</span> <span class="o">*</span> <span class="n">Wp</span><span class="p">,</span> <span class="n">E</span><span class="p">)</span>
+<a id="__codelineno-0-606" name="__codelineno-0-606"></a>    <span class="n">pe</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-607" name="__codelineno-0-607"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">spatial_pe</span><span class="p">(</span><span class="n">Hp</span><span class="p">,</span> <span class="n">Wp</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">agg_latent</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">agg_latent</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+<a id="__codelineno-0-608" name="__codelineno-0-608"></a>    <span class="p">)</span>  <span class="c1"># (Hp*Wp, E)</span>
+<a id="__codelineno-0-609" name="__codelineno-0-609"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">agg_latent</span> <span class="o">+</span> <span class="n">pe</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+<a id="__codelineno-0-610" name="__codelineno-0-610"></a>
+<a id="__codelineno-0-611" name="__codelineno-0-611"></a>    <span class="c1"># Step 4: Spatial mixing with Transformer</span>
+<a id="__codelineno-0-612" name="__codelineno-0-612"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">M</span><span class="p">,</span> <span class="n">Hp</span> <span class="o">*</span> <span class="n">Wp</span><span class="p">,</span> <span class="n">E</span><span class="p">)</span>
+<a id="__codelineno-0-613" name="__codelineno-0-613"></a>    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spatial_tr</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># (B*M, Hp*Wp, E)</span>
+<a id="__codelineno-0-614" name="__codelineno-0-614"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">M</span> <span class="o">*</span> <span class="n">Hp</span> <span class="o">*</span> <span class="n">Wp</span><span class="p">,</span> <span class="n">E</span><span class="p">)</span>  <span class="c1"># back to (B, M*Hp*Wp, E)</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615"></a>
+<a id="__codelineno-0-616" name="__codelineno-0-616"></a>    <span class="c1"># Step 5: Decode to full-resolution 2D map</span>
+<a id="__codelineno-0-617" name="__codelineno-0-617"></a>    <span class="n">monthly_pred</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">decoder</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">land_mask_patch</span><span class="p">)</span>  <span class="c1"># (B, M, H, W)</span>
+<a id="__codelineno-0-618" name="__codelineno-0-618"></a>    <span class="k">return</span> <span class="n">monthly_pred</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="climanet.st_encoder_decoder.TemporalAttentionAggregator" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">TemporalAttentionAggregator</span><span class="p">(</span><span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">max_days</span><span class="o">=</span><span class="mi">31</span><span class="p">,</span> <span class="n">max_months</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
+
+
+
+        <p>Temporal attention-based aggregator.</p>
+<p>This module aggregates temporal information for each spatial patch by
+applying attention across the temporal dimension. It consists of two main
+steps:
+1. Day attention: For each month, it computes attention weights across the
+temporal tokens (days) and performs a weighted sum to get one token per
+spatial location for each month.
+2. Cross-month mixing: After temporal aggregation, it applies a Transformer
+encoder layer to mix information across months at each spatial location.</p>
+<p>For each spatial location, the day attention allows the model to learn which
+days are most important for predicting the monthly average, while the
+cross-month mixing allows the model to learn interactions between different
+months.</p>
+
+        <p>Initialize the temporal attention aggregator.</p>
+<p>Args:
+    embed_dim: Dimension of the embedding. The default is 128.
+        Many vision transformers use embedding dimensions that are multiples
+        of 64 (e.g., 64, 128, 256). This can be tuned.
+    max_days: Maximum length of the temporal dimension to precompute
+    encodings for. Default is 31, which is sufficient for a month of
+    daily data.
+    max_months: Maximum number of months (temporal patches) to precompute
+    encodings for. Default is 12, which is sufficient for a year of monthly data.</p>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-141">141</a></span>
+<span class="normal"><a href="#__codelineno-0-142">142</a></span>
+<span class="normal"><a href="#__codelineno-0-143">143</a></span>
+<span class="normal"><a href="#__codelineno-0-144">144</a></span>
+<span class="normal"><a href="#__codelineno-0-145">145</a></span>
+<span class="normal"><a href="#__codelineno-0-146">146</a></span>
+<span class="normal"><a href="#__codelineno-0-147">147</a></span>
+<span class="normal"><a href="#__codelineno-0-148">148</a></span>
+<span class="normal"><a href="#__codelineno-0-149">149</a></span>
+<span class="normal"><a href="#__codelineno-0-150">150</a></span>
+<span class="normal"><a href="#__codelineno-0-151">151</a></span>
+<span class="normal"><a href="#__codelineno-0-152">152</a></span>
+<span class="normal"><a href="#__codelineno-0-153">153</a></span>
+<span class="normal"><a href="#__codelineno-0-154">154</a></span>
+<span class="normal"><a href="#__codelineno-0-155">155</a></span>
+<span class="normal"><a href="#__codelineno-0-156">156</a></span>
+<span class="normal"><a href="#__codelineno-0-157">157</a></span>
+<span class="normal"><a href="#__codelineno-0-158">158</a></span>
+<span class="normal"><a href="#__codelineno-0-159">159</a></span>
+<span class="normal"><a href="#__codelineno-0-160">160</a></span>
+<span class="normal"><a href="#__codelineno-0-161">161</a></span>
+<span class="normal"><a href="#__codelineno-0-162">162</a></span>
+<span class="normal"><a href="#__codelineno-0-163">163</a></span>
+<span class="normal"><a href="#__codelineno-0-164">164</a></span>
+<span class="normal"><a href="#__codelineno-0-165">165</a></span>
+<span class="normal"><a href="#__codelineno-0-166">166</a></span>
+<span class="normal"><a href="#__codelineno-0-167">167</a></span>
+<span class="normal"><a href="#__codelineno-0-168">168</a></span>
+<span class="normal"><a href="#__codelineno-0-169">169</a></span>
+<span class="normal"><a href="#__codelineno-0-170">170</a></span>
+<span class="normal"><a href="#__codelineno-0-171">171</a></span>
+<span class="normal"><a href="#__codelineno-0-172">172</a></span>
+<span class="normal"><a href="#__codelineno-0-173">173</a></span>
+<span class="normal"><a href="#__codelineno-0-174">174</a></span>
+<span class="normal"><a href="#__codelineno-0-175">175</a></span>
+<span class="normal"><a href="#__codelineno-0-176">176</a></span>
+<span class="normal"><a href="#__codelineno-0-177">177</a></span>
+<span class="normal"><a href="#__codelineno-0-178">178</a></span>
+<span class="normal"><a href="#__codelineno-0-179">179</a></span>
+<span class="normal"><a href="#__codelineno-0-180">180</a></span>
+<span class="normal"><a href="#__codelineno-0-181">181</a></span>
+<span class="normal"><a href="#__codelineno-0-182">182</a></span>
+<span class="normal"><a href="#__codelineno-0-183">183</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-141" name="__codelineno-0-141"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">max_days</span><span class="o">=</span><span class="mi">31</span><span class="p">,</span> <span class="n">max_months</span><span class="o">=</span><span class="mi">12</span><span class="p">):</span>
+<a id="__codelineno-0-142" name="__codelineno-0-142"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Initialize the temporal attention aggregator.</span>
+<a id="__codelineno-0-143" name="__codelineno-0-143"></a>
+<a id="__codelineno-0-144" name="__codelineno-0-144"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-145" name="__codelineno-0-145"></a><span class="sd">        embed_dim: Dimension of the embedding. The default is 128.</span>
+<a id="__codelineno-0-146" name="__codelineno-0-146"></a><span class="sd">            Many vision transformers use embedding dimensions that are multiples</span>
+<a id="__codelineno-0-147" name="__codelineno-0-147"></a><span class="sd">            of 64 (e.g., 64, 128, 256). This can be tuned.</span>
+<a id="__codelineno-0-148" name="__codelineno-0-148"></a><span class="sd">        max_days: Maximum length of the temporal dimension to precompute</span>
+<a id="__codelineno-0-149" name="__codelineno-0-149"></a><span class="sd">        encodings for. Default is 31, which is sufficient for a month of</span>
+<a id="__codelineno-0-150" name="__codelineno-0-150"></a><span class="sd">        daily data.</span>
+<a id="__codelineno-0-151" name="__codelineno-0-151"></a><span class="sd">        max_months: Maximum number of months (temporal patches) to precompute</span>
+<a id="__codelineno-0-152" name="__codelineno-0-152"></a><span class="sd">        encodings for. Default is 12, which is sufficient for a year of monthly data.</span>
+<a id="__codelineno-0-153" name="__codelineno-0-153"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-154" name="__codelineno-0-154"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<a id="__codelineno-0-155" name="__codelineno-0-155"></a>
+<a id="__codelineno-0-156" name="__codelineno-0-156"></a>    <span class="c1"># Positional encodings for days and months</span>
+<a id="__codelineno-0-157" name="__codelineno-0-157"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">pos_days</span> <span class="o">=</span> <span class="n">TemporalPositionalEncoding</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">,</span> <span class="n">max_len</span><span class="o">=</span><span class="n">max_days</span><span class="p">)</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">pos_months</span> <span class="o">=</span> <span class="n">TemporalPositionalEncoding</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">,</span> <span class="n">max_len</span><span class="o">=</span><span class="n">max_months</span><span class="p">)</span>
+<a id="__codelineno-0-159" name="__codelineno-0-159"></a>
+<a id="__codelineno-0-160" name="__codelineno-0-160"></a>    <span class="c1"># Day scorer (within each month)</span>
+<a id="__codelineno-0-161" name="__codelineno-0-161"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">day_scorer</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+<a id="__codelineno-0-162" name="__codelineno-0-162"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">),</span>  <span class="c1"># normalizing features</span>
+<a id="__codelineno-0-163" name="__codelineno-0-163"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">),</span>  <span class="c1"># learns temporal feature transformation</span>
+<a id="__codelineno-0-164" name="__codelineno-0-164"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(),</span>  <span class="c1"># adds non-linearity to capture complex temporal patterns</span>
+<a id="__codelineno-0-165" name="__codelineno-0-165"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>  <span class="c1"># project to a single score</span>
+<a id="__codelineno-0-166" name="__codelineno-0-166"></a>    <span class="p">)</span>
+<a id="__codelineno-0-167" name="__codelineno-0-167"></a>
+<a id="__codelineno-0-168" name="__codelineno-0-168"></a>    <span class="c1"># Cross month mixing</span>
+<a id="__codelineno-0-169" name="__codelineno-0-169"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">month_ln</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">)</span>
+<a id="__codelineno-0-170" name="__codelineno-0-170"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">month_attn</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MultiheadAttention</span><span class="p">(</span>
+<a id="__codelineno-0-171" name="__codelineno-0-171"></a>        <span class="n">embed_dim</span><span class="o">=</span><span class="n">embed_dim</span><span class="p">,</span>
+<a id="__codelineno-0-172" name="__codelineno-0-172"></a>        <span class="n">num_heads</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<a id="__codelineno-0-173" name="__codelineno-0-173"></a>        <span class="n">dropout</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+<a id="__codelineno-0-174" name="__codelineno-0-174"></a>        <span class="n">batch_first</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-175" name="__codelineno-0-175"></a>    <span class="p">)</span>
+<a id="__codelineno-0-176" name="__codelineno-0-176"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">month_ffn</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">),</span>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a>            <span class="n">embed_dim</span><span class="p">,</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">embed_dim</span>
+<a id="__codelineno-0-180" name="__codelineno-0-180"></a>        <span class="p">),</span>  <span class="c1"># 4 is a common factor in transformer feedforward layers</span>
+<a id="__codelineno-0-181" name="__codelineno-0-181"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(),</span>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a>        <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">embed_dim</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">),</span>
+<a id="__codelineno-0-183" name="__codelineno-0-183"></a>    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="climanet.st_encoder_decoder.TemporalAttentionAggregator.forward" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">forward</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">padded_days_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Args:
+    x: (B, M<em>T</em>H<em>W, C) containing spatio-temporal tokens, where C is the embedding dimension.
+    M: number of months
+    T: number of temporal tokens per month after temporal patching (Tp)
+    H: spatial height after spatial patching
+    W: spatial width after spatial patching
+    padded_days_mask: Optional boolean tensor of shape (B, M, T), bool,
+        True indicating which day tokens are padded (because some months
+        have fewer days). This is used to mask out padded tokens in attention computation.
+Returns:
+    Tensor of shape (B, M</em>H*W, C) with one temporally aggregated, where C is the embedding dimension.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-185">185</a></span>
+<span class="normal"><a href="#__codelineno-0-186">186</a></span>
+<span class="normal"><a href="#__codelineno-0-187">187</a></span>
+<span class="normal"><a href="#__codelineno-0-188">188</a></span>
+<span class="normal"><a href="#__codelineno-0-189">189</a></span>
+<span class="normal"><a href="#__codelineno-0-190">190</a></span>
+<span class="normal"><a href="#__codelineno-0-191">191</a></span>
+<span class="normal"><a href="#__codelineno-0-192">192</a></span>
+<span class="normal"><a href="#__codelineno-0-193">193</a></span>
+<span class="normal"><a href="#__codelineno-0-194">194</a></span>
+<span class="normal"><a href="#__codelineno-0-195">195</a></span>
+<span class="normal"><a href="#__codelineno-0-196">196</a></span>
+<span class="normal"><a href="#__codelineno-0-197">197</a></span>
+<span class="normal"><a href="#__codelineno-0-198">198</a></span>
+<span class="normal"><a href="#__codelineno-0-199">199</a></span>
+<span class="normal"><a href="#__codelineno-0-200">200</a></span>
+<span class="normal"><a href="#__codelineno-0-201">201</a></span>
+<span class="normal"><a href="#__codelineno-0-202">202</a></span>
+<span class="normal"><a href="#__codelineno-0-203">203</a></span>
+<span class="normal"><a href="#__codelineno-0-204">204</a></span>
+<span class="normal"><a href="#__codelineno-0-205">205</a></span>
+<span class="normal"><a href="#__codelineno-0-206">206</a></span>
+<span class="normal"><a href="#__codelineno-0-207">207</a></span>
+<span class="normal"><a href="#__codelineno-0-208">208</a></span>
+<span class="normal"><a href="#__codelineno-0-209">209</a></span>
+<span class="normal"><a href="#__codelineno-0-210">210</a></span>
+<span class="normal"><a href="#__codelineno-0-211">211</a></span>
+<span class="normal"><a href="#__codelineno-0-212">212</a></span>
+<span class="normal"><a href="#__codelineno-0-213">213</a></span>
+<span class="normal"><a href="#__codelineno-0-214">214</a></span>
+<span class="normal"><a href="#__codelineno-0-215">215</a></span>
+<span class="normal"><a href="#__codelineno-0-216">216</a></span>
+<span class="normal"><a href="#__codelineno-0-217">217</a></span>
+<span class="normal"><a href="#__codelineno-0-218">218</a></span>
+<span class="normal"><a href="#__codelineno-0-219">219</a></span>
+<span class="normal"><a href="#__codelineno-0-220">220</a></span>
+<span class="normal"><a href="#__codelineno-0-221">221</a></span>
+<span class="normal"><a href="#__codelineno-0-222">222</a></span>
+<span class="normal"><a href="#__codelineno-0-223">223</a></span>
+<span class="normal"><a href="#__codelineno-0-224">224</a></span>
+<span class="normal"><a href="#__codelineno-0-225">225</a></span>
+<span class="normal"><a href="#__codelineno-0-226">226</a></span>
+<span class="normal"><a href="#__codelineno-0-227">227</a></span>
+<span class="normal"><a href="#__codelineno-0-228">228</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-185" name="__codelineno-0-185"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">padded_days_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-187" name="__codelineno-0-187"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">        x: (B, M*T*H*W, C) containing spatio-temporal tokens, where C is the embedding dimension.</span>
+<a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="sd">        M: number of months</span>
+<a id="__codelineno-0-190" name="__codelineno-0-190"></a><span class="sd">        T: number of temporal tokens per month after temporal patching (Tp)</span>
+<a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">        H: spatial height after spatial patching</span>
+<a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="sd">        W: spatial width after spatial patching</span>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">        padded_days_mask: Optional boolean tensor of shape (B, M, T), bool,</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a><span class="sd">            True indicating which day tokens are padded (because some months</span>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">            have fewer days). This is used to mask out padded tokens in attention computation.</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">        Tensor of shape (B, M*H*W, C) with one temporally aggregated, where C is the embedding dimension.</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a>    <span class="n">seq</span> <span class="o">=</span> <span class="n">rearrange</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s2">&quot;b (m t h w) c -&gt; b (h w) m t c&quot;</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="n">M</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="n">H</span><span class="p">,</span> <span class="n">w</span><span class="o">=</span><span class="n">W</span><span class="p">)</span>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a>    <span class="n">pe_days</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos_days</span><span class="p">(</span><span class="n">T</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">seq</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">seq</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>  <span class="c1"># (T, C)</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a>    <span class="n">pe_months</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos_months</span><span class="p">(</span><span class="n">M</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">seq</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">seq</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>  <span class="c1"># (M, C)</span>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a>    <span class="n">seq</span> <span class="o">=</span> <span class="n">seq</span> <span class="o">+</span> <span class="n">pe_days</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>  <span class="c1"># add day PE</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a>    <span class="n">seq</span> <span class="o">=</span> <span class="n">seq</span> <span class="o">+</span> <span class="n">pe_months</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>  <span class="c1"># add month PE</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a>    <span class="c1"># Day attention per month</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a>    <span class="n">day_logits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">day_scorer</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (B, HW, M, T)</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a>    <span class="c1"># padded_days_mask is (B, M, T) true=padded, -&gt; (B, HW, M, T)</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a>    <span class="k">if</span> <span class="n">padded_days_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a>        <span class="n">pad</span> <span class="o">=</span> <span class="n">padded_days_mask</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">H</span> <span class="o">*</span> <span class="n">W</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">T</span><span class="p">)</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a>        <span class="n">day_logits</span> <span class="o">=</span> <span class="n">day_logits</span><span class="o">.</span><span class="n">masked_fill</span><span class="p">(</span><span class="n">pad</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;-inf&quot;</span><span class="p">))</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a>    <span class="n">day_w</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">day_logits</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a>    <span class="n">month_tokens</span> <span class="o">=</span> <span class="p">(</span><span class="n">seq</span> <span class="o">*</span> <span class="n">day_w</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>  <span class="c1"># (B, HW, M, C)</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a>    <span class="c1"># Cross-month attention at each spatial location</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a>    <span class="n">z</span> <span class="o">=</span> <span class="n">rearrange</span><span class="p">(</span><span class="n">month_tokens</span><span class="p">,</span> <span class="s2">&quot;b s m c -&gt; (b s) m c&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a>    <span class="n">z_ln</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">month_ln</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="n">attn_out</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">month_attn</span><span class="p">(</span><span class="n">z_ln</span><span class="p">,</span> <span class="n">z_ln</span><span class="p">,</span> <span class="n">z_ln</span><span class="p">,</span> <span class="n">need_weights</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a>    <span class="n">z</span> <span class="o">=</span> <span class="n">z</span> <span class="o">+</span> <span class="n">attn_out</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a>    <span class="n">z</span> <span class="o">=</span> <span class="n">z</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">month_ffn</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a>    <span class="c1"># Back to flattened tokens with month kept</span>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a>    <span class="n">z</span> <span class="o">=</span> <span class="n">rearrange</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="s2">&quot;(b s) m c -&gt; b s m c&quot;</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">s</span><span class="o">=</span><span class="n">H</span> <span class="o">*</span> <span class="n">W</span><span class="p">)</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">rearrange</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="s2">&quot;b (h w) m c -&gt; b (m h w) c&quot;</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="n">H</span><span class="p">,</span> <span class="n">w</span><span class="o">=</span><span class="n">W</span><span class="p">)</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a>    <span class="k">return</span> <span class="n">out</span>  <span class="c1"># (B, M*H*W, C)  C: embedding dimension</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="climanet.st_encoder_decoder.TemporalPositionalEncoding" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">TemporalPositionalEncoding</span><span class="p">(</span><span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">max_len</span><span class="o">=</span><span class="mi">31</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
+
+
+
+        <p>Temporal Positional Encoding using sine and cosine functions.</p>
+<p>This module generates fixed (non-learnable) sinusoidal positional encodings
+for the temporal dimension, following the formulation in
+"Attention Is All You Need" (Vaswani et al., 2017).</p>
+<p>The returned positional encodings are intended to be added to temporal
+embeddings by the caller, but this module itself does not perform the addition.</p>
+
+        <p>Initialize the temporal positional encoding.
+Args:
+    embed_dim: Dimension of the embedding.The default is 128.
+        Many vision transformers use embedding dimensions that are multiples
+        of 64 (e.g., 64, 128, 256). This can be tuned.
+    max_len: Maximum length of the temporal dimension to precompute
+    encodings for. Default is 31, which is sufficient for a month of
+    daily data.</p>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-93"> 93</a></span>
+<span class="normal"><a href="#__codelineno-0-94"> 94</a></span>
+<span class="normal"><a href="#__codelineno-0-95"> 95</a></span>
+<span class="normal"><a href="#__codelineno-0-96"> 96</a></span>
+<span class="normal"><a href="#__codelineno-0-97"> 97</a></span>
+<span class="normal"><a href="#__codelineno-0-98"> 98</a></span>
+<span class="normal"><a href="#__codelineno-0-99"> 99</a></span>
+<span class="normal"><a href="#__codelineno-0-100">100</a></span>
+<span class="normal"><a href="#__codelineno-0-101">101</a></span>
+<span class="normal"><a href="#__codelineno-0-102">102</a></span>
+<span class="normal"><a href="#__codelineno-0-103">103</a></span>
+<span class="normal"><a href="#__codelineno-0-104">104</a></span>
+<span class="normal"><a href="#__codelineno-0-105">105</a></span>
+<span class="normal"><a href="#__codelineno-0-106">106</a></span>
+<span class="normal"><a href="#__codelineno-0-107">107</a></span>
+<span class="normal"><a href="#__codelineno-0-108">108</a></span>
+<span class="normal"><a href="#__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#__codelineno-0-111">111</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">max_len</span><span class="o">=</span><span class="mi">31</span><span class="p">):</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Initialize the temporal positional encoding.</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="sd">        embed_dim: Dimension of the embedding.The default is 128.</span>
+<a id="__codelineno-0-97" name="__codelineno-0-97"></a><span class="sd">            Many vision transformers use embedding dimensions that are multiples</span>
+<a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="sd">            of 64 (e.g., 64, 128, 256). This can be tuned.</span>
+<a id="__codelineno-0-99" name="__codelineno-0-99"></a><span class="sd">        max_len: Maximum length of the temporal dimension to precompute</span>
+<a id="__codelineno-0-100" name="__codelineno-0-100"></a><span class="sd">        encodings for. Default is 31, which is sufficient for a month of</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101"></a><span class="sd">        daily data.</span>
+<a id="__codelineno-0-102" name="__codelineno-0-102"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-103" name="__codelineno-0-103"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a>    <span class="n">pe</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">max_len</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">)</span>
+<a id="__codelineno-0-105" name="__codelineno-0-105"></a>    <span class="n">position</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_len</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-106" name="__codelineno-0-106"></a>    <span class="n">div_term</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span>
+<a id="__codelineno-0-107" name="__codelineno-0-107"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">10000.0</span><span class="p">)</span> <span class="o">/</span> <span class="n">embed_dim</span><span class="p">)</span>
+<a id="__codelineno-0-108" name="__codelineno-0-108"></a>    <span class="p">)</span>
+<a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="n">pe</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">::</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">position</span> <span class="o">*</span> <span class="n">div_term</span><span class="p">)</span>
+<a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="n">pe</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">::</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">position</span> <span class="o">*</span> <span class="n">div_term</span><span class="p">)</span>
+<a id="__codelineno-0-111" name="__codelineno-0-111"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="s2">&quot;pe&quot;</span><span class="p">,</span> <span class="n">pe</span><span class="p">)</span>  <span class="c1"># (max_len, embeddim)</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="climanet.st_encoder_decoder.TemporalPositionalEncoding.forward" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">forward</span><span class="p">(</span><span class="n">T</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return positional encodings for a temporal sequence.
+Args:
+    T: Temporal length (must be &lt;= max_len)
+Returns:
+    Tensor of shape (T, embed_dim) containing sinusoidal positional encodings</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-113">113</a></span>
+<span class="normal"><a href="#__codelineno-0-114">114</a></span>
+<span class="normal"><a href="#__codelineno-0-115">115</a></span>
+<span class="normal"><a href="#__codelineno-0-116">116</a></span>
+<span class="normal"><a href="#__codelineno-0-117">117</a></span>
+<span class="normal"><a href="#__codelineno-0-118">118</a></span>
+<span class="normal"><a href="#__codelineno-0-119">119</a></span>
+<span class="normal"><a href="#__codelineno-0-120">120</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-113" name="__codelineno-0-113"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">T</span><span class="p">):</span>
+<a id="__codelineno-0-114" name="__codelineno-0-114"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return positional encodings for a temporal sequence.</span>
+<a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-116" name="__codelineno-0-116"></a><span class="sd">        T: Temporal length (must be &lt;= max_len)</span>
+<a id="__codelineno-0-117" name="__codelineno-0-117"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-118" name="__codelineno-0-118"></a><span class="sd">        Tensor of shape (T, embed_dim) containing sinusoidal positional encodings</span>
+<a id="__codelineno-0-119" name="__codelineno-0-119"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-120" name="__codelineno-0-120"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">pe</span><span class="p">[:</span><span class="n">T</span><span class="p">]</span>  <span class="c1"># (T, embed_dim)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="climanet.st_encoder_decoder.VideoEncoder" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">VideoEncoder</span><span class="p">(</span><span class="n">in_chans</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">patch_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">drop</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
+
+
+
+        <p>Video Encoder with spatio-temporal patch embedding.</p>
+<p>This module converts an input video into a sequence of non-overlapping
+spatio-temporal patch embeddings using a 3D convolution.</p>
+<p>Masking is handled by:
+- zeroing out masked (missing) pixels
+- concatenating a validity mask as an additional input channel</p>
+<p>The convolution uses kernel size and stride equal to the patch size.
+The output is a sequence of patch embeddings, as used in VideoMAE:
+https://arxiv.org/abs/2203.12602</p>
+
+        <p>Args:
+    in_chans: Number of input channels (1 for SST)
+    embed_dim: Dimension of the patch embedding. The default is 128.
+        Many vision transformers use embedding dimensions that are multiples
+        of 64 (e.g., 64, 128, 256). This can be tuned.
+    patch_size: Tuple of (T, H, W) patch size. Default is (1, 4, 4).
+    drop: Probability of an element to be zeroed. Default is 0.0.
+        Increase it if there is overfitting.</p>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-30">30</a></span>
+<span class="normal"><a href="#__codelineno-0-31">31</a></span>
+<span class="normal"><a href="#__codelineno-0-32">32</a></span>
+<span class="normal"><a href="#__codelineno-0-33">33</a></span>
+<span class="normal"><a href="#__codelineno-0-34">34</a></span>
+<span class="normal"><a href="#__codelineno-0-35">35</a></span>
+<span class="normal"><a href="#__codelineno-0-36">36</a></span>
+<span class="normal"><a href="#__codelineno-0-37">37</a></span>
+<span class="normal"><a href="#__codelineno-0-38">38</a></span>
+<span class="normal"><a href="#__codelineno-0-39">39</a></span>
+<span class="normal"><a href="#__codelineno-0-40">40</a></span>
+<span class="normal"><a href="#__codelineno-0-41">41</a></span>
+<span class="normal"><a href="#__codelineno-0-42">42</a></span>
+<span class="normal"><a href="#__codelineno-0-43">43</a></span>
+<span class="normal"><a href="#__codelineno-0-44">44</a></span>
+<span class="normal"><a href="#__codelineno-0-45">45</a></span>
+<span class="normal"><a href="#__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#__codelineno-0-47">47</a></span>
+<span class="normal"><a href="#__codelineno-0-48">48</a></span>
+<span class="normal"><a href="#__codelineno-0-49">49</a></span>
+<span class="normal"><a href="#__codelineno-0-50">50</a></span>
+<span class="normal"><a href="#__codelineno-0-51">51</a></span>
+<span class="normal"><a href="#__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#__codelineno-0-54">54</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_chans</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">patch_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">drop</span><span class="o">=</span><span class="mf">0.0</span><span class="p">):</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="sd">        in_chans: Number of input channels (1 for SST)</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="sd">        embed_dim: Dimension of the patch embedding. The default is 128.</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="sd">            Many vision transformers use embedding dimensions that are multiples</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="sd">            of 64 (e.g., 64, 128, 256). This can be tuned.</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">        patch_size: Tuple of (T, H, W) patch size. Default is (1, 4, 4).</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38"></a><span class="sd">        drop: Probability of an element to be zeroed. Default is 0.0.</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="sd">            Increase it if there is overfitting.</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span> <span class="o">=</span> <span class="n">patch_size</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43"></a>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a>    <span class="c1"># proj is a Conv3d with kernel and stride = patch_size to create non-overlapping patches</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45"></a>    <span class="c1"># 2 * in_chans because we add a validity channel</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">proj</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv3d</span><span class="p">(</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a>        <span class="mi">2</span> <span class="o">*</span> <span class="n">in_chans</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="n">patch_size</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="n">patch_size</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a>    <span class="p">)</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a>    <span class="c1"># norm is LayerNorm over the embedding dimension to normalize patch embeddings</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">norm</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">)</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a>    <span class="c1"># dropout for regularization</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">drop</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">drop</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="climanet.st_encoder_decoder.VideoEncoder.forward" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">forward</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Forward pass with masking support via an additional validity channel.
+Args:
+    x: Input video tensor of shape (B, C, T, H, W)
+    mask: Boolean mask tensor of shape (B, C, T, H, W), where True
+    indicates masked pixels</p>
+<p>Returns:
+    Embedded patches of shape (B, N_patches, embed_dim)</p>
+<p>Notes:
+    - Masked pixels are zeroed out before patch embedding
+    - A validity mask (1 = observed, 0 = missing) is concatenated
+    as an additional input channel</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>climanet/st_encoder_decoder.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-56">56</a></span>
+<span class="normal"><a href="#__codelineno-0-57">57</a></span>
+<span class="normal"><a href="#__codelineno-0-58">58</a></span>
+<span class="normal"><a href="#__codelineno-0-59">59</a></span>
+<span class="normal"><a href="#__codelineno-0-60">60</a></span>
+<span class="normal"><a href="#__codelineno-0-61">61</a></span>
+<span class="normal"><a href="#__codelineno-0-62">62</a></span>
+<span class="normal"><a href="#__codelineno-0-63">63</a></span>
+<span class="normal"><a href="#__codelineno-0-64">64</a></span>
+<span class="normal"><a href="#__codelineno-0-65">65</a></span>
+<span class="normal"><a href="#__codelineno-0-66">66</a></span>
+<span class="normal"><a href="#__codelineno-0-67">67</a></span>
+<span class="normal"><a href="#__codelineno-0-68">68</a></span>
+<span class="normal"><a href="#__codelineno-0-69">69</a></span>
+<span class="normal"><a href="#__codelineno-0-70">70</a></span>
+<span class="normal"><a href="#__codelineno-0-71">71</a></span>
+<span class="normal"><a href="#__codelineno-0-72">72</a></span>
+<span class="normal"><a href="#__codelineno-0-73">73</a></span>
+<span class="normal"><a href="#__codelineno-0-74">74</a></span>
+<span class="normal"><a href="#__codelineno-0-75">75</a></span>
+<span class="normal"><a href="#__codelineno-0-76">76</a></span>
+<span class="normal"><a href="#__codelineno-0-77">77</a></span>
+<span class="normal"><a href="#__codelineno-0-78">78</a></span>
+<span class="normal"><a href="#__codelineno-0-79">79</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Forward pass with masking support via an additional validity channel.</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">        x: Input video tensor of shape (B, C, T, H, W)</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">        mask: Boolean mask tensor of shape (B, C, T, H, W), where True</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">        indicates masked pixels</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">        Embedded patches of shape (B, N_patches, embed_dim)</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">    Notes:</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">        - Masked pixels are zeroed out before patch embedding</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">        - A validity mask (1 = observed, 0 = missing) is concatenated</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">        as an additional input channel</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a>    <span class="c1"># x: (B,1,T,H,W), mask: (B,1,T,H,W) where True means missing</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a>    <span class="n">valid</span> <span class="o">=</span> <span class="p">(</span><span class="o">~</span><span class="n">mask</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">*</span> <span class="n">valid</span>  <span class="c1"># zero-out missing values</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">valid</span><span class="p">],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># add validity as a channel</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># (B, C, T&#39;, H&#39;, W&#39;)</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">rearrange</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s2">&quot;b c t h w -&gt; b (t h w) c&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a>    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a>    <span class="k">return</span> <span class="n">x</span>  <span class="c1"># (B, N_patches, embed_dim)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tabs", "navigation.tabs.sticky", "content.code.copy", "content.tabs"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
