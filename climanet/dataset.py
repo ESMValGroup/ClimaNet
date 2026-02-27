@@ -16,7 +16,7 @@ class STDataset(Dataset):
         land_mask: xr.DataArray = None,
         time_dim: str = "time",
         spatial_dims: Tuple[str, str] = ("lat", "lon"),
-        patch_size: Tuple[int, int] = (16, 16),
+        patch_size: Tuple[int, int] = (16, 16),  # (lat, lon)
         overlap: int = 0,
     ):
         self.spatial_dims = spatial_dims
