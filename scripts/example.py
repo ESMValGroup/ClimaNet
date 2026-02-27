@@ -16,47 +16,56 @@ def _preprocess_roi(ds, lon_subset, lat_subset):
 
 
 def main():
-    # For debug, load part of the two year dataset
-    data_folder = Path("DATA/FOLDER/PATH")
-
-    # Load full dataset
+    # Data files
+    # data_folder = Path("/work/bd0854/b380103/eso4clima/output/v1.0/concatenated/") # remote
+    data_folder = Path("../../data/output/") # local
     daily_files = sorted(data_folder.rglob("20*_day_ERA5_masked_ts.nc"))
     monthly_files = sorted(data_folder.rglob("20*_mon_ERA5_full_ts.nc"))
-    patch_size_training = 80
-    daily_data = xr.open_mfdataset(daily_files)
-    monthly_data = xr.open_mfdataset(monthly_files)
-    lsm_mask = xr.open_dataset(data_folder / "era5_lsm_bool.nc")
-    lsm_mask = lsm_mask.rename({"latitude": "lat", "longitude": "lon"})[["lsm"]]
+    daily_files.sort()
+    monthly_files.sort()
 
-    # # Uncomment following for a partial debugging
-    # lon_subset = slice(-10, 10)
-    # lat_subset = slice(-5, 5)
-    # patch_size_training = 20
-    # daily_data = xr.open_mfdataset(
-    #     daily_files,
-    #     combine="by_coords",
-    #     preprocess=lambda ds: _preprocess_roi(ds, lon_subset, lat_subset),
-    #     chunks={"time": 1, "lat": patch_size_training * 2, "lon": patch_size_training * 2},
-    #     data_vars="minimal",
-    #     coords="minimal",
-    #     compat="override",
-    #     parallel=False,
-    # )
+    # Land surface
+    # lsm_file = "/home/b/b383704/eso4clima/train_twoyears/era5_lsm_bool.nc" # remote
+    lsm_file = data_folder / "era5_lsm_bool.nc" # local
+    
 
-    # monthly_data = xr.open_mfdataset(
-    #     monthly_files,
-    #     combine="by_coords",
-    #     preprocess=lambda ds: _preprocess_roi(ds, lon_subset, lat_subset),
-    #     chunks={"time": 1, "lat": patch_size_training * 2, "lon": patch_size_training * 2},
-    #     data_vars="minimal",
-    #     coords="minimal",
-    #     compat="override",
-    #     parallel=False,
-    # )
-    # lsm_mask = xr.open_dataset(data_folder / "era5_lsm_bool.nc")
-    # lsm_mask = lsm_mask.rename({"latitude": "lat", "longitude": "lon"})[["lsm"]].sel(
-    #     lon=lon_subset, lat=lat_subset
-    # )
+    # # Load full dataset
+    # daily_files = sorted(data_folder.rglob("20*_day_ERA5_masked_ts.nc"))
+    # monthly_files = sorted(data_folder.rglob("20*_mon_ERA5_full_ts.nc"))
+    # patch_size_training = 80
+    # daily_data = xr.open_mfdataset(daily_files)
+    # monthly_data = xr.open_mfdataset(monthly_files)
+
+    # Uncomment following for a partial debugging
+    lon_subset = slice(-10, 10)
+    lat_subset = slice(-5, 5)
+    patch_size_training = 20
+    daily_data = xr.open_mfdataset(
+        daily_files,
+        combine="by_coords",
+        preprocess=lambda ds: _preprocess_roi(ds, lon_subset, lat_subset),
+        chunks={"time": 1, "lat": patch_size_training * 2, "lon": patch_size_training * 2},
+        data_vars="minimal",
+        coords="minimal",
+        compat="override",
+        parallel=False,
+    )
+
+    monthly_data = xr.open_mfdataset(
+        monthly_files,
+        combine="by_coords",
+        preprocess=lambda ds: _preprocess_roi(ds, lon_subset, lat_subset),
+        chunks={"time": 1, "lat": patch_size_training * 2, "lon": patch_size_training * 2},
+        data_vars="minimal",
+        coords="minimal",
+        compat="override",
+        parallel=False,
+    )
+    
+    lsm_mask = xr.open_dataset(lsm_file)
+    lsm_mask = lsm_mask.rename({"latitude": "lat", "longitude": "lon"})[["lsm"]].sel(
+        lon=lon_subset, lat=lat_subset
+    )
 
     # Compute monthly climatology stats without persisting the full (time, lat, lon) monthly field
     monthly_ts = daily_data["ts"].resample(time="MS").mean(skipna=True)
