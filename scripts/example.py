@@ -17,16 +17,16 @@ def _preprocess_roi(ds, lon_subset, lat_subset):
 
 def main():
     # Data files
-    # data_folder = Path("/work/bd0854/b380103/eso4clima/output/v1.0/concatenated/") # remote
-    data_folder = Path("../../data/output/") # local
+    data_folder = Path("/work/bd0854/b380103/eso4clima/output/v1.0/concatenated/") # HPC
+    # data_folder = Path("../../data/output/") # local
     daily_files = sorted(data_folder.rglob("20*_day_ERA5_masked_ts.nc"))
     monthly_files = sorted(data_folder.rglob("20*_mon_ERA5_full_ts.nc"))
     daily_files.sort()
     monthly_files.sort()
 
     # Land surface
-    # lsm_file = "/home/b/b383704/eso4clima/train_twoyears/era5_lsm_bool.nc" # remote
-    lsm_file = data_folder / "era5_lsm_bool.nc" # local
+    lsm_file = "/home/b/b383704/eso4clima/train_twoyears/era5_lsm_bool.nc" # HPC
+    # lsm_file = data_folder / "era5_lsm_bool.nc" # local
     
 
     # # Load full dataset
@@ -188,8 +188,8 @@ def main():
     print(f"Saved predictions to: {predictions_save_path}")
 
     # Plot and save inspections
-    plot_path = Path("./figures/")
-    plot_path.parent.mkdir(parents=True, exist_ok=True)
+    plot_path = Path("./figures/") # local
+    plot_path.mkdir(parents=True, exist_ok=True)
     # 1) Prediction (t=0)
     fig, ax = plt.subplots(figsize=(8, 4))
     monthly_data["ts_pred"].isel(time=0).plot(ax=ax)
