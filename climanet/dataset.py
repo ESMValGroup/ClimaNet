@@ -60,25 +60,32 @@ class STDataset(Dataset):
         self.padded_days_tensor = torch.from_numpy(self.padded_mask_np).bool()
 
         # Precompute lazy index mapping for patches
-        self.stride = self.patch_size[0] - self.overlap
+        self.stride = (patch_size[0] - overlap, patch_size[1] - overlap)
         H, W = self.daily_np.shape[2], self.daily_np.shape[3]
-        self.n_i = (H - self.patch_size[0]) // self.stride + 1
-        self.n_j = (W - self.patch_size[1]) // self.stride + 1
+        self.patch_indices = self._compute_patch_indices(H, W)
 
-        # Total length is only spatial patches (all months included in each sample)
-        self.total_len = self.n_i * self.n_j
+    def _compute_patch_indices(self, H: int, W: int) -> list:
+        """Generate patch start indices ensuring full coverage."""
+        def get_starts(size, patch_len, stride):
+            starts = list(range(0, size - patch_len + 1, stride))
+            if not starts or starts[-1] + patch_len < size:
+                starts.append(size - patch_len)
+            return sorted(set(starts))
+
+        i_starts = get_starts(H, self.patch_size[0], self.stride[0])
+        j_starts = get_starts(W, self.patch_size[1], self.stride[1])
+        return [(i, j) for i in i_starts for j in j_starts]
+
 
     def __len__(self):
-        return self.total_len
+        return len(self.patch_indices)
 
     def __getitem__(self, idx):
         """Get a spatiotemporal patch sample based on the index."""
-        if idx < 0 or idx >= self.total_len:
+        if idx < 0 or idx >= len(self.patch_indices):
             raise IndexError("Index out of range")
 
-        i_idx, j_idx = divmod(idx, self.n_j)
-        i = i_idx * self.stride
-        j = j_idx * self.stride
+        i, j = self.patch_indices[idx]
         ph, pw = self.patch_size
 
         # Extract spatial patch via numpy slicing — faster than xarray indexing
