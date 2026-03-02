@@ -224,8 +224,8 @@ class TemporalAttentionAggregator(nn.Module):
 
         # Back to flattened tokens with month kept
         z = rearrange(z, "(b s) m c -> b s m c", b=x.shape[0], s=H * W)
-        out = rearrange(z, "b (h w) m c -> b (m h w) c", h=H, w=W)
-        return out  # (B, M*H*W, C)  C: embedding dimension
+        out = rearrange(z, "b (h w) m c -> b m (h w) c", h=H, w=W)
+        return out  # (B, M, H*W, C)  C: embedding dimension
 
 
 class MonthlyConvDecoder(nn.Module):
@@ -319,13 +319,13 @@ class MonthlyConvDecoder(nn.Module):
         Returns:
             Tensor of shape (B, M, out_H, out_W) representing the monthly variable e.g. SST.
         """
-        B, MHW, C = latent.shape
+        B, M, Np, C = latent.shape
         Hp = out_H // self.patch_h
         Wp = out_W // self.patch_w
-        assert MHW == M * Hp * Wp, f"Token mismatch: got {MHW}, expected {M * Hp * Wp}"
+        assert Np == Hp * Wp, f"Token mismatch: got {Np}, expected {Hp * Wp}"
 
         # transforms the latent tensor from sequence format to image format for
-        # convolution operations; (B, M*Hp*Wp, C) -> (B*M, C, Hp, Wp)
+        # convolution operations;
         out = latent.view(B, M, Hp, Wp, C).permute(0, 1, 4, 2, 3).contiguous()
         out = out.view(B * M, C, Hp, Wp)
 
@@ -576,18 +576,6 @@ class SpatioTemporalModel(nn.Module):
         )
         assert T % self.patch_size[0] == 0, "T must be divisible by patch size"
 
-        # Step 1: Encode spatio-temporal patches
-        # each month independently by folding M into batch
-        daily_data_reshaped = daily_data.reshape(B * M, C, T, H, W)
-        daily_mask_reshaped = daily_mask.reshape(B * M, C, T, H, W)
-        latent = self.encoder(
-            daily_data_reshaped, daily_mask_reshaped
-        )  # (B*M, N_patches, embed_dim)
-
-        # Step 2: Aggregate temporal information for each spatial patch
-        # latent -> (B, M*Np, embed_dim) to match the aggregator input x: (B, M*Tp*Hp*Wp, embed_dim)
-        latent = latent.reshape(B, M * Np, -1)
-
         if padded_days_mask is not None and self.patch_size[0] > 1:
             B, M, T_days = padded_days_mask.shape
             if T_days % self.patch_size[0] != 0:
@@ -598,23 +586,44 @@ class SpatioTemporalModel(nn.Module):
                 B, M, T_days // self.patch_size[0], self.patch_size[0]
             ).all(dim=-1)  # (B, M, Tp)
 
+        # Step 1: Encode spatio-temporal patches
+        # each month independently by folding M into batch
+        # encoder input shape = (B, C, T, H, W) where C is channel.
+        # encoder output shape = (B, N_patches, embed_dim)
+        # so M is folded into B, and T, H, W are the spatio-temporal dimensions to be patched.
+        daily_data_reshaped = daily_data.reshape(B * M, C, T, H, W)
+        daily_mask_reshaped = daily_mask.reshape(B * M, C, T, H, W)
+
+        latent = self.encoder(
+            daily_data_reshaped, daily_mask_reshaped
+        )  # (B*M, N_patches, embed_dim)
+
+        # Step 2: Aggregate temporal information for each spatial patch
+        # temporal input shape = (B, M*T*H*W, C),  C: embedding dimension
+        # temporal output shape = (B, M, H*W, C)  C: embedding dimension
+        latent = latent.reshape(B, M * Np, -1)
+
         agg_latent = self.temporal(
             latent, M, Tp, Hp, Wp, padded_days_mask=padded_days_mask
-        )  # (B, M*Hp*Wp, embed_dim)
+        )  # (B, M, Hp*Wp, embed_dim)
 
         # Step 3: Add spatial positional encodings and mix spatial features
-        E = agg_latent.shape[-1]
-        agg_latent = agg_latent.view(B, M, Hp * Wp, E)
+        # spatial PE output shape = (Hp, Wp, embed_dim)
         pe = (
             self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)
-        )  # (Hp*Wp, E)
-        x = agg_latent + pe[None, None, :, :]
+        )  # (Hp, Wp, E)
+        x = agg_latent + pe[None, None, :, :]  # (B, M, Hp*Wp, E)
 
         # Step 4: Spatial mixing with Transformer
-        x = x.view(B * M, Hp * Wp, E)
-        x = self.spatial_tr(x)  # (B*M, Hp*Wp, E)
-        x = x.view(B, M * Hp * Wp, E)  # back to (B, M*Hp*Wp, E)
+        # spatial transformer input shape = (B, N, C), output shape = (B, N, C) C: embedding dimension
+        # M is folded in B.
+        C = x.shape[-1]
+        x = x.reshape(B * M, Hp * Wp, C)
+        x = self.spatial_tr(x)
+        x = x.view(B, M, Hp * Wp, C)
 
         # Step 5: Decode to full-resolution 2D map
+        # decoder input shape is (B, M*Hp*Wp, C), C: embedding dimension
+        # decoder output shape is (B, M, H, W)
         monthly_pred = self.decoder(x, M, H, W, land_mask_patch)  # (B, M, H, W)
         return monthly_pred
