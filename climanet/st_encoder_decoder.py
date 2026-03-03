@@ -291,18 +291,11 @@ class MonthlyConvDecoder(nn.Module):
         in_channels, out_channels = hidden // 2, hidden // 2
 
         # Refinement block: a small conv layers to smooth patch boundaries
-        # Dynamic kernel and padding size based on patch size
-        dynamic_k = max(3, min(patch_h, patch_w) // 2 * 2 + 1)  # odd kernel size
-        dynamic_pad = dynamic_k // 2
         self.refine = nn.Sequential(
-            nn.Conv2d(
-                in_channels, out_channels, kernel_size=dynamic_k, padding=dynamic_pad
-            ),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.GELU(),
-            nn.Conv2d(
-                out_channels, out_channels, kernel_size=dynamic_k, padding=dynamic_pad
-            ),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.GELU(),
         )
