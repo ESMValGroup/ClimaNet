@@ -30,6 +30,13 @@ class STDataset(Dataset):
             if dim not in daily_da.dims or dim not in monthly_da.dims:
                 raise ValueError(f"Spatial dimension '{dim}' not found in input data")
 
+        if (
+            patch_size[0] > daily_da.sizes[spatial_dims[0]] or patch_size[1] > daily_da.sizes[spatial_dims[1]]
+        ):
+            raise ValueError(
+                f"Patch size {patch_size} is larger than data dimensions {daily_da.sizes[spatial_dims]}"
+            )
+
         # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
         # and get padded_days_mask → (M, T=31)
         daily_mt, monthly_m, padded_days_mask = add_month_day_dims(
@@ -40,6 +47,10 @@ class STDataset(Dataset):
         self.daily_np = daily_mt.to_numpy().copy()  # (M, T=31, H, W) float
         self.monthly_np = monthly_m.to_numpy().copy()  # (M, H, W) float
         self.padded_mask_np = padded_days_mask.to_numpy().copy()  # (M, T=31) bool
+
+        # Store coordinate arrays
+        self.lat_coords = daily_da[spatial_dims[0]].to_numpy().copy()
+        self.lon_coords = daily_da[spatial_dims[1]].to_numpy().copy()
 
         if land_mask is not None:
             lm = land_mask.to_numpy().copy()
@@ -115,6 +126,10 @@ class STDataset(Dataset):
             ~land_tensor.unsqueeze(0).unsqueeze(0).unsqueeze(0)
         )
 
+        # Extract lat/lon coordinates for this patch
+        lat_patch = self.lat_coords[i : i + ph]
+        lon_patch = self.lon_coords[j : j + pw]
+
         # Convert to tensors
         return {
             "daily_patch": daily_tensor,  # (C=1, M, T=31, H, W)
@@ -123,4 +138,6 @@ class STDataset(Dataset):
             "land_mask_patch": land_tensor,  # (H,W) True=Land
             "padded_days_mask": self.padded_days_tensor,  # (M, T=31) True=padded
             "coords": (i, j),
+            "lat_patch": lat_patch,  # (H,)
+            "lon_patch": lon_patch,  # (W,)
         }
