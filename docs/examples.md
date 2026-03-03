@@ -24,16 +24,16 @@ consider when setting these two patch sizes.
   may also lead to a loss of broader context.
 
 - dataset_patch_size: this is used in `STDataset` where the input data is split
-  into (overlapping) spatial patches to manage memory in training and inference.
-  The patch size should be set based on the available computational resources
-  and spatial variability of the input data. We have to make sure that data is
-  represntive enough for training purposes. Small `dataset_patch_size` might
-  lead the model to learn from a very limited spatial context, leading to
-  artifacts in the predictions. On the other hand, a large `dataset_patch_size`
-  might lead to memory issues during training and inference. The
-  `dataset_patch_size` should be divisible by `model_patch_size`. If you use
-  overlapping patches, during inference, you'll need to handle this overlap
-  (e.g., averaging predictions in overlapping regions).
+  into (non-overlapping) spatial patches to manage memory in training and
+  inference. The overlapping patches is disable because the loss function is
+  computed on each patch icluding gaps. Otherwise, some pixels will be included
+  in loss computation multiple times. The patch size should be set based on the
+  available computational resources and spatial variability of the input data.
+  The `dataset_patch_size` should be divisible by `model_patch_size`. We have to
+  make sure that data is represntive enough for training purposes. Note that
+  large `dataset_patch_size` might lead to memory issues during training and
+  inference. During inference on a larger spatial extent, you'll need to handle
+  stitching the patches.
 
 - spatial extent of input data: the input data might be used for train_test
   split or for inference. If a model is trained on a specific
@@ -41,6 +41,7 @@ consider when setting these two patch sizes.
   inference. If the spatial extent of the input data is larger than the
   `dataset_patch_size`, the dataloader can be used to split the input data into
   patches in inference and the results can be stitched together to get the final
-  prediction.
+  prediction.Also, you may need to preprocess the predictions for
+  edge effect because of non-overlapping patches.
 
 ! Note: It is better to have larger `dataset_patch_size` and smaller `model_patch_size`.
