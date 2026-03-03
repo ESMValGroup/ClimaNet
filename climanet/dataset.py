@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from .utils import add_month_day_dims
 import xarray as xr
@@ -17,11 +19,9 @@ class STDataset(Dataset):
         time_dim: str = "time",
         spatial_dims: Tuple[str, str] = ("lat", "lon"),
         patch_size: Tuple[int, int] = (16, 16),  # (lat, lon)
-        overlap: int = 0,
     ):
         self.spatial_dims = spatial_dims
         self.patch_size = patch_size
-        self.overlap = overlap
 
         # Check that the input data has the expected dimensions
         if time_dim not in daily_da.dims or time_dim not in monthly_da.dims:
@@ -71,20 +71,33 @@ class STDataset(Dataset):
         self.padded_days_tensor = torch.from_numpy(self.padded_mask_np).bool()
 
         # Precompute lazy index mapping for patches
-        self.stride = (patch_size[0] - overlap, patch_size[1] - overlap)
         H, W = self.daily_np.shape[2], self.daily_np.shape[3]
         self.patch_indices = self._compute_patch_indices(H, W)
 
     def _compute_patch_indices(self, H: int, W: int) -> list:
-        """Generate patch start indices ensuring full coverage."""
-        def get_starts(size, patch_len, stride):
-            starts = list(range(0, size - patch_len + 1, stride))
-            if not starts or starts[-1] + patch_len < size:
-                starts.append(size - patch_len)
-            return sorted(set(starts))
+        """Generate non-overlapping patch start indices with coverage warning."""
+        ph, pw = self.patch_size
 
-        i_starts = get_starts(H, self.patch_size[0], self.stride[0])
-        j_starts = get_starts(W, self.patch_size[1], self.stride[1])
+        # Compute number of full non-overlapping patches
+        n_patches_h = H // ph
+        n_patches_w = W // pw
+
+        # Check for incomplete coverage
+        remainder_h = H % ph
+        remainder_w = W % pw
+
+        if remainder_h > 0 or remainder_w > 0:
+            warnings.warn(
+                f"Patch size {self.patch_size} does not evenly divide image dimensions (H={H}, W={W}). "
+                f"Uncovered pixels: {remainder_h} in height, {remainder_w} in width. "
+                f"Consider adjusting patch_size or image dimensions for full coverage.",
+                UserWarning
+            )
+
+        # Generate non-overlapping patch indices
+        i_starts = [i * ph for i in range(n_patches_h)]
+        j_starts = [j * pw for j in range(n_patches_w)]
+
         return [(i, j) for i in i_starts for j in j_starts]
 
 
