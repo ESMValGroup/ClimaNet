@@ -27,14 +27,20 @@ consider when setting these two patch sizes.
   into (overlapping) spatial patches to manage memory in training and inference.
   The patch size should be set based on the available computational resources
   and spatial variability of the input data. We have to make sure that data is
-  represntive enough for training purposes. Small dataset_patch_size might lead
-  the model to learn from a very limited spatial context, leading to artifacts
-  in the predictions. On the other hand, a large dataset_patch_size might lead
-  to memory issues during training and inference. The dataset_patch_size should
-  be divisible by `model_patch_size`.
+  represntive enough for training purposes. Small `dataset_patch_size` might
+  lead the model to learn from a very limited spatial context, leading to
+  artifacts in the predictions. On the other hand, a large `dataset_patch_size`
+  might lead to memory issues during training and inference. The
+  `dataset_patch_size` should be divisible by `model_patch_size`. If you use
+  overlapping patches, during inference, you'll need to handle this overlap
+  (e.g., averaging predictions in overlapping regions).
 
 - spatial extent of input data: the input data might be used for train_test
-  split or for inference. The spatial extent should be divisible by
-  `model_patch_size`.
+  split or for inference. If a model is trained on a specific
+  `dataset_patch_size`, the same `dataset_patch_size` should be used for
+  inference. If the spatial extent of the input data is larger than the
+  `dataset_patch_size`, the dataloader can be used to split the input data into
+  patches in inference and the results can be stitched together to get the final
+  prediction.
 
 ! Note: It is better to have larger `dataset_patch_size` and smaller `model_patch_size`.
