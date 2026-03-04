@@ -296,10 +296,10 @@ class MonthlyConvDecoder(nn.Module):
         # Refinement block: a small conv layers to smooth patch boundaries
         self.refine = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
+            nn.GroupNorm(num_groups=8, num_channels=out_channels),
             nn.GELU(),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
+            nn.GroupNorm(num_groups=8, num_channels=out_channels),
             nn.GELU(),
         )
 
