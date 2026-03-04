@@ -185,7 +185,7 @@ class TemporalAttentionAggregator(nn.Module):
     def forward(self, x, M, T, H, W, padded_days_mask=None):
         """
         Args:
-            x: (B, M*T*H*W, C) containing spatio-temporal tokens, where C is the embedding dimension.
+            x: (B, M, T, H, W, C) containing spatio-temporal tokens, where C is the embedding dimension.
             M: number of months
             T: number of temporal tokens per month after temporal patching (Tp)
             H: spatial height after spatial patching
@@ -194,9 +194,12 @@ class TemporalAttentionAggregator(nn.Module):
                 True indicating which day tokens are padded (because some months
                 have fewer days). This is used to mask out padded tokens in attention computation.
         Returns:
-            Tensor of shape (B, M*H*W, C) with one temporally aggregated, where C is the embedding dimension.
+            Tensor of shape (B, M, H*W, C) with one temporally aggregated, where C is the embedding dimension.
         """
-        seq = rearrange(x, "b (m t h w) c -> b (h w) m t c", m=M, t=T, h=H, w=W)
+        B, M, Tp, Hp, Wp, C = x.shape
+
+        # Reshape to (B, Hp*Wp, M, Tp, C) for temporal processing
+        seq = x.permute(0, 3, 4, 1, 2, 5).reshape(B, Hp * Wp, M, Tp, C)
 
         pe_days = self.pos_days(T).to(seq.device).to(seq.dtype)  # (T, C)
         pe_months = self.pos_months(M).to(seq.device).to(seq.dtype)  # (M, C)
@@ -209,7 +212,7 @@ class TemporalAttentionAggregator(nn.Module):
 
         # padded_days_mask is (B, M, T) true=padded, -> (B, HW, M, T)
         if padded_days_mask is not None:
-            pad = padded_days_mask[:, None, :, :].expand(x.shape[0], H * W, M, T)
+            pad = padded_days_mask[:, None, :, :].expand(B, H * W, M, T)
             day_logits = day_logits.masked_fill(pad, float("-inf"))
 
         day_w = torch.softmax(day_logits, dim=-1)  # turns inf to 0
@@ -222,9 +225,9 @@ class TemporalAttentionAggregator(nn.Module):
         z = z + attn_out
         z = z + self.month_ffn(z)
 
-        # Back to flattened tokens with month kept
-        z = rearrange(z, "(b s) m c -> b s m c", b=x.shape[0], s=H * W)
-        out = rearrange(z, "b (h w) m c -> b m (h w) c", h=H, w=W)
+        # Back to (B, M, Hp*Wp, C)
+        z = z.view(B, Hp * Wp, M, C)
+        out = z.permute(0, 2, 1, 3)  # (B, M, Hp*Wp, C)
         return out  # (B, M, H*W, C)  C: embedding dimension
 
 
@@ -601,7 +604,8 @@ class SpatioTemporalModel(nn.Module):
         # Step 2: Aggregate temporal information for each spatial patch
         # temporal input shape = (B, M*T*H*W, C),  C: embedding dimension
         # temporal output shape = (B, M, H*W, C)  C: embedding dimension
-        latent = latent.reshape(B, M * Np, -1)
+        embed_dim = latent.shape[-1]
+        latent = latent.view(B, M, Tp, Hp, Wp, embed_dim)
 
         agg_latent = self.temporal(
             latent, M, Tp, Hp, Wp, padded_days_mask=padded_days_mask
