@@ -45,3 +45,15 @@ consider when setting these two patch sizes.
   edge effect because of non-overlapping patches.
 
 ! Note: It is better to have larger `dataset_patch_size` and smaller `model_patch_size`.
+
+- Hyperparameters: In the example notebook, we didn't set the hyperparameters
+  based on any tuning or training. These parameters especially
+  `model_patch_size`, `dataset_patch_size`, `batch_size`, `overlap`, and `number
+  of epochs` can affect the model's performance. Note that the number of batches
+  should be always larger than 1 to avoid overfitting.
+
+- accumulation_step: in training loop we use `accumulation_step`.  Gradient
+accumulation is a technique to simulate a larger batch size when memory is
+limited. `batch_size` is the number of samples processed before one gradient
+update.Start with accumulation_steps = 1 (no accumulation) Adjust based on
+training behavior i.e. noisy predictions or overfitting.
