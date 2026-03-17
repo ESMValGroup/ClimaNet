@@ -55,7 +55,6 @@ def test_len_and_shapes():
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),
-        overlap=0,
     )
 
     assert len(dataset) == 4
@@ -77,7 +76,6 @@ def test_index_bounds():
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),
-        overlap=0,
     )
 
     with pytest.raises(IndexError):
@@ -94,7 +92,6 @@ def test_index_mapping_and_mask_values():
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),
-        overlap=0,
     )
 
     sample = dataset[3]
