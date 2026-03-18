@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+"""Example inference script"""
+
 from pathlib import Path
-from matplotlib import pyplot as plt
 import torch
 import torch.nn.functional
 import xarray as xr
@@ -9,6 +10,13 @@ from torch.utils.data import DataLoader
 from climanet import STDataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.utils import pred_to_numpy
+
+import logging
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -97,7 +105,7 @@ def main():
     predictions_save_path = Path("./predicted_data/predictions.nc")
     predictions_save_path.parent.mkdir(parents=True, exist_ok=True)
     monthly_data.to_netcdf(predictions_save_path)
-    print(f"Saved predictions to: {predictions_save_path}")
+    logger.info(f"Saved predictions to: {predictions_save_path}")
 
 
 if __name__ == "__main__":

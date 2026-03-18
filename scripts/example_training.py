@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+"""Example training script"""
+
 from pathlib import Path
-from matplotlib import pyplot as plt
 import torch
 import torch.nn.functional
 import xarray as xr
@@ -8,12 +9,20 @@ from torch.utils.data import DataLoader
 
 from climanet import STDataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
-from climanet.utils import pred_to_numpy
+
+import logging
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 def main():
     # Data files
-    data_folder = Path("/work/bd0854/b380103/eso4clima/output/v1.0/concatenated/") # HPC
+    data_folder = Path(
+        "/work/bd0854/b380103/eso4clima/output/v1.0/concatenated/"
+    )  # HPC
     # data_folder = Path("../../data/output/") # local
     daily_files = sorted(data_folder.rglob("20*_day_ERA5_masked_ts.nc"))
     monthly_files = sorted(data_folder.rglob("20*_mon_ERA5_full_ts.nc"))
@@ -21,9 +30,8 @@ def main():
     monthly_files.sort()
 
     # Land surface
-    lsm_file = "/home/b/b383704/eso4clima/train_twoyears/era5_lsm_bool.nc" # HPC
+    lsm_file = "/home/b/b383704/eso4clima/train_twoyears/era5_lsm_bool.nc"  # HPC
     # lsm_file = data_folder / "era5_lsm_bool.nc" # local
-    
 
     # Load full dataset
     daily_files = sorted(data_folder.rglob("20*_day_ERA5_masked_ts.nc"))
@@ -35,7 +43,11 @@ def main():
     daily_data = xr.open_mfdataset(
         daily_files,
         combine="by_coords",
-        chunks={"time": 1, "lat": patch_size_training * 2, "lon": patch_size_training * 2},
+        chunks={
+            "time": 1,
+            "lat": patch_size_training * 2,
+            "lon": patch_size_training * 2,
+        },
         data_vars="minimal",
         coords="minimal",
         compat="override",
@@ -45,20 +57,24 @@ def main():
     monthly_data = xr.open_mfdataset(
         monthly_files,
         combine="by_coords",
-        chunks={"time": 1, "lat": patch_size_training * 2, "lon": patch_size_training * 2},
+        chunks={
+            "time": 1,
+            "lat": patch_size_training * 2,
+            "lon": patch_size_training * 2,
+        },
         data_vars="minimal",
         coords="minimal",
         compat="override",
         parallel=False,
     )
-    
+
     lsm_mask = xr.open_dataset(lsm_file)
 
     # Compute monthly climatology stats without persisting the full (time, lat, lon) monthly field
     monthly_ts = daily_data["ts"].resample(time="MS").mean(skipna=True)
     mean = monthly_ts.mean(dim=["lat", "lon"], skipna=True).compute().values
     std = monthly_ts.std(dim=["lat", "lon"], skipna=True).compute().values
-    print(f"mean: {mean}, std: {std}")
+    logger.info(f"mean: {mean}, std: {std}")
 
     # Make a dataset
     dataset = STDataset(
@@ -125,30 +141,30 @@ def main():
             counter = 0
 
         if epoch % 20 == 0:
-            print(f"The loss is {best_loss} at epoch {epoch}")
+            logger.info(f"The loss is {best_loss} at epoch {epoch}")
         else:
             counter += 1
             if counter >= patience:
-                print(
+                logger.info(
                     f"No improvement for {patience} epochs, stopping early at epoch {epoch}."
                 )
                 break
 
-    print("training done!")
-    print(f"Final loss: {loss.item()}")
+    logger.info("training done!")
+    logger.info(f"Final loss: {loss.item()}")
 
     # Save the trained model with config
     checkpoint = {
-        'config': model.config,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'epoch': epoch,
-        'loss': loss.item(),
+        "config": model.config,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "epoch": epoch,
+        "loss": loss.item(),
     }
     model_save_path = Path("./models/spatio_temporal_model.pth")
     model_save_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(checkpoint, model_save_path)
-    print(f"Checkpoint saved to {model_save_path}")
+    logger.info(f"Checkpoint saved to {model_save_path}")
 
 
 if __name__ == "__main__":
