@@ -11,8 +11,6 @@ from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.utils import pred_to_numpy
 
 
-
-
 def main():
     # Data files
     data_folder = Path("/work/bd0854/b380103/eso4clima/output/v1.0/concatenated/") # HPC
@@ -27,21 +25,16 @@ def main():
     # lsm_file = data_folder / "era5_lsm_bool.nc" # local
     
 
-    # # Load full dataset
-    # daily_files = sorted(data_folder.rglob("20*_day_ERA5_masked_ts.nc"))
-    # monthly_files = sorted(data_folder.rglob("20*_mon_ERA5_full_ts.nc"))
-    # patch_size_training = 80
-    # daily_data = xr.open_mfdataset(daily_files)
-    # monthly_data = xr.open_mfdataset(monthly_files)
+    # Load full dataset
+    daily_files = sorted(data_folder.rglob("20*_day_ERA5_masked_ts.nc"))
+    monthly_files = sorted(data_folder.rglob("20*_mon_ERA5_full_ts.nc"))
+    patch_size_training = 80
+    daily_data = xr.open_mfdataset(daily_files)
+    monthly_data = xr.open_mfdataset(monthly_files)
 
-    # Uncomment following for a partial debugging
-    lon_subset = slice(-10, 10)
-    lat_subset = slice(-5, 5)
-    patch_size_training = 20
     daily_data = xr.open_mfdataset(
         daily_files,
         combine="by_coords",
-        preprocess=lambda ds: _preprocess_roi(ds, lon_subset, lat_subset),
         chunks={"time": 1, "lat": patch_size_training * 2, "lon": patch_size_training * 2},
         data_vars="minimal",
         coords="minimal",
@@ -52,7 +45,6 @@ def main():
     monthly_data = xr.open_mfdataset(
         monthly_files,
         combine="by_coords",
-        preprocess=lambda ds: _preprocess_roi(ds, lon_subset, lat_subset),
         chunks={"time": 1, "lat": patch_size_training * 2, "lon": patch_size_training * 2},
         data_vars="minimal",
         coords="minimal",
@@ -145,69 +137,18 @@ def main():
     print("training done!")
     print(f"Final loss: {loss.item()}")
 
-    # Calculate prediction and error
-    dataset_pred = STDataset(
-        daily_da=daily_data["ts"],
-        monthly_da=monthly_data["ts"],
-        land_mask=lsm_mask["lsm"],
-        patch_size=(daily_data.sizes["lat"], daily_data.sizes["lon"]),
-    )
-    dataloader_pred = DataLoader(
-        dataset_pred,
-        batch_size=len(dataset_pred),
-        pin_memory=False,
-    )
-    full_batch = next(iter(dataloader_pred))
-    daily_batch = full_batch["daily_patch"]
-    daily_mask = full_batch["daily_mask_patch"]
-    monthly_target = full_batch["monthly_patch"]
-    land_mask_patch = full_batch["land_mask_patch"][0, ...]
-    padded_days_mask = full_batch["padded_days_mask"]
-    model.eval()
-    with torch.no_grad():
-        pred = model(daily_batch, daily_mask, land_mask_patch, padded_days_mask)
-    monthly_prediction = pred_to_numpy(pred, land_mask=land_mask_patch)[0]
-    monthly_data["ts_pred"] = (("time", "lat", "lon"), monthly_prediction)
-    target = monthly_data["ts"].where(~lsm_mask["lsm"].values)
-    err = target - monthly_data["ts_pred"]
-
-    # Save the trained model
+    # Save the trained model with config
+    checkpoint = {
+        'config': model.config,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'epoch': epoch,
+        'loss': loss.item(),
+    }
     model_save_path = Path("./models/spatio_temporal_model.pth")
     model_save_path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(model.state_dict(), model_save_path)
-    # Save the xr.Dataset with predictions
-    predictions_save_path = Path("./predicted_data/predictions.nc")
-    predictions_save_path.parent.mkdir(parents=True, exist_ok=True)
-    monthly_data.to_netcdf(predictions_save_path)
-    print(f"Saved model to: {model_save_path}")
-    print(f"Saved predictions to: {predictions_save_path}")
-
-    # Plot and save inspections
-    plot_path = Path("./figures/") # local
-    plot_path.mkdir(parents=True, exist_ok=True)
-    # 1) Prediction (t=0)
-    fig, ax = plt.subplots(figsize=(8, 4))
-    monthly_data["ts_pred"].isel(time=0).plot(ax=ax)
-    fig.savefig(plot_path / "ts_pred_t0.png", dpi=200, bbox_inches="tight")
-    plt.close(fig)
-
-    # 2) Target (t=0)
-    fig, ax = plt.subplots(figsize=(8, 4))
-    monthly_data["ts"].where(~lsm_mask["lsm"].values).isel(time=0).plot(ax=ax)
-    fig.savefig(plot_path / "ts_target_t0.png", dpi=200, bbox_inches="tight")
-    plt.close(fig)
-
-    # 3) Error (t=0)
-    fig, ax = plt.subplots(figsize=(8, 4))
-    err.isel(time=0).plot(ax=ax)
-    fig.savefig(plot_path / "err_t0.png", dpi=200, bbox_inches="tight")
-    plt.close(fig)
-
-    # 4) Error (t=1)
-    fig, ax = plt.subplots(figsize=(8, 4))
-    err.isel(time=1).plot(ax=ax)
-    fig.savefig(plot_path / "err_t1.png", dpi=200, bbox_inches="tight")
-    plt.close(fig)
+    torch.save(checkpoint, model_save_path)
+    print(f"Checkpoint saved to {model_save_path}")
 
 
 if __name__ == "__main__":
