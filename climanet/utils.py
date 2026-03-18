@@ -133,7 +133,7 @@ def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
     """
     pred: (B, M, H_pad,W_pad) or (B, H, W) torch tensor
     orig_H/W: original sizes before padding (optional)
-    land_mask: (H_pad,W_pad) or (H,W) bool; if given, land will be set to NaN
+    land_mask: (B, H_pad,W_pad) or (B, H,W) bool; if given, land will be set to NaN
     returns: (H,W) numpy array
     """
     # crop to original size if provided
@@ -145,6 +145,8 @@ def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
     # set land to NaN (broadcast mask across batch)
     if land_mask is not None:
         pred = pred.clone().to(torch.float32)
-        pred[:, :, land_mask.bool()] = float("nan")
+        land_mask = land_mask.bool()
+        land_mask = land_mask.unsqueeze(1) # (B, H,W) -> (B, 1, H, W) for broadcasting
+        pred = torch.where(land_mask, torch.full_like(pred, float("nan")), pred)
 
     return pred.detach().cpu().numpy()

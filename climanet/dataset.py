@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from .utils import add_month_day_dims
 import xarray as xr
@@ -16,12 +18,10 @@ class STDataset(Dataset):
         land_mask: xr.DataArray = None,
         time_dim: str = "time",
         spatial_dims: Tuple[str, str] = ("lat", "lon"),
-        patch_size: Tuple[int, int] = (16, 16),
-        overlap: int = 0,
+        patch_size: Tuple[int, int] = (16, 16),  # (lat, lon)
     ):
         self.spatial_dims = spatial_dims
         self.patch_size = patch_size
-        self.overlap = overlap
 
         # Check that the input data has the expected dimensions
         if time_dim not in daily_da.dims or time_dim not in monthly_da.dims:
@@ -29,6 +29,13 @@ class STDataset(Dataset):
         for dim in spatial_dims:
             if dim not in daily_da.dims or dim not in monthly_da.dims:
                 raise ValueError(f"Spatial dimension '{dim}' not found in input data")
+
+        if (
+            patch_size[0] > daily_da.sizes[spatial_dims[0]] or patch_size[1] > daily_da.sizes[spatial_dims[1]]
+        ):
+            raise ValueError(
+                f"Patch size {patch_size} is larger than data dimensions {daily_da.sizes[spatial_dims]}"
+            )
 
         # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
         # and get padded_days_mask → (M, T=31)
@@ -40,6 +47,10 @@ class STDataset(Dataset):
         self.daily_np = daily_mt.to_numpy().copy()  # (M, T=31, H, W) float
         self.monthly_np = monthly_m.to_numpy().copy()  # (M, H, W) float
         self.padded_mask_np = padded_days_mask.to_numpy().copy()  # (M, T=31) bool
+
+        # Store coordinate arrays
+        self.lat_coords = daily_da[spatial_dims[0]].to_numpy().copy()
+        self.lon_coords = daily_da[spatial_dims[1]].to_numpy().copy()
 
         if land_mask is not None:
             lm = land_mask.to_numpy().copy()
@@ -60,25 +71,45 @@ class STDataset(Dataset):
         self.padded_days_tensor = torch.from_numpy(self.padded_mask_np).bool()
 
         # Precompute lazy index mapping for patches
-        self.stride = self.patch_size[0] - self.overlap
         H, W = self.daily_np.shape[2], self.daily_np.shape[3]
-        self.n_i = (H - self.patch_size[0]) // self.stride + 1
-        self.n_j = (W - self.patch_size[1]) // self.stride + 1
+        self.patch_indices = self._compute_patch_indices(H, W)
 
-        # Total length is only spatial patches (all months included in each sample)
-        self.total_len = self.n_i * self.n_j
+    def _compute_patch_indices(self, H: int, W: int) -> list:
+        """Generate non-overlapping patch start indices with coverage warning."""
+        ph, pw = self.patch_size
+
+        # Compute number of full non-overlapping patches
+        n_patches_h = H // ph
+        n_patches_w = W // pw
+
+        # Check for incomplete coverage
+        remainder_h = H % ph
+        remainder_w = W % pw
+
+        if remainder_h > 0 or remainder_w > 0:
+            warnings.warn(
+                f"Patch size {self.patch_size} does not evenly divide image dimensions (H={H}, W={W}). "
+                f"Uncovered pixels: {remainder_h} in height, {remainder_w} in width. "
+                f"Consider adjusting patch_size or image dimensions for full coverage.",
+                UserWarning
+            )
+
+        # Generate non-overlapping patch indices
+        i_starts = [i * ph for i in range(n_patches_h)]
+        j_starts = [j * pw for j in range(n_patches_w)]
+
+        return [(i, j) for i in i_starts for j in j_starts]
+
 
     def __len__(self):
-        return self.total_len
+        return len(self.patch_indices)
 
     def __getitem__(self, idx):
         """Get a spatiotemporal patch sample based on the index."""
-        if idx < 0 or idx >= self.total_len:
+        if idx < 0 or idx >= len(self.patch_indices):
             raise IndexError("Index out of range")
 
-        i_idx, j_idx = divmod(idx, self.n_j)
-        i = i_idx * self.stride
-        j = j_idx * self.stride
+        i, j = self.patch_indices[idx]
         ph, pw = self.patch_size
 
         # Extract spatial patch via numpy slicing — faster than xarray indexing
@@ -108,6 +139,10 @@ class STDataset(Dataset):
             ~land_tensor.unsqueeze(0).unsqueeze(0).unsqueeze(0)
         )
 
+        # Extract lat/lon coordinates for this patch
+        lat_patch = self.lat_coords[i : i + ph]
+        lon_patch = self.lon_coords[j : j + pw]
+
         # Convert to tensors
         return {
             "daily_patch": daily_tensor,  # (C=1, M, T=31, H, W)
@@ -116,4 +151,6 @@ class STDataset(Dataset):
             "land_mask_patch": land_tensor,  # (H,W) True=Land
             "padded_days_mask": self.padded_days_tensor,  # (M, T=31) True=padded
             "coords": (i, j),
+            "lat_patch": lat_patch,  # (H,)
+            "lon_patch": lon_patch,  # (W,)
         }
