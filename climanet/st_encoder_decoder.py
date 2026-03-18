@@ -528,6 +528,10 @@ class SpatioTemporalModel(nn.Module):
             spatial_heads: Number of attention heads in the spatial Transformer
         """
         super().__init__()
+
+        # Store arguments to be used later for model saving/loading
+        self.config = {k: v for k, v in locals().items() if k not in ('self', '__class__')}
+
         self.encoder = VideoEncoder(
             in_chans=in_chans, embed_dim=embed_dim, patch_size=patch_size
         )
@@ -568,7 +572,6 @@ class SpatioTemporalModel(nn.Module):
         Tp = T // self.patch_size[0]
         Hp = H // self.patch_size[1]
         Wp = W // self.patch_size[2]
-        Np = Tp * Hp * Wp
 
         # check shape and patch compatibility
         assert daily_mask.shape == daily_data.shape, (
