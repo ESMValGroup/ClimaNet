@@ -8,5 +8,9 @@
 
 source /home/b/b383704/eso4clima/ClimaNet/.venv/bin/activate
 
-python /home/b/b383704/eso4clima/train_twoyears/example.py
+# Run the training script
+python /home/b/b383704/eso4clima/train_twoyears/example_training.py
+
+# After training, you can run the inference script to generate predictions
+# python /home/b/b383704/eso4clima/train_twoyears/example_inference.py
 
