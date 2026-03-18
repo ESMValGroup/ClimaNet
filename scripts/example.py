@@ -11,8 +11,6 @@ from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.utils import pred_to_numpy
 
 
-def _preprocess_roi(ds, lon_subset, lat_subset):
-    return ds[["ts"]].sel(lon=lon_subset, lat=lat_subset)
 
 
 def main():
@@ -63,9 +61,6 @@ def main():
     )
     
     lsm_mask = xr.open_dataset(lsm_file)
-    lsm_mask = lsm_mask.rename({"latitude": "lat", "longitude": "lon"})[["lsm"]].sel(
-        lon=lon_subset, lat=lat_subset
-    )
 
     # Compute monthly climatology stats without persisting the full (time, lat, lon) monthly field
     monthly_ts = daily_data["ts"].resample(time="MS").mean(skipna=True)
