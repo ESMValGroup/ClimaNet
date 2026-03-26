@@ -549,8 +549,6 @@ class SpatioTemporalModel(nn.Module):
             num_months=num_months,
         )
         self.patch_size = patch_size
-        
-        # Store config for easy model replication
 
     def forward(self, daily_data, daily_mask, land_mask_patch, padded_days_mask=None):
         """Forward pass of the Spatio-Temporal model.
