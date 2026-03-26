@@ -103,49 +103,75 @@ def main():
         pin_memory=False,
     )
 
-    # Training process
     best_loss = float("inf")
-    patience = 10
+    patience = 10  # stop if no improvement for <patience> epochs
     counter = 0
-    model.train()
-    for epoch in range(101):
-        for batch in dataloader:
-            optimizer.zero_grad()
 
+    # Effective batch size = batch_size (fit in memory) * accumulation_steps
+    accumulation_steps = 2
+
+    # Training loop with DataLoader
+    model.train()
+    for epoch in range(501):
+        epoch_loss = 0.0
+        
+        optimizer.zero_grad()
+        
+        for i, batch in enumerate(dataloader):
+            # Get batch data
             daily_batch = batch["daily_patch"]
             daily_mask = batch["daily_mask_patch"]
             monthly_target = batch["monthly_patch"]
-            land_mask_patch = batch["land_mask_patch"][0, ...]
+            land_mask = batch["land_mask_patch"]
             padded_days_mask = batch["padded_days_mask"]
 
-            pred = model(daily_batch, daily_mask, land_mask_patch, padded_days_mask)
-
-            ocean = (~land_mask_patch).to(pred.device)
-            ocean = ocean[None, None, :, :]
-
-            loss = (
-                torch.nn.functional.l1_loss(pred, monthly_target, reduction="none")
-                * ocean
-            )
-            loss_per_month = loss.sum(dim=(-2, -1)) / ocean.sum(dim=(-2, -1))
+            # Batch prediction
+            pred = model(daily_batch, daily_mask, land_mask, padded_days_mask)  # (B, M, H, W)
+            
+            # Mask out land pixels
+            ocean = (~land_mask).to(pred.device).unsqueeze(1).float()  # (B, M=1, H, W) bool    
+            loss = torch.nn.functional.l1_loss(pred, monthly_target, reduction="none") 
+            loss = loss * ocean
+            
+            num = loss.sum(dim=(-2, -1))  # (B, M)
+            denom = ocean.sum(dim=(-2, -1)).clamp_min(1)  # (B, 1)
+            
+            loss_per_month = num / denom   
             loss = loss_per_month.mean()
 
-            loss.backward()
+            # Scale loss for gradient accumulation
+            scaled_loss = loss / accumulation_steps
+            scaled_loss.backward()
+            
+            # Track unscaled loss for logging
+            epoch_loss += loss.item()
+
+            # Update weights every accumulation_steps batches
+            if (i + 1) % accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+        
+        # Handle remaining gradients if num_batches is not divisible by accumulation_steps
+        if (i + 1) % accumulation_steps != 0:
             optimizer.step()
-
-        if loss.item() < best_loss:
-            best_loss = loss.item()
+            optimizer.zero_grad()
+        
+        # Calculate average epoch loss
+        avg_epoch_loss = epoch_loss / (i + 1)
+        
+        # Early stopping check
+        if avg_epoch_loss < best_loss:
+            best_loss = avg_epoch_loss
             counter = 0
-
-        if epoch % 20 == 0:
-            logger.info(f"The loss is {best_loss} at epoch {epoch}")
         else:
             counter += 1
-            if counter >= patience:
-                logger.info(
-                    f"No improvement for {patience} epochs, stopping early at epoch {epoch}."
-                )
-                break
+        
+        if epoch % 20 == 0:
+            print(f"Epoch {epoch}: best_loss = {best_loss:.6f}")
+        
+        if counter >= patience:
+            print(f"No improvement for {patience} epochs, stopping early at epoch {epoch}.")
+            break
 
     logger.info("training done!")
     logger.info(f"Final loss: {loss.item()}")
