@@ -167,10 +167,10 @@ def main():
             counter += 1
         
         if epoch % 20 == 0:
-            print(f"Epoch {epoch}: best_loss = {best_loss:.6f}")
+            logger.info(f"Epoch {epoch}: best_loss = {best_loss:.6f}")
         
         if counter >= patience:
-            print(f"No improvement for {patience} epochs, stopping early at epoch {epoch}.")
+            logger.info(f"No improvement for {patience} epochs, stopping early at epoch {epoch}.")
             break
 
     logger.info("training done!")
