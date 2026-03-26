@@ -551,20 +551,6 @@ class SpatioTemporalModel(nn.Module):
         self.patch_size = patch_size
         
         # Store config for easy model replication
-        self.config = {
-            'in_chans': in_chans,
-            'embed_dim': embed_dim,
-            'patch_size': patch_size,
-            'max_days': max_days,
-            'max_months': max_months,
-            'num_months': num_months,
-            'hidden': hidden,
-            'overlap': overlap,
-            'max_H': max_H,
-            'max_W': max_W,
-            'spatial_depth': spatial_depth,
-            'spatial_heads': spatial_heads,
-        }
 
     def forward(self, daily_data, daily_mask, land_mask_patch, padded_days_mask=None):
         """Forward pass of the Spatio-Temporal model.
