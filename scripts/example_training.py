@@ -86,22 +86,19 @@ def main():
 
     # Initialize training
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = SpatioTemporalModel(
-        embed_dim=128,
-        patch_size=(1, 2, 2),
-        overlap=2,
-        max_months=monthly_data.sizes["time"],
-    ).to(device)
+    patch_size = (1, 4, 4)
+    overlap = 1
+    model = SpatioTemporalModel(patch_size=patch_size, overlap=overlap, num_months=2).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     decoder = model.decoder
     with torch.no_grad():
         decoder.bias.copy_(torch.from_numpy(mean))
         decoder.scale.copy_(torch.from_numpy(std) + 1e-6)
 
-    # Make a dataloader
+    # Create dataloader
     dataloader = DataLoader(
         dataset,
-        batch_size=1,
+        batch_size=2,  
         shuffle=True,
         pin_memory=False,
     )
