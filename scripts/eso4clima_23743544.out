@@ -1,0 +1,61 @@
+/home/b/b383704/eso4clima/train_twoyears/example_training.py:43: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 160. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training.py:43: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 160. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training.py:43: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 160. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training.py:43: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 160. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training.py:57: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 160. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training.py:57: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 160. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training.py:57: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 160. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training.py:57: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 160. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+2026-03-26 17:02:31,368 - INFO - mean: [289.19693 289.3843 ], std: [10.575894 10.624186]
+2026-03-26 17:02:58,933 - INFO - Epoch 0: best_loss = inf
+2026-03-26 17:04:51,712 - INFO - No improvement for 10 epochs, stopping early at epoch 9.
+2026-03-26 17:04:51,712 - INFO - training done!
+2026-03-26 17:04:51,712 - INFO - Final loss: 4.909843444824219
+2026-03-26 17:04:51,777 - INFO - Checkpoint saved to models/spatio_temporal_model.pth
+==== Slurm accounting summary 23743544 ====
+JobID|NTasks|AveCPU|AveRSS|MaxRSS|MaxVMSize|TRESUsageInAve|TRESUsageInMax
+23743544.extern|1|00:00:00|856K|3752K|641376K|cpu=00:00:00,energy=0,fs/disk=2332,mem=856K,pages=2,vmem=217160K|cpu=00:00:00,energy=0,fs/disk=2332,mem=3752K,pages=2,vmem=641376K
+23743544.batch|1|04:21:01|11964K|4102096K|37743716K|cpu=04:21:01,energy=0,fs/disk=22293117907,mem=11964K,pages=19,vmem=356724K|cpu=04:21:01,energy=0,fs/disk=22293117907,mem=4102096K,pages=7711,vmem=37743716K
+
+********************************************************************************
+*                                                                              *
+*  This is the automated job summary provided by DKRZ.                         *
+*  If you encounter problems, need assistance or have any suggestion, please   *
+*  write an email to                                                           *
+*                                                                              *
+*  --  support@dkrz.de --                                                      *
+*                                                                              *
+*                       We hope you enjoyed the DKRZ supercomputer LEVANTE ... *
+*
+* JobID            : 23743544
+* JobName          : eso4clima                                         
+* Account          : bd0854
+* User             : b383704 (202985), bd0854 (1473)                   
+* Partition        : compute
+* QOS              : normal
+* Nodelist         : l40338 (1)                                                
+* Submit date      : 2026-03-26T17:02:02
+* Start time       : 2026-03-26T17:02:10
+* End time         : 2026-03-26T17:04:54
+* Elapsed time     : 00:02:44 (Timelimit=00:30:00)                     
+* Command          : /home/b/b383704/eso4clima/train_twoyears/example.slurm
+* WorkDir          : /home/b/b383704/eso4clima/train_twoyears
+*
+* StepID | JobName      NodeHours    MaxRSS [Byte] (@task)
+* ------------------------------------------------------------------------------
+* batch  | batch            0.046
+* extern | extern           0.046                3752K (0)
+* ------------------------------------------------------------------------------
+
+JobID|JobName|Partition|AllocCPUS|Elapsed|TotalCPU|MaxRSS|State|ExitCode
+23743544|eso4clima|compute|256|00:02:44|04:21:01||COMPLETED|0:0
+23743544.batch|batch||256|00:02:44|04:21:01|4102096K|COMPLETED|0:0
+23743544.extern|extern||256|00:02:44|00:00.001|3752K|COMPLETED|0:0
