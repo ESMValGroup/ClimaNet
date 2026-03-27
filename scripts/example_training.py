@@ -178,7 +178,6 @@ def main():
 
     # Save the trained model with config
     checkpoint = {
-        "config": model.config,
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "epoch": epoch,
