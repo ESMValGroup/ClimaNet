@@ -1,17 +1,17 @@
+import copy
 from pathlib import Path
 from typing import Tuple
 
 import numpy as np
 from torch.utils.data import Dataset
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import xarray as xr
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-def regrid_to_boundary_centered_grid(
-    da: xr.DataArray,
-    roll = False
-) -> xr.DataArray:
+
+def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
     """
     Interpolates a DataArray from its current center-based grid onto a new
     grid whose coordinates are derived from user-specified boundaries.
@@ -24,7 +24,7 @@ def regrid_to_boundary_centered_grid(
 
     # --- 0. Longitude Domain Check and Correction ---
 
-    input_lon = da['longitude']
+    input_lon = da["longitude"]
 
     # Check if roll for 0-360 to -180-180 is requested
     if roll:
@@ -34,18 +34,24 @@ def regrid_to_boundary_centered_grid(
         lon_diff = np.abs(input_lon - 180.0)
         # We need to roll such that the 180-degree line is moved to the edge
         # and the new array starts near -180
-        roll_amount = int(lon_diff.argmin().item() + (input_lon.size / 2)) % input_lon.size
+        roll_amount = (
+            int(lon_diff.argmin().item() + (input_lon.size / 2)) % input_lon.size
+        )
 
         # Roll the DataArray and its coordinates
         da = da.roll(longitude=roll_amount, roll_coords=True)
 
         # Correct the longitude coordinate values: shift values > 180 down by 360
-        new_lon_coords = da['longitude'].where(da['longitude'] <= 180, da['longitude'] - 360)
+        new_lon_coords = da["longitude"].where(
+            da["longitude"] <= 180, da["longitude"] - 360
+        )
 
         # Assign the corrected and sorted coordinates
-        da = da.assign_coords(longitude=new_lon_coords).sortby('longitude')
-        print(f"Longitudes adjusted. New range: {da['longitude'].min().item():.2f} "
-              f"to {da['longitude'].max().item():.2f}")
+        da = da.assign_coords(longitude=new_lon_coords).sortby("longitude")
+        print(
+            f"Longitudes adjusted. New range: {da['longitude'].min().item():.2f} "
+            f"to {da['longitude'].max().item():.2f}"
+        )
 
     # --- 1. Define Target Grid Boundaries ---
 
@@ -71,23 +77,19 @@ def regrid_to_boundary_centered_grid(
 
     # Use linear interpolation (suitable for gappy data) to map data onto the
     # new centers. xarray handles the NaNs automatically.
-    da_regridded = da.interp(
-        latitude=new_lats,
-        longitude=new_lons,
-        method="linear"
-    )
+    da_regridded = da.interp(latitude=new_lats, longitude=new_lons, method="linear")
 
     print(f"Regridding complete. New dimensions: {da_regridded.dims}")
     return da_regridded
 
 
 def add_month_day_dims(
-    daily_ts: xr.DataArray,    # (time, H, W) daily
+    daily_ts: xr.DataArray,  # (time, H, W) daily
     monthly_ts: xr.DataArray,  # (time, H, W) monthly
     time_dim: str = "time",
-    spatial_dims: Tuple[str, str] = ("lat", "lon")
+    spatial_dims: Tuple[str, str] = ("lat", "lon"),
 ):
-    """ Reshape daily and monthly data to have explicit month (M) and day (T) dimensions.
+    """Reshape daily and monthly data to have explicit month (M) and day (T) dimensions.
 
     Here we assume maximum 31 days in a month, and invalid day entries will be
     padded with NaN.
@@ -108,8 +110,9 @@ def add_month_day_dims(
 
     # Add M (month key) and T (day of month) coordinates to daily data
     daily_indexed = (
-        daily_ts
-        .assign_coords(M=(time_dim, dkey.values), T=(time_dim, daily_ts[time_dim].dt.day.values))
+        daily_ts.assign_coords(
+            M=(time_dim, dkey.values), T=(time_dim, daily_ts[time_dim].dt.day.values)
+        )
         .set_index({time_dim: ("M", "T")})
         .unstack(time_dim)
         .reindex(T=np.arange(1, 32), M=month_keys)
@@ -123,8 +126,7 @@ def add_month_day_dims(
 
     # Align monthly data to same month keys/order
     monthly_m = (
-        monthly_ts
-        .assign_coords(M=(time_dim, mkey.values))
+        monthly_ts.assign_coords(M=(time_dim, mkey.values))
         .swap_dims({time_dim: "M"})
         .drop_vars(time_dim)
         .sel(M=month_keys)
@@ -150,38 +152,70 @@ def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
     if land_mask is not None:
         pred = pred.clone().to(torch.float32)
         land_mask = land_mask.bool()
-        land_mask = land_mask.unsqueeze(1) # (B, H,W) -> (B, 1, H, W) for broadcasting
+        land_mask = land_mask.unsqueeze(1)  # (B, H,W) -> (B, 1, H, W) for broadcasting
         pred = torch.where(land_mask, torch.full_like(pred, float("nan")), pred)
 
     return pred.detach().cpu().numpy()
 
 
-def calc_stats(data: xr.DataArray, time_unit="MS", spatial_dims=("lat", "lon")):
-    averaged = data.resample(time=time_unit).mean(skipna=True)
-    mean = averaged.mean(dim=spatial_dims, skipna=True).values
-    std = averaged.std(dim=spatial_dims, skipna=True).values
+def calc_stats(arr: np.ndarray, mean_axis: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+    """Calculate mean and std along the specified axis, ignoring NaNs."""
+    axes_to_reduce = tuple(i for i in range(arr.ndim) if i != mean_axis)
+
+    mean = np.nanmean(arr, axis=axes_to_reduce)  # shape: (M,)
+    std = np.nanstd(arr, axis=axes_to_reduce)  # shape: (M,)
     return mean, std
 
 
+def _setup_logging(log_dir: str) -> SummaryWriter:
+    """Set up TensorBoard logging directory and writer."""
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    return SummaryWriter(log_dir)
+
+
+def _compute_masked_loss(
+    pred: torch.Tensor, target: torch.Tensor, land_mask: torch.Tensor
+) -> torch.Tensor:
+    """Compute L1 loss masked to ocean pixels only."""
+    ocean = (~land_mask).to(pred.device).unsqueeze(1).float()
+    loss = torch.nn.functional.l1_loss(pred, target, reduction="none") * ocean
+
+    num = loss.sum(dim=(-2, -1))
+    denom = ocean.sum(dim=(-2, -1)).clamp_min(1)
+
+    return (num / denom).mean()
+
+
+def _save_model(model: torch.nn.Module, log_dir: str, verbose: bool) -> None:
+    """Save model state and config to disk."""
+    model_path = Path(log_dir) / "best_model.pth"
+    torch.save(
+        {"model_state_dict": model.state_dict(), "model_config": model.config},
+        model_path,
+    )
+    if verbose:
+        print(f"Model saved to {model_path}")
+
+
 def train_monthly_model(
-        model: torch.nn.Module,
-        dataset: Dataset,
-        decoder_stats: Tuple[np.ndarray, np.ndarray],
-        batch_size=2,
-        num_epoch=100,
-        patience=10,
-        accumulation_steps=1,
-        optimizer_lr=1e-3,
-        log_dir=".",
-        save_model=True,
-        device="cpu",
-        verbose=True
-    ):
-    """ Train the model to predict monthly data from daily data.
+    model: torch.nn.Module,
+    dataset: Dataset,
+    shuffle: bool = True,
+    batch_size: int = 2,
+    num_epoch: int = 100,
+    patience: int = 10,
+    accumulation_steps: int = 1,
+    optimizer_lr: float = 1e-3,
+    log_dir: str = ".",
+    save_model: bool = True,
+    device: str = "cpu",
+    verbose: bool = True,
+):
+    """Train the model to predict monthly data from daily data.
     Args:
         model: the PyTorch model to train
         dataset: Dataset object containing the training data
-        decoder_stats: Tuple of (mean, std) for the decoder
+        shuffle: whether to shuffle the data each epoch
         batch_size: number of samples per batch
         num_epoch: number of epochs to train
         patience: number of epochs to wait for improvement before early stopping
@@ -195,28 +229,36 @@ def train_monthly_model(
 
     # Initialize the model
     model = model.to(device)
-    mean, std = decoder_stats
     decoder = model.decoder
     with torch.no_grad():
-        decoder.bias.copy_(torch.from_numpy(mean))
-        decoder.scale.copy_(torch.from_numpy(std) + 1e-6)  # small epsilon to avoid zero
+        decoder.bias.copy_(torch.from_numpy(dataset.daily_mean))
+        decoder.scale.copy_(torch.from_numpy(dataset.daily_std) + 1e-6)
 
     # Create data loader
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=shuffle,
         pin_memory=False,
     )
 
-    # Initialize TensorBoard writer
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    writer = SummaryWriter(log_dir)
+    # Set up logging
+    writer = _setup_logging(log_dir)
 
     # Set the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
     best_loss = float("inf")
     counter = 0
+    best_state_dict = None  # Store best model state
+
+    # Add scheduler - reduces LR instead of stopping immediately
+    scheduler = ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.5,
+        patience=patience // 2,  # Reduce LR before early stop triggers
+        min_lr=1e-7,
+    )
 
     model.train()
     for epoch in range(num_epoch):
@@ -225,26 +267,18 @@ def train_monthly_model(
         optimizer.zero_grad()
 
         for i, batch in enumerate(dataloader):
-            # Get batch data
-            daily_batch = batch["daily_patch"]
-            daily_mask = batch["daily_mask_patch"]
-            monthly_target = batch["monthly_patch"]
-            land_mask = batch["land_mask_patch"]
-            padded_days_mask = batch["padded_days_mask"]
-
             # Batch prediction
-            pred = model(daily_batch, daily_mask, land_mask, padded_days_mask)  # (B, M, H, W)
+            pred = model(
+                batch["daily_patch"],
+                batch["daily_mask_patch"],
+                batch["land_mask_patch"],
+                batch["padded_days_mask"],
+            )  # (B, M, H, W)
 
-            # Mask out land pixels
-            ocean = (~land_mask).to(pred.device).unsqueeze(1).float()  # (B, M=1, H, W) bool
-            loss = torch.nn.functional.l1_loss(pred, monthly_target, reduction="none")
-            loss = loss * ocean
-
-            num = loss.sum(dim=(-2, -1))  # (B, M)
-            denom = ocean.sum(dim=(-2, -1)).clamp_min(1)  # (B, 1)
-
-            loss_per_month = num / denom
-            loss = loss_per_month.mean()
+            # Compute masked loss
+            loss = _compute_masked_loss(
+                pred, batch["monthly_patch"], batch["land_mask_patch"]
+            )
 
             # Scale loss for gradient accumulation
             scaled_loss = loss / accumulation_steps
@@ -266,13 +300,17 @@ def train_monthly_model(
         # Calculate average epoch loss
         avg_epoch_loss = epoch_loss / (i + 1)
 
+        # Step scheduler
+        scheduler.step(avg_epoch_loss)
+
         # Log to TensorBoard
-        writer.add_scalar('Loss/train', avg_epoch_loss, epoch)
-        writer.add_scalar('Loss/best', best_loss, epoch)
+        writer.add_scalar("Loss/train", avg_epoch_loss, epoch)
+        writer.add_scalar("Loss/best", best_loss, epoch)
 
         # Early stopping check
         if avg_epoch_loss < best_loss:
             best_loss = avg_epoch_loss
+            best_state_dict = copy.deepcopy(model.state_dict())
             counter = 0
         else:
             counter += 1
@@ -280,9 +318,15 @@ def train_monthly_model(
         if verbose and epoch % 20 == 0:
             print(f"Epoch {epoch}: best_loss = {best_loss:.6f}")
 
-        if counter >= patience:
-            writer.add_text('Training', f'Early stop at epoch {epoch}', epoch)
+        # Only stop if LR is at minimum AND no improvement
+        current_lr = optimizer.param_groups[0]["lr"]
+        if counter >= patience and current_lr <= scheduler.min_lrs[0]:
+            writer.add_text("Training", f"Early stop at epoch {epoch}", epoch)
             break
+
+    # Restore best model
+    if best_state_dict is not None:
+        model.load_state_dict(best_state_dict)
 
     # Close the writer when done
     writer.close()
@@ -291,11 +335,6 @@ def train_monthly_model(
         print(f"Training complete. Best loss: {best_loss:.6f}")
 
     if save_model:
-        model_path = Path(log_dir) / "best_model.pth"
-        torch.save(
-            {"model_state_dict": model.state_dict(), "model_config": model.config}, model_path
-        )
-        if verbose:
-            print(f"Model saved to {model_path}")
+        _save_model(model, log_dir, verbose)
 
     return model
