@@ -62,7 +62,7 @@ def predict_monthly_var(
     return_numpy: bool = True,
     save_predictions: bool = True,
     device: str = "cpu",
-    log_dir: str = ".",
+    run_dir: str = ".",
     verbose: bool = True,
 ):
     """
@@ -77,7 +77,7 @@ def predict_monthly_var(
         save_predictions: If True, convert the predictions to xarray and
             save to disk as netCDF files and return the xarray Dataset.
         device: The device to run the predictions on (e.g., 'cpu' or 'cuda').
-        log_dir: Directory to save log files and predictions.
+        run_dir: Directory to save log files and predictions.
         verbose: If True, prints progress information during prediction.
     Returns:
         A NumPy array, PyTorch tensor, or xarray Dataset containing the predicted values.
@@ -100,7 +100,7 @@ def predict_monthly_var(
     all_predictions = torch.empty(len(dataset), M, H, W)
 
     # Set up logging
-    writer = _setup_logging(log_dir)
+    writer = _setup_logging(run_dir)
 
     with torch.no_grad():
         idx = 0
@@ -126,12 +126,12 @@ def predict_monthly_var(
     if save_predictions:
         if not return_numpy:
             all_predictions = all_predictions.cpu().numpy()
-        all_predictions = _save_netcdf(all_predictions, dataset, log_dir)
+        all_predictions = _save_netcdf(all_predictions, dataset, run_dir)
 
         if verbose:
-            print(f"Predictions saved to '{log_dir}'")
+            print(f"Predictions saved to '{run_dir}'")
 
-        writer.add_text("Info", f"Predictions saved to '{log_dir}'")
+        writer.add_text("Info", f"Predictions saved to '{run_dir}'")
 
     # Close the writer when done
     writer.close()
