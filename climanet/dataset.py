@@ -1,7 +1,7 @@
 import warnings
 
 import numpy as np
-from .utils import add_month_day_dims
+from .utils import add_month_day_dims, calc_stats
 import xarray as xr
 import torch
 from torch.utils.data import Dataset
@@ -51,6 +51,9 @@ class STDataset(Dataset):
         # Store coordinate arrays
         self.lat_coords = daily_da[spatial_dims[0]].to_numpy().copy()
         self.lon_coords = daily_da[spatial_dims[1]].to_numpy().copy()
+
+        # Store the stats of the daily data before filling NaNs
+        self.daily_mean, self.daily_std = calc_stats(self.daily_np)
 
         if land_mask is not None:
             lm = land_mask.to_numpy().copy()
