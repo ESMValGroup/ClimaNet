@@ -22,6 +22,8 @@ class STDataset(Dataset):
     ):
         self.spatial_dims = spatial_dims
         self.patch_size = patch_size
+        self.daily_da = daily_da
+        self.monthly_da = monthly_da
 
         # Check that the input data has the expected dimensions
         if time_dim not in daily_da.dims or time_dim not in monthly_da.dims:
