@@ -19,12 +19,16 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
     """Helper function to convert predictions to xarray and save as netCDF."""
     B, M, H, W = predictions.shape
 
-    lats = dataset.monthly_da.coords["lat"].values
-    lons = dataset.monthly_da.coords["lon"].values
-    times = dataset.monthly_da.coords["time"].values
+    base_dataset = dataset.dataset if hasattr(dataset, 'dataset') else dataset
+    indices = dataset.indices if hasattr(dataset, 'indices') else range(len(dataset))
 
-    full_predictions = np.empty((M, len(lats), len(lons)), dtype=predictions.dtype)
-    for i, (lat_start, lon_start) in enumerate(dataset.patch_indices):
+    lats = base_dataset.monthly_da.coords["lat"].values
+    lons = base_dataset.monthly_da.coords["lon"].values
+    times = base_dataset.monthly_da.coords["time"].values
+
+    full_predictions = np.full((M, len(lats), len(lons)), np.nan, dtype=predictions.dtype)
+    for i, patch_idx in enumerate(indices):
+        lat_start, lon_start = base_dataset.patch_indices[patch_idx]
         full_predictions[:, lat_start : lat_start + H, lon_start : lon_start + W] = (
             predictions[i]
         )
@@ -95,8 +99,11 @@ def predict_monthly_var(
     )
 
     # Initialize an empty list to store predictions
-    M = dataset.monthly_np.shape[0]
-    H, W = dataset.patch_size
+    base_dataset = dataset.dataset if hasattr(dataset, 'dataset') else dataset
+    base_dataset.fill_nans_with_zero() # Ensure NaNs are filled before prediction
+
+    M = base_dataset.monthly_np.shape[0]
+    H, W = base_dataset.patch_size
     all_predictions = torch.empty(len(dataset), M, H, W)
 
     # Set up logging

@@ -113,7 +113,7 @@ class STDataset(Dataset):
         """Get a spatiotemporal patch sample based on the index."""
         if not self._nans_filled and not self._warned:
             warnings.warn(
-                "NaNs have not been replaced. Call compute_stats() before using the dataset.",
+                "NaNs have not been replaced. Call fill_nans_with_zero() before using the dataset.",
                 UserWarning
             )
             self._warned = True
@@ -194,8 +194,13 @@ class STDataset(Dataset):
         self.daily_mean = mean
         self.daily_std = std
 
+        # Fill NaNs with 0 in-place after stats are computed
+        self.fill_nans_with_zero()
+
+        return mean, std
+
+    def fill_nans_with_zero(self):
+        """Fill NaN values in daily_np with zero in-place."""
         if not self._nans_filled:
             np.nan_to_num(self.daily_np, copy=False, nan=0.0)
             self._nans_filled = True
-
-        return mean, std
