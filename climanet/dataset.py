@@ -54,9 +54,6 @@ class STDataset(Dataset):
         self.lat_coords = daily_da[spatial_dims[0]].to_numpy().copy()
         self.lon_coords = daily_da[spatial_dims[1]].to_numpy().copy()
 
-        # Store the stats of the daily data before filling NaNs
-        self.daily_mean, self.daily_std = calc_stats(self.daily_np)
-
         if land_mask is not None:
             lm = land_mask.to_numpy().copy()
             if lm.ndim == 3:
@@ -69,8 +66,11 @@ class STDataset(Dataset):
         # daily_mask: True where NaN (i.e. missing ocean data, not land)
         self.daily_nan_mask = np.isnan(self.daily_np)  # (M, T=31, H, W)
 
-        # Fill NaNs with 0 in-place
-        np.nan_to_num(self.daily_np, copy=False, nan=0.0)
+        # Stats will be set later via set_stats() and NaNs will be filled with 0 in-place
+        self.daily_mean = None
+        self.daily_std = None
+        self._nans_filled = False
+        self._warned = False
 
         # Precompute padded_days_mask as a tensor (same for all patches)
         self.padded_days_tensor = torch.from_numpy(self.padded_mask_np).bool()
@@ -111,6 +111,13 @@ class STDataset(Dataset):
 
     def __getitem__(self, idx):
         """Get a spatiotemporal patch sample based on the index."""
+        if not self._nans_filled and not self._warned:
+            warnings.warn(
+                "NaNs have not been replaced. Call compute_stats() before using the dataset.",
+                UserWarning
+            )
+            self._warned = True
+
         if idx < 0 or idx >= len(self.patch_indices):
             raise IndexError("Index out of range")
 
@@ -159,3 +166,36 @@ class STDataset(Dataset):
             "lat_patch": lat_patch,  # (H,)
             "lon_patch": lon_patch,  # (W,)
         }
+
+
+    def compute_stats(self, indices: list = None) -> Tuple[np.ndarray, np.ndarray]:
+        """Compute mean and std from specified indices (or all data if None).
+
+        Args:
+            indices: List of patch indices to compute stats from. If None, use all.
+
+        Returns:
+            Tuple of (mean, std) arrays
+        """
+        if indices is None:
+            data = self.daily_np  # (M, T, H, W)
+        else:
+            # Stack selected spatial patches
+            ph, pw = self.patch_size
+            patches = []
+            for idx in indices:
+                i, j = self.patch_indices[idx]
+                patch = self.daily_np[:, :, i:i+ph, j:j+pw]  # (M, T, ph, pw)
+                patches.append(patch)
+            data = np.concatenate(patches, axis=-1)  # (M, T, H, W_total)
+
+        mean, std = calc_stats(data)  # (M,)
+
+        self.daily_mean = mean
+        self.daily_std = std
+
+        if not self._nans_filled:
+            np.nan_to_num(self.daily_np, copy=False, nan=0.0)
+            self._nans_filled = True
+
+        return mean, std

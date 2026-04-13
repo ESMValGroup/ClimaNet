@@ -67,12 +67,17 @@ def train_monthly_model(
         verbose: whether to print training progress
     """
 
+    # check if dataset has indices attribute for stats calculation
+    base_dataset = dataset.dataset if hasattr(dataset, 'dataset') else dataset
+    indices = dataset.indices if hasattr(dataset, 'indices') else None
+    mean, std = base_dataset.compute_stats(indices)
+
     # Initialize the model
     model = model.to(device)
     decoder = model.decoder
     with torch.no_grad():
-        decoder.bias.copy_(torch.from_numpy(dataset.daily_mean))
-        decoder.scale.copy_(torch.from_numpy(dataset.daily_std) + 1e-6)
+        decoder.bias.copy_(torch.from_numpy(mean))
+        decoder.scale.copy_(torch.from_numpy(std) + 1e-6)
 
     # Create data loader
     dataloader = DataLoader(
