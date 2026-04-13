@@ -141,7 +141,7 @@ def add_month_day_dims(
     )
     #-------------------------------------------
 
-    #determine day-of-year (doy) [and hour-of-day (hod) if applicable]
+    #determine day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
     doy_period = 365.0
     hod_period = 24.0
 
