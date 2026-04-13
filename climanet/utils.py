@@ -93,6 +93,7 @@ def add_month_day_dims(
     daily_m : xr.DataArray - dims: (M, T, H, W)
     monthly_m : xr.DataArray - dims: (M, H, W)
     padded_days_mask : xr.DataArray - dims: (M, T=31), bool, True where day is padded
+    time_features : xr.DataArray - dims: (M, T, 4)
     """
     # Month key as integer YYYYMM
     dkey = daily_ts[time_dim].dt.year * 100 + daily_ts[time_dim].dt.month
@@ -126,7 +127,43 @@ def add_month_day_dims(
         .sel(M=month_keys)
     )
 
-    return daily_indexed, monthly_m, padded_days_mask
+    #-----------------------------------------
+    # Build aligned datetime array (M,T)
+    time_da = daily_ts[time_dim]
+
+    #time_indexed is (M,T) with NaT for padded days 
+    time_indexed = (
+        time_da.assign_coords(M=(time_dim, dkey.values),
+                              T=(time_dim, time_da.dt.day.values))
+        .set_index({time_dim: ("M", "T")})
+        .unstack(time_dim)
+        .reindex(T=np.arange(1,32), M=month_keys)
+    )
+    #-------------------------------------------
+
+    #determine day-of-year (doy) [and hour-of-day (hod) if applicable]
+    doy_period = 365.0
+    hod_period = 24.0
+
+    doy = time_indexed.dt.dayofyear.fillna(0)
+
+    if "hour" in dir(time_indexed.dt):
+        hod = time_indexed.dt.hour.fillna(0)
+    else:
+        hod = xr.zeros_like(doy)
+
+    #Create cyclic encodings
+    doy_sin = np.sin(2*np.pi*doy/doy_period)
+    doy_cos = np.cos(2*np.pi.doy/doy_period)
+    hod_sin = np.sin(2*np.pi*hod/hod_period)
+    hod_cos = np.cos(2*np.pi*hod/hod_period)
+
+    #Stack cyclic encodings into time_features (M,T,4)
+    time_features = xr.concat([doy_sin,doy_cos,hod_sin,hod_cos],
+                              dim="feature"
+                              ).transpose("M","T","feature")
+
+    return daily_indexed, monthly_m, padded_days_mask, time_features
 
 
 def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
