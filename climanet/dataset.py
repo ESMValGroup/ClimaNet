@@ -41,7 +41,7 @@ class STDataset(Dataset):
 
         # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
         # and get padded_days_mask → (M, T=31)
-        daily_mt, monthly_m, padded_days_mask = add_month_day_dims(
+        daily_mt, monthly_m, padded_days_mask, daily_timef = add_month_day_dims(
             daily_da, monthly_da, time_dim=time_dim
         )
 
@@ -49,6 +49,7 @@ class STDataset(Dataset):
         self.daily_np = daily_mt.to_numpy().copy()  # (M, T=31, H, W) float
         self.monthly_np = monthly_m.to_numpy().copy()  # (M, H, W) float
         self.padded_mask_np = padded_days_mask.to_numpy().copy()  # (M, T=31) bool
+        self.daily_timef_np = daily_timef.to_numpy().copy() # (M,T=31, 4)
 
         # Store coordinate arrays
         self.lat_coords = daily_da[spatial_dims[0]].to_numpy().copy()
@@ -123,6 +124,7 @@ class STDataset(Dataset):
         daily_nan_mask = self.daily_nan_mask[
             :, :, i : i + ph, j : j + pw
         ]  # (M, T, H, W)
+        daily_timef_patch = self.daily_timef_np # (M,T,4)
 
         if self.land_mask_np is not None:
             land_patch = self.land_mask_np[i : i + ph, j : j + pw]  # (H, W)
@@ -137,6 +139,8 @@ class STDataset(Dataset):
         monthly_tensor = torch.from_numpy(monthly_patch).float()
         # (1, M, T, H, W)
         daily_nan_mask = torch.from_numpy(daily_nan_mask).unsqueeze(0)
+        # ( M, T, 4)
+        daily_timef_tensor = torch.from_numpy(daily_timef_patch).float()
 
         # daily_mask: NaN locations that are NOT land
         # Reshape land_tensor for broadcasting: (H, W) → (1, 1, 1, H, W)
@@ -154,6 +158,7 @@ class STDataset(Dataset):
             "monthly_patch": monthly_tensor,  # (M, H, W)
             "daily_mask_patch": daily_mask_tensor,  # (C=1, M, T=31, H, W)
             "land_mask_patch": land_tensor,  # (H,W) True=Land
+            "daily_timef_patch": daily_timef_tensor, #(M, T=31, 4)
             "padded_days_mask": self.padded_days_tensor,  # (M, T=31) True=padded
             "coords": (i, j),
             "lat_patch": lat_patch,  # (H,)
