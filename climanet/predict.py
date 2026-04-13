@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 from torch.utils.data import Dataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
+from climanet.train import _compute_masked_loss
 import xarray as xr
 import torch
 from torch.utils.data import DataLoader
@@ -111,6 +112,7 @@ def predict_monthly_var(
 
     with torch.no_grad():
         idx = 0
+        average_loss = 0.0
         for i, batch in enumerate(dataloader):
             # Move batch to the appropriate device
             predictions = model(
@@ -119,13 +121,26 @@ def predict_monthly_var(
                 batch["land_mask_patch"].to(device, non_blocking=use_cuda),
                 batch["padded_days_mask"].to(device, non_blocking=use_cuda),
             )
+
+            # Compute masked loss
+            loss = _compute_masked_loss(
+                predictions, batch["monthly_patch"], batch["land_mask_patch"]
+            )
+            average_loss += loss.item()
+
             all_predictions[idx : idx + predictions.size(0)] = predictions.cpu()
             idx += predictions.size(0)
 
             if verbose:
-                print(f"Processed batch {i + 1}/{len(dataloader)}")
+                print(f"Processed batch {i + 1}/{len(dataloader)}, with loss: {loss.item():.4f}")
 
             writer.add_scalar("Progress/Batch", i + 1, idx)
+
+    average_loss = average_loss / len(dataloader)
+
+    if verbose:
+        print(f"Average loss over all batches: {average_loss:.4f}")
+    writer.add_scalar("Loss/Average", average_loss)
 
     if return_numpy:
         all_predictions = all_predictions.numpy()
