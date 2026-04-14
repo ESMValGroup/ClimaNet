@@ -1,45 +1,17 @@
 import copy
-from pathlib import Path
 from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 import torch
 
-
-def _setup_logging(log_dir: str) -> SummaryWriter:
-    """Set up TensorBoard logging directory and writer."""
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    return SummaryWriter(log_dir)
-
-
-def _compute_masked_loss(
-    pred: torch.Tensor, target: torch.Tensor, land_mask: torch.Tensor
-) -> torch.Tensor:
-    """Compute L1 loss masked to ocean pixels only."""
-    ocean = (~land_mask).to(pred.device).unsqueeze(1).float()
-    loss = torch.nn.functional.l1_loss(pred, target, reduction="none") * ocean
-
-    num = loss.sum(dim=(-2, -1))
-    denom = ocean.sum(dim=(-2, -1)).clamp_min(1)
-
-    return (num / denom).mean()
-
-
-def _save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
-    """Save model state and config to disk."""
-    model_path = Path(run_dir) / "best_model.pth"
-    torch.save(
-        {"model_state_dict": model.state_dict(), "model_config": model.config},
-        model_path,
-    )
-    if verbose:
-        print(f"Model saved to {model_path}")
+from climanet.predict import predict_monthly_var
+from climanet.utils import setup_logging, compute_masked_loss, save_model
 
 
 def train_monthly_model(
     model: torch.nn.Module,
     dataset: Dataset,
+    validation_dataset: Dataset | None = None,
     shuffle: bool = True,
     batch_size: int = 2,
     num_epoch: int = 100,
@@ -47,7 +19,7 @@ def train_monthly_model(
     accumulation_steps: int = 1,
     optimizer_lr: float = 1e-3,
     run_dir: str = ".",
-    save_model: bool = True,
+    store_model: bool = True,
     device: str = "cpu",
     verbose: bool = True,
 ):
@@ -62,7 +34,7 @@ def train_monthly_model(
         accumulation_steps: number of batches to accumulate gradients over before updating weights
         optimizer_lr: learning rate for the optimizer
         run_dir: directory to save logs and model
-        save_model: whether to save the best model to disk
+        store_model: whether to save the best model to disk
         device: device to run training on ("cpu" or "cuda")
         verbose: whether to print training progress
     """
@@ -88,7 +60,7 @@ def train_monthly_model(
     )
 
     # Set up logging
-    writer = _setup_logging(run_dir)
+    writer = setup_logging(run_dir)
 
     # Set the optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=optimizer_lr, weight_decay=1e-3)
@@ -121,7 +93,7 @@ def train_monthly_model(
             )  # (B, M, H, W)
 
             # Compute masked loss
-            loss = _compute_masked_loss(
+            loss = compute_masked_loss(
                 pred, batch["monthly_patch"], batch["land_mask_patch"]
             )
 
@@ -144,6 +116,21 @@ def train_monthly_model(
 
         # Calculate average epoch loss
         avg_epoch_loss = epoch_loss / (i + 1)
+
+        # Validation loss (optional)
+        if validation_dataset is not None:
+            _, avg_epoch_loss = predict_monthly_var(
+                model,
+                validation_dataset,
+                batch_size=batch_size,
+                device=device,
+                return_numpy=False,
+                save_predictions=False,
+                return_loss=True,
+                verbose=False,
+                run_dir=run_dir,
+            )
+            writer.add_scalar("Loss/validation", avg_epoch_loss, epoch)
 
         # Step scheduler
         scheduler.step(avg_epoch_loss)
@@ -180,7 +167,7 @@ def train_monthly_model(
     if verbose:
         print(f"Training complete. Best loss: {best_loss:.6f}")
 
-    if save_model:
-        _save_model(model, run_dir, verbose)
+    if store_model:
+        save_model(model, run_dir, verbose)
 
     return model
