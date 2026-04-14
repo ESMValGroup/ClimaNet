@@ -1,4 +1,4 @@
-
+import random
 from typing import Tuple
 import numpy as np
 import xarray as xr
@@ -153,9 +153,28 @@ def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
 
 
 def calc_stats(arr: np.ndarray, mean_axis: int = 0) -> Tuple[np.ndarray, np.ndarray]:
-    """Calculate mean and std along the specified axis, ignoring NaNs."""
+    """Calculate mean and std along the specified axis, ignoring NaNs.
+
+    Args:
+        arr: Input array containing NaNs to ignore. shape is (M, T, H, W)
+        mean_axis: Axis along which to compute mean and std (default is 0 for month)
+    Returns:
+        mean: Mean values along the specified axis, shape (M,)
+        std: Standard deviation along the specified axis, shape (M,)
+    """
     axes_to_reduce = tuple(i for i in range(arr.ndim) if i != mean_axis)
 
     mean = np.nanmean(arr, axis=axes_to_reduce)  # shape: (M,)
     std = np.nanstd(arr, axis=axes_to_reduce)  # shape: (M,)
     return mean, std
+
+
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # https://docs.pytorch.org/docs/stable/notes/randomness.html
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
