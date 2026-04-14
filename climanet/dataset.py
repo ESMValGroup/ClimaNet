@@ -185,9 +185,9 @@ class STDataset(Dataset):
             patches = []
             for idx in indices:
                 i, j = self.patch_indices[idx]
-                patch = self.daily_np[:, :, i:i+ph, j:j+pw]  # (M, T, ph, pw)
+                patch = self.daily_np[:, :, i:i+ph, j:j+pw]
                 patches.append(patch)
-            data = np.concatenate(patches, axis=-1)  # (M, T, H, W_total)
+            data = np.concatenate(patches, axis=-1)
 
         mean, std = calc_stats(data)  # (M,)
 
