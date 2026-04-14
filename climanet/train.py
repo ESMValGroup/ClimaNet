@@ -91,7 +91,7 @@ def train_monthly_model(
     writer = _setup_logging(run_dir)
 
     # Set the optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=optimizer_lr, weight_decay=1e-3)
     best_loss = float("inf")
     counter = 0
     best_state_dict = None  # Store best model state
@@ -106,7 +106,7 @@ def train_monthly_model(
     )
 
     model.train()
-    for epoch in range(num_epoch):
+    for epoch in range(num_epoch + 1):
         epoch_loss = 0.0
 
         optimizer.zero_grad()
@@ -153,7 +153,8 @@ def train_monthly_model(
         writer.add_scalar("Loss/best", best_loss, epoch)
 
         # Early stopping check
-        if avg_epoch_loss < best_loss:
+        # Consider improvement only if loss decreases by a small threshold
+        if avg_epoch_loss < best_loss - 1e-4:
             best_loss = avg_epoch_loss
             best_state_dict = copy.deepcopy(model.state_dict())
             counter = 0
