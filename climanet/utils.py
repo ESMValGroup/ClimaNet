@@ -1,8 +1,11 @@
+from pathlib import Path
 import random
 from typing import Tuple
 import numpy as np
 import xarray as xr
 import torch
+
+from torch.utils.tensorboard import SummaryWriter
 
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
@@ -178,3 +181,33 @@ def set_seed(seed: int = 42):
     # https://docs.pytorch.org/docs/stable/notes/randomness.html
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+def setup_logging(log_dir: str) -> SummaryWriter:
+    """Set up TensorBoard logging directory and writer."""
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    return SummaryWriter(log_dir)
+
+
+def compute_masked_loss(
+    pred: torch.Tensor, target: torch.Tensor, land_mask: torch.Tensor
+) -> torch.Tensor:
+    """Compute L1 loss masked to ocean pixels only."""
+    ocean = (~land_mask).to(pred.device).unsqueeze(1).float()
+    loss = torch.nn.functional.l1_loss(pred, target, reduction="none") * ocean
+
+    num = loss.sum(dim=(-2, -1))
+    denom = ocean.sum(dim=(-2, -1)).clamp_min(1)
+
+    return (num / denom).mean()
+
+
+def save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
+    """Save model state and config to disk."""
+    model_path = Path(run_dir) / "best_model.pth"
+    torch.save(
+        {"model_state_dict": model.state_dict(), "model_config": model.config},
+        model_path,
+    )
+    if verbose:
+        print(f"Model saved to {model_path}")

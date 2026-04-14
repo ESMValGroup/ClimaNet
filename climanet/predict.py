@@ -3,17 +3,10 @@ from pathlib import Path
 import numpy as np
 from torch.utils.data import Dataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
-from climanet.train import _compute_masked_loss
 import xarray as xr
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-
-
-def _setup_logging(log_dir: str) -> SummaryWriter:
-    """Set up TensorBoard logging directory and writer."""
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    return SummaryWriter(log_dir)
+from climanet.utils import setup_logging, compute_masked_loss
 
 
 def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
@@ -66,6 +59,7 @@ def predict_monthly_var(
     batch_size: int = 2,
     return_numpy: bool = True,
     save_predictions: bool = True,
+    return_loss: bool = False,
     device: str = "cpu",
     run_dir: str = ".",
     verbose: bool = True,
@@ -81,11 +75,13 @@ def predict_monthly_var(
             Otherwise, returns a PyTorch tensor.
         save_predictions: If True, convert the predictions to xarray and
             save to disk as netCDF files and return the xarray Dataset.
+        return_loss: If True, also return the average loss over the dataset.
         device: The device to run the predictions on (e.g., 'cpu' or 'cuda').
         run_dir: Directory to save log files and predictions.
         verbose: If True, prints progress information during prediction.
     Returns:
         A NumPy array, PyTorch tensor, or xarray Dataset containing the predicted values.
+        If return_loss is True, it also returns the average loss over the dataset.
     """
     # Load the model if a path is provided
     if isinstance(model, str):
@@ -108,7 +104,7 @@ def predict_monthly_var(
     all_predictions = torch.empty(len(dataset), M, H, W)
 
     # Set up logging
-    writer = _setup_logging(run_dir)
+    writer = setup_logging(run_dir)
 
     with torch.no_grad():
         idx = 0
@@ -123,7 +119,7 @@ def predict_monthly_var(
             )
 
             # Compute masked loss
-            loss = _compute_masked_loss(
+            loss = compute_masked_loss(
                 predictions, batch["monthly_patch"], batch["land_mask_patch"]
             )
             average_loss += loss.item()
@@ -157,5 +153,8 @@ def predict_monthly_var(
 
     # Close the writer when done
     writer.close()
+
+    if return_loss:
+        all_predictions = (all_predictions, average_loss)
 
     return all_predictions
