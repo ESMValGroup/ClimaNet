@@ -63,7 +63,7 @@ def train_monthly_model(
     writer = setup_logging(run_dir)
 
     # Set the optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=optimizer_lr, weight_decay=1e-3)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=optimizer_lr, weight_decay=1e-2)
     best_loss = float("inf")
     counter = 0
     best_state_dict = None  # Store best model state
@@ -116,9 +116,13 @@ def train_monthly_model(
 
         # Calculate average epoch loss
         avg_epoch_loss = epoch_loss / (i + 1)
+        writer.add_scalar("Loss/train", avg_epoch_loss, epoch)
 
         # Validation loss (optional)
         if validation_dataset is not None:
+            # Store train loss for gap calculation
+            avg_train_loss = avg_epoch_loss
+
             _, avg_epoch_loss = predict_monthly_var(
                 model,
                 validation_dataset,
@@ -131,6 +135,10 @@ def train_monthly_model(
                 run_dir=run_dir,
             )
             writer.add_scalar("Loss/validation", avg_epoch_loss, epoch)
+
+            if verbose and epoch % 20 == 0:
+                gap = avg_epoch_loss - avg_train_loss
+                print(f"Epoch {epoch}: gap between train and val loss: {gap:.6f}")
 
         # Step scheduler
         scheduler.step(avg_epoch_loss)
