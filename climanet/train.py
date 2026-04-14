@@ -40,8 +40,8 @@ def train_monthly_model(
     """
 
     # check if dataset has indices attribute for stats calculation
-    base_dataset = dataset.dataset if hasattr(dataset, 'dataset') else dataset
-    indices = dataset.indices if hasattr(dataset, 'indices') else None
+    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
+    indices = dataset.indices if hasattr(dataset, "indices") else None
     mean, std = base_dataset.compute_stats(indices)
 
     # Initialize the model
@@ -63,7 +63,9 @@ def train_monthly_model(
     writer = setup_logging(run_dir)
 
     # Set the optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=optimizer_lr, weight_decay=1e-2)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=optimizer_lr, weight_decay=1e-2
+    )
     best_loss = float("inf")
     counter = 0
     best_state_dict = None  # Store best model state

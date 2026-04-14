@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import numpy as np
 from torch.utils.data import Dataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
@@ -13,14 +11,16 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
     """Helper function to convert predictions to xarray and save as netCDF."""
     B, M, H, W = predictions.shape
 
-    base_dataset = dataset.dataset if hasattr(dataset, 'dataset') else dataset
-    indices = dataset.indices if hasattr(dataset, 'indices') else range(len(dataset))
+    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
+    indices = dataset.indices if hasattr(dataset, "indices") else range(len(dataset))
 
     lats = base_dataset.monthly_da.coords["lat"].values
     lons = base_dataset.monthly_da.coords["lon"].values
     times = base_dataset.monthly_da.coords["time"].values
 
-    full_predictions = np.full((M, len(lats), len(lons)), np.nan, dtype=predictions.dtype)
+    full_predictions = np.full(
+        (M, len(lats), len(lons)), np.nan, dtype=predictions.dtype
+    )
     for i, patch_idx in enumerate(indices):
         lat_start, lon_start = base_dataset.patch_indices[patch_idx]
         full_predictions[:, lat_start : lat_start + H, lon_start : lon_start + W] = (
@@ -96,8 +96,8 @@ def predict_monthly_var(
     )
 
     # Initialize an empty list to store predictions
-    base_dataset = dataset.dataset if hasattr(dataset, 'dataset') else dataset
-    base_dataset.fill_nans_with_zero() # Ensure NaNs are filled before prediction
+    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
+    base_dataset.fill_nans_with_zero()  # Ensure NaNs are filled before prediction
 
     M = base_dataset.monthly_np.shape[0]
     H, W = base_dataset.patch_size
@@ -128,7 +128,9 @@ def predict_monthly_var(
             idx += predictions.size(0)
 
             if verbose:
-                print(f"Processed batch {i + 1}/{len(dataloader)}, with loss: {loss.item():.4f}")
+                print(
+                    f"Processed batch {i + 1}/{len(dataloader)}, with loss: {loss.item():.4f}"
+                )
 
             writer.add_scalar("Progress/Batch", i + 1, idx)
 

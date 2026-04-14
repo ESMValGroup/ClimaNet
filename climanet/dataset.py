@@ -33,7 +33,8 @@ class STDataset(Dataset):
                 raise ValueError(f"Spatial dimension '{dim}' not found in input data")
 
         if (
-            patch_size[0] > daily_da.sizes[spatial_dims[0]] or patch_size[1] > daily_da.sizes[spatial_dims[1]]
+            patch_size[0] > daily_da.sizes[spatial_dims[0]]
+            or patch_size[1] > daily_da.sizes[spatial_dims[1]]
         ):
             raise ValueError(
                 f"Patch size {patch_size} is larger than data dimensions {daily_da.sizes[spatial_dims]}"
@@ -96,7 +97,7 @@ class STDataset(Dataset):
                 f"Patch size {self.patch_size} does not evenly divide image dimensions (H={H}, W={W}). "
                 f"Uncovered pixels: {remainder_h} in height, {remainder_w} in width. "
                 f"Consider adjusting patch_size or image dimensions for full coverage.",
-                UserWarning
+                UserWarning,
             )
 
         # Generate non-overlapping patch indices
@@ -104,7 +105,6 @@ class STDataset(Dataset):
         j_starts = [j * pw for j in range(n_patches_w)]
 
         return [(i, j) for i in i_starts for j in j_starts]
-
 
     def __len__(self):
         return len(self.patch_indices)
@@ -114,7 +114,7 @@ class STDataset(Dataset):
         if not self._nans_filled and not self._warned:
             warnings.warn(
                 "NaNs have not been replaced. Call fill_nans_with_zero() before using the dataset.",
-                UserWarning
+                UserWarning,
             )
             self._warned = True
 
@@ -167,7 +167,6 @@ class STDataset(Dataset):
             "lon_patch": lon_patch,  # (W,)
         }
 
-
     def compute_stats(self, indices: list = None) -> Tuple[np.ndarray, np.ndarray]:
         """Compute mean and std from specified indices (or all data if None).
 
@@ -185,7 +184,7 @@ class STDataset(Dataset):
             patches = []
             for idx in indices:
                 i, j = self.patch_indices[idx]
-                patch = self.daily_np[:, :, i:i+ph, j:j+pw]
+                patch = self.daily_np[:, :, i : i + ph, j : j + pw]
                 patches.append(patch)
             data = np.concatenate(patches, axis=-1)
 

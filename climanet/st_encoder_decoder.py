@@ -248,7 +248,14 @@ class MonthlyConvDecoder(nn.Module):
     """
 
     def __init__(
-        self, embed_dim=128, patch_h=4, patch_w=4, hidden=128, overlap=1, num_months=12, dropout=0.0
+        self,
+        embed_dim=128,
+        patch_h=4,
+        patch_w=4,
+        hidden=128,
+        overlap=1,
+        num_months=12,
+        dropout=0.0,
     ):
         """
         Args:
@@ -540,19 +547,30 @@ class SpatioTemporalModel(nn.Module):
         super().__init__()
 
         # Store arguments to be used later for model saving/loading
-        self.config = {k: v for k, v in locals().items() if k not in ('self', '__class__')}
+        self.config = {
+            k: v for k, v in locals().items() if k not in ("self", "__class__")
+        }
 
         self.encoder = VideoEncoder(
-            in_chans=in_chans, embed_dim=embed_dim, patch_size=patch_size, dropout=dropout
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+            patch_size=patch_size,
+            dropout=dropout,
         )
         self.temporal = TemporalAttentionAggregator(
-            embed_dim=embed_dim, max_days=max_days, max_months=max_months, dropout=dropout
+            embed_dim=embed_dim,
+            max_days=max_days,
+            max_months=max_months,
+            dropout=dropout,
         )
         self.spatial_pe = SpatialPositionalEncoding2D(
             embed_dim=embed_dim, max_H=max_H, max_W=max_W
         )
         self.spatial_tr = SpatialTransformer(
-            embed_dim=embed_dim, depth=spatial_depth, num_heads=spatial_heads, dropout=dropout
+            embed_dim=embed_dim,
+            depth=spatial_depth,
+            num_heads=spatial_heads,
+            dropout=dropout,
         )
         self.decoder = MonthlyConvDecoder(
             embed_dim=embed_dim,
