@@ -78,6 +78,76 @@ class VideoEncoder(nn.Module):
         x = self.drop(x)
         return x  # (B, N_patches, embed_dim)
 
+class CyclicTimeEmbedding(nn.Module):
+    """Cyclical Temporal encoding using day-of-year and hour-of-day values in combination
+    sine and cosine functions
+
+    This module generates fixed (non-learnable) sinusoidal temporal encodings for the temporal dimension
+    using the sinusoidally encoded day-of-year and hour-of-day values extracted from the datetime associated with the input.
+    This represents a natural positional encoding on the temporal cycle related to the solar year and the
+    diurnal cycle.
+
+    The module uses fixed Fourier frequencies to expand the cyclic encoding to the embedding dimension 
+    The returned encodings are intended to be added emddings of the input data by the caller. The module does
+    not perform the additon
+    """
+
+    def __init__(self, embed_dim=128, base_dim=4):
+        """
+        Initialize temporal encodings
+        
+        Args:
+            embed_dim: Dimension of the embedding.The default is 128.
+                Many vision transformers use embedding dimensions that are multiples
+                of 64 (e.g., 64, 128, 256). This can be tuned.
+            base_dim: Dimension of the input cyclical encodings of doy and hod. This is 4 by default (sin/cos(doy) sin/cos(hod)) 
+        """
+
+        super().__init__()
+
+        self.embed_dim = embed_dim
+        self.base_dim = base_dim
+
+        #Determine number of frequencies for Fourier expansion in line with embedding dimension
+        if (embed_dim % (2*base_dim)==0):
+            num_frequencies = embed_dim/(2*base_dim)
+            self.num_freqencies = num_frequencies
+            freqs = torch.linspace(1.0, num_frequencies, num_frequencies)
+            self.register_buffer("freqs", freqs)
+        else:
+            raise ValueError(
+                f"embed_dim must be an even multiple of 2*base_dim for fixed encoding."
+                f"Got embed_dim: {embed_dim} and base_dim: {base_dim}."
+            )
+            
+    def forward(self, time_features):
+        """
+        create encodings in of size embedding dimension
+        
+        Args:
+        time_features: (B, M, T, D) ; D is base_dim
+
+        Returns:
+        emb_encode : (B,M,T, embed_dim)
+        """
+        B, M, T, D = time_features.shape
+
+        #(B, M, T, D, 1)
+        x= time_features.unsqueeze(-1)
+
+        #(1,1,1,1,F)
+        freqs = self.freqs.view(1,1,1,1,-1)
+
+        sinx = torch.sin(x)
+        cosx = torch.cos(x)
+
+        emb_encode = torch.cat([sinx,cosx],dim=-1) # (B,M,T,D, 2F)
+
+        emb_encode = emb_encode.view(B,M,T,-1) # flatten
+
+        return emb_encode
+        
+
 
 class TemporalPositionalEncoding(nn.Module):
     """Temporal Positional Encoding using sine and cosine functions.
@@ -153,8 +223,10 @@ class TemporalAttentionAggregator(nn.Module):
         """
         super().__init__()
 
+        self.time_embed = CyclicTimeEmbedding(embed_dim=embed_dim)
+
         # Positional encodings for days and months
-        self.pos_days = TemporalPositionalEncoding(embed_dim, max_len=max_days)
+        #self.pos_days = TemporalPositionalEncoding(embed_dim, max_len=max_days) REMOVE THIS AND REPLACE WITH time_embed
         self.pos_months = TemporalPositionalEncoding(embed_dim, max_len=max_months)
 
         # Day scorer (within each month)
@@ -182,7 +254,7 @@ class TemporalAttentionAggregator(nn.Module):
             nn.Linear(4 * embed_dim, embed_dim),
         )
 
-    def forward(self, x, M, T, H, W, padded_days_mask=None):
+    def forward(self, x, M, T, H, W, time_features, padded_days_mask=None):
         """
         Args:
             x: (B, M, T, H, W, C) containing spatio-temporal tokens, where C is the embedding dimension.
@@ -190,6 +262,7 @@ class TemporalAttentionAggregator(nn.Module):
             T: number of temporal tokens per month after temporal patching (Tp)
             H: spatial height after spatial patching
             W: spatial width after spatial patching
+            time_features: (B,M,T,4) containing cyclically encoded DOY and HOD 
             padded_days_mask: Optional boolean tensor of shape (B, M, T), bool,
                 True indicating which day tokens are padded (because some months
                 have fewer days). This is used to mask out padded tokens in attention computation.
@@ -201,10 +274,15 @@ class TemporalAttentionAggregator(nn.Module):
         # Reshape to (B, Hp*Wp, M, Tp, C) for temporal processing
         seq = x.permute(0, 3, 4, 1, 2, 5).reshape(B, Hp * Wp, M, Tp, C)
 
-        pe_days = self.pos_days(T).to(seq.device).to(seq.dtype)  # (T, C)
+        temp_emb = self.time_emb(time_features) # (B,M,T,emd_dim)
+        #expand spatially
+        temp_emb = temp_emb[:, None, :, :, :] #[B, 1, M, T, C]
+        temp_emb = temp_embed.expand(-1, H*W, -1, -1, -1)
+        #pe_days = self.pos_days(T).to(seq.device).to(seq.dtype)  # (T, C)
         pe_months = self.pos_months(M).to(seq.device).to(seq.dtype)  # (M, C)
 
-        seq = seq + pe_days[None, None, None, :, :]  # add day PE
+        #seq = seq + pe_days[None, None, None, :, :]  # add day PE
+        seq = seq + temp_emb # add temporal embeddings
         seq = seq + pe_months[None, None, :, None, :]  # add month PE
 
         # Day attention per month
@@ -554,13 +632,15 @@ class SpatioTemporalModel(nn.Module):
         )
         self.patch_size = patch_size
 
-    def forward(self, daily_data, daily_mask, land_mask_patch, padded_days_mask=None):
+    def forward(self, daily_data, daily_mask, daily_timef, land_mask_patch, padded_days_mask=None,):
         """Forward pass of the Spatio-Temporal model.
 
         Args:
             daily_data: Tensor of shape (B, C, M, T, H, W) containing daily
                 data, where C is the number of channels (e.g., 1 for SST)
             daily_mask: Boolean tensor of same shape as daily_data indicating missing values
+            daily_timef: Tensor of shape (B, M, T, 4) containing the cyclically encoded day-of-year 
+                and hour-of-day information for the daily data
             land_mask_patch: Boolean tensor of shape (B, H, W) to mask land areas in the output
             padded_days_mask: Optional boolean tensor of shape (B, M, T) indicating which day tokens are padded
                  (True for padded tokens). Used to mask out padded tokens in temporal attention.
@@ -581,6 +661,9 @@ class SpatioTemporalModel(nn.Module):
             "H and W must be divisible by patch size"
         )
         assert T % self.patch_size[0] == 0, "T must be divisible by patch size"
+
+        if self.patch_size[0] > 1:
+            daily_timef = daily_timef.view(B, M, Tp, self.patch_size[0], 4).mean(dim=3)  # -> (B,M, Tp, 4)
 
         if padded_days_mask is not None and self.patch_size[0] > 1:
             B, M, T_days = padded_days_mask.shape
@@ -611,7 +694,7 @@ class SpatioTemporalModel(nn.Module):
         latent = latent.view(B, M, Tp, Hp, Wp, embed_dim)
 
         agg_latent = self.temporal(
-            latent, M, Tp, Hp, Wp, padded_days_mask=padded_days_mask
+            latent, M, Tp, Hp, Wp, daily_timef, padded_days_mask=padded_days_mask
         )  # (B, M, Hp*Wp, embed_dim)
 
         # Step 3: Add spatial positional encodings and mix spatial features
