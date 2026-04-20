@@ -97,7 +97,6 @@ def predict_monthly_var(
 
     # Initialize an empty list to store predictions
     base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
-    base_dataset.fill_nans_with_zero()  # Ensure NaNs are filled before prediction
 
     M = base_dataset.monthly_np.shape[0]
     H, W = base_dataset.patch_size
