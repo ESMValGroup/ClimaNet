@@ -193,11 +193,18 @@ def compute_masked_loss(
     pred: torch.Tensor, target: torch.Tensor, land_mask: torch.Tensor
 ) -> torch.Tensor:
     """Compute L1 loss masked to ocean pixels only."""
-    ocean = (~land_mask).to(pred.device).unsqueeze(1).float()
-    loss = torch.nn.functional.l1_loss(pred, target, reduction="none") * ocean
+    ocean = (~land_mask).to(pred.device).unsqueeze(1)
+
+    # Mask for valid (non-NaN) target values
+    valid = ~torch.isnan(target)
+    target = torch.nan_to_num(target, nan=0.0)
+
+    mask = ocean & valid
+    loss = torch.nn.functional.l1_loss(pred, target, reduction="none")
+    loss = loss * mask
 
     num = loss.sum(dim=(-2, -1))
-    denom = ocean.sum(dim=(-2, -1)).clamp_min(1)
+    denom = mask.sum(dim=(-2, -1)).clamp_min(1)
 
     return (num / denom).mean()
 
