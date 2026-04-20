@@ -12,8 +12,9 @@ def main():
         "/work/bd0854/b380103/eso4clima/output/v1.0/concatenated/"
     )  # Data folder
     lsm_file = "/home/b/b383704/eso4clima/train_twoyears/era5_lsm_bool.nc"  # Path to land-sea mask file (local)
-    patch_size_training = 200  # Spatial patch size for the training samples (lat, lon)
+    patch_size_training = 160  # Spatial patch size for the training samples (lat, lon)
     # Must be divisible by the model patch size
+    # Default input data has 720x1440 spatial dimensions
 
     # Training settings
     patch_size_model = (1, 4, 4)  # Size of model encoder (time, lat, lon).
@@ -61,7 +62,7 @@ def main():
 
     # create the model
     model = SpatioTemporalModel(
-        patch_size=patch_size_model, overlap=overlap, num_months=num_months
+        patch_size=patch_size_model, overlap=overlap, max_months=num_months, num_months=num_months
     )
 
     # Make a dataset
