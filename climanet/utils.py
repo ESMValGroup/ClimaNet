@@ -154,7 +154,7 @@ def add_month_day_dims(
 
     #Create cyclic encodings
     doy_sin = np.sin(2*np.pi*doy/doy_period)
-    doy_cos = np.cos(2*np.pi.doy/doy_period)
+    doy_cos = np.cos(2*np.pi*doy/doy_period)
     hod_sin = np.sin(2*np.pi*hod/hod_period)
     hod_cos = np.cos(2*np.pi*hod/hod_period)
 
