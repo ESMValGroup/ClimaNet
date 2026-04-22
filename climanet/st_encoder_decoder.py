@@ -110,7 +110,7 @@ class CyclicTimeEmbedding(nn.Module):
 
         #Determine number of frequencies for Fourier expansion in line with embedding dimension
         if (embed_dim % (2*base_dim)==0):
-            num_frequencies = embed_dim/(2*base_dim)
+            num_frequencies = int(embed_dim/(2*base_dim))
             self.num_freqencies = num_frequencies
             freqs = torch.linspace(1.0, num_frequencies, num_frequencies)
             self.register_buffer("freqs", freqs)
@@ -137,6 +137,9 @@ class CyclicTimeEmbedding(nn.Module):
 
         #(1,1,1,1,F)
         freqs = self.freqs.view(1,1,1,1,-1)
+
+        #apply frequencies
+        x = x * freqs # (B, M, T, D, F)
 
         sinx = torch.sin(x)
         cosx = torch.cos(x)
@@ -274,14 +277,12 @@ class TemporalAttentionAggregator(nn.Module):
         # Reshape to (B, Hp*Wp, M, Tp, C) for temporal processing
         seq = x.permute(0, 3, 4, 1, 2, 5).reshape(B, Hp * Wp, M, Tp, C)
 
-        temp_emb = self.time_emb(time_features) # (B,M,T,emd_dim)
+        temp_emb = self.time_embed(time_features) # (B,M,T,emd_dim)
         #expand spatially
         temp_emb = temp_emb[:, None, :, :, :] #[B, 1, M, T, C]
-        temp_emb = temp_embed.expand(-1, H*W, -1, -1, -1)
-        #pe_days = self.pos_days(T).to(seq.device).to(seq.dtype)  # (T, C)
+        temp_emb = temp_emb.expand(-1, H*W, -1, -1, -1)
         pe_months = self.pos_months(M).to(seq.device).to(seq.dtype)  # (M, C)
 
-        #seq = seq + pe_days[None, None, None, :, :]  # add day PE
         seq = seq + temp_emb # add temporal embeddings
         seq = seq + pe_months[None, None, :, None, :]  # add month PE
 
