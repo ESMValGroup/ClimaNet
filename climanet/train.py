@@ -150,7 +150,7 @@ def train_monthly_model(
         writer.add_scalar("Loss/best", best_loss, epoch)
 
         # Early stopping check
-        # Consider improvement only if loss decreases by a small threshold
+        # Consider improvement only if loss decreases more than a small threshold
         if avg_epoch_loss < best_loss - 1e-4:
             best_loss = avg_epoch_loss
             best_state_dict = copy.deepcopy(model.state_dict())
