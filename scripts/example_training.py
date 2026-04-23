@@ -5,12 +5,13 @@ from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import train_monthly_model
 from climanet import STDataset
 
+
 def main():
     # Data settings
-    data_folder = Path(
-        "/work/bd0854/b380103/eso4clima/output/v1.0/concatenated/"
-    )  # Data folder
-    lsm_file = "/home/b/b383704/eso4clima/train_twoyears/era5_lsm_bool.nc"  # Path to land-sea mask file (local)
+    # Data folder
+    data_folder = Path("/work/bd0854/b380103/eso4clima/output/v1.0/concatenated/")
+    # Path to land-sea mask file (need to setup in the experiment directory)
+    lsm_file = "/home/b/b383704/eso4clima/train_twoyears/data/era5_lsm_bool.nc"
     patch_size_training = 120  # Spatial patch size for the training samples (lat, lon)
     # Must be divisible by the model patch size
     # Default input data has 720x1440 spatial dimensions
@@ -59,10 +60,22 @@ def main():
     )
     lsm_mask = xr.open_dataset(lsm_file)
 
+    # Excluding lattude values over 80 and under -80
+    # Experiments found including extreme datasets causes loss=inf
+    # subset data to smaller region for testing
+    lon_subset = slice(-80, 80)
+    lat_subset = slice(-179.99, 179.99)
+    daily_data = daily_data.sel(lon=lon_subset, lat=lat_subset)
+    monthly_data = monthly_data.sel(lon=lon_subset, lat=lat_subset)
+    lsm_mask = lsm_mask.sel(lon=lon_subset, lat=lat_subset)  # True=Land
+
     # create the model
     print("Creating the model...")
     model = SpatioTemporalModel(
-        patch_size=patch_size_model, overlap=overlap, max_months=num_months, num_months=num_months
+        patch_size=patch_size_model,
+        overlap=overlap,
+        max_months=num_months,
+        num_months=num_months,
     )
 
     # Make a dataset
