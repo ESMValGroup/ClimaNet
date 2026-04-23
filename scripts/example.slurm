@@ -3,7 +3,7 @@
 #SBATCH --partition=compute
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
-#SBATCH --time=00:30:00
+#SBATCH --time=04:00:00
 #SBATCH --account=bd0854
 #SBATCH --output=eso4clima_%j.out
 
