@@ -1,4 +1,13 @@
-# Execute training tasks on SLURM
+# Example of training a SpatioTemporalModel on HPC
+
+## Folder structure
+
+- example_training.py: example training script
+- example.slurm: example SLURM script to execute the training script on SLURM system
+- eso4clima_24438134_subset.out: example SLURM job output file of an execution on a subset of the global dataset. The dataset has two years of data (2020-2021) and the spatial coverage is from 30S to 30N and from 30W to 30E.
+- eso4clima_24449471_full.out: example SLURM job output file of an execution on the full dataset, two years of data (2020-2021) and almost global coverage (from 80S to 80N and from 179.99W to 179.99E). The training only executed for 1 hour and cuted off by SLURM time limit.
+
+## Execute training tasks on SLURM system
 
 1. Make a working directory
 
