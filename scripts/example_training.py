@@ -4,6 +4,10 @@ import xarray as xr
 from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import train_monthly_model
 from climanet import STDataset
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 def main():
@@ -12,7 +16,7 @@ def main():
         "/work/bd0854/b380103/eso4clima/output/v1.0/concatenated/"
     )  # Data folder
     lsm_file = "/home/b/b383704/eso4clima/train_twoyears/era5_lsm_bool.nc"  # Path to land-sea mask file (local)
-    patch_size_training = 160  # Spatial patch size for the training samples (lat, lon)
+    patch_size_training = 120  # Spatial patch size for the training samples (lat, lon)
     # Must be divisible by the model patch size
     # Default input data has 720x1440 spatial dimensions
 
@@ -61,11 +65,13 @@ def main():
     lsm_mask = xr.open_dataset(lsm_file)
 
     # create the model
+    logger.info("Creating the model...")
     model = SpatioTemporalModel(
         patch_size=patch_size_model, overlap=overlap, max_months=num_months, num_months=num_months
     )
 
     # Make a dataset
+    logger.info("Creating the dataset...")
     dataset = STDataset(
         daily_da=daily_data["ts"],
         monthly_da=monthly_data["ts"],
@@ -75,6 +81,7 @@ def main():
 
     # Train the model
     # Results will be saved to runs/best_model.pth
+    logger.info("Starting training...")
     _ = train_monthly_model(
         model,
         dataset,
