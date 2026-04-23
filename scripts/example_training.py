@@ -4,11 +4,6 @@ import xarray as xr
 from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import train_monthly_model
 from climanet import STDataset
-import logging
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
 
 def main():
     # Data settings
@@ -65,13 +60,13 @@ def main():
     lsm_mask = xr.open_dataset(lsm_file)
 
     # create the model
-    logger.info("Creating the model...")
+    print("Creating the model...")
     model = SpatioTemporalModel(
         patch_size=patch_size_model, overlap=overlap, max_months=num_months, num_months=num_months
     )
 
     # Make a dataset
-    logger.info("Creating the dataset...")
+    print("Creating the dataset...")
     dataset = STDataset(
         daily_da=daily_data["ts"],
         monthly_da=monthly_data["ts"],
@@ -81,7 +76,7 @@ def main():
 
     # Train the model
     # Results will be saved to runs/best_model.pth
-    logger.info("Starting training...")
+    print("Starting training...")
     _ = train_monthly_model(
         model,
         dataset,

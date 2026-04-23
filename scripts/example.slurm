@@ -10,7 +10,7 @@
 source /home/b/b383704/eso4clima/ClimaNet/.venv/bin/activate
 
 # Run the training script
-python /home/b/b383704/eso4clima/train_twoyears/example_training.py
+python -u /home/b/b383704/eso4clima/train_twoyears/example_training.py
 
 echo "==== Slurm accounting summary ${SLURM_JOB_ID} ===="
 sstat --allsteps -j "$SLURM_JOB_ID" \
