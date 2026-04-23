@@ -1,0 +1,232 @@
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:39: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  daily_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lat" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+/home/b/b383704/eso4clima/train_twoyears/example_training_subset.py:52: UserWarning: The specified chunks separate the stored chunks along dimension "lon" starting at index 240. This could degrade performance. Instead, consider rechunking after loading.
+  monthly_data = xr.open_mfdataset(
+2026-04-23 17:37:53,532 - INFO - Creating the model...
+2026-04-23 17:37:53,750 - INFO - Creating the dataset...
+/home/b/b383704/eso4clima/ClimaNet/climanet/dataset.py:112: UserWarning: Patch size (120, 120) does not evenly divide image dimensions (H=720, W=640). Uncovered pixels: 0 in height, 40 in width. Consider adjusting patch_size or image dimensions for full coverage.
+  warnings.warn(
+2026-04-23 17:38:52,233 - INFO - Starting training...
+Epoch 0: best_loss = 13.395518
+Epoch 20: best_loss = 5.020292
+slurmstepd: error: *** JOB 24449471 ON l10543 CANCELLED AT 2026-04-23T18:37:47 DUE TO TIME LIMIT ***
+
+********************************************************************************
+*                                                                              *
+*  This is the automated job summary provided by DKRZ.                         *
+*  If you encounter problems, need assistance or have any suggestion, please   *
+*  write an email to                                                           *
+*                                                                              *
+*  --  support@dkrz.de --                                                      *
+*                                                                              *
+*                       We hope you enjoyed the DKRZ supercomputer LEVANTE ... *
+*
+* JobID            : 24449471
+* JobName          : eso4clima                                         
+* Account          : bd0854
+* User             : b383704 (202985), bd0854 (1473)                   
+* Partition        : compute
+* QOS              : normal
+* Nodelist         : l10543 (1)                                                
+* Submit date      : 2026-04-23T17:37:01
+* Start time       : 2026-04-23T17:37:37
+* End time         : 2026-04-23T18:37:47
+* Elapsed time     : 01:00:10 (Timelimit=01:00:00)                     
+* Command          : /home/b/b383704/eso4clima/train_twoyears/
+*                    example_subset.slurm
+* WorkDir          : /home/b/b383704/eso4clima/train_twoyears
+*
+* StepID | JobName      NodeHours    MaxRSS [Byte] (@task)
+* ------------------------------------------------------------------------------
+* batch  | batch              1.0
+* extern | extern             1.0                3812K (0)
+* ------------------------------------------------------------------------------
+
