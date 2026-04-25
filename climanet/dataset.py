@@ -124,7 +124,6 @@ class STDataset(Dataset):
         daily_nan_mask = self.daily_nan_mask[
             :, :, i : i + ph, j : j + pw
         ]  # (M, T, H, W)
-        daily_timef_patch = self.daily_timef_np # (M,T,4)
 
         if self.land_mask_np is not None:
             land_patch = self.land_mask_np[i : i + ph, j : j + pw]  # (H, W)
@@ -139,8 +138,8 @@ class STDataset(Dataset):
         monthly_tensor = torch.from_numpy(monthly_patch).float()
         # (1, M, T, H, W)
         daily_nan_mask = torch.from_numpy(daily_nan_mask).unsqueeze(0)
-        # ( M, T, 4)
-        daily_timef_tensor = torch.from_numpy(daily_timef_patch).float()
+        # ( M, T, 2)
+        daily_timef_tensor = torch.from_numpy(self.daily_timef_np).float()
 
         # daily_mask: NaN locations that are NOT land
         # Reshape land_tensor for broadcasting: (H, W) → (1, 1, 1, H, W)
