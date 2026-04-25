@@ -79,18 +79,20 @@ class VideoEncoder(nn.Module):
         return x  # (B, N_patches, embed_dim)
 
 class CyclicTimeEmbedding(nn.Module):
-    """Cyclical Temporal encoding using day-of-year and hour-of-day values in combination
-    sine and cosine functions
+    """Cyclical Temporal encoding using day-of-year and hour-of-day values in 
+    combination sine and cosine functions
 
-    This module generates fixed (non-learnable) trigonometric temporal encodings for the temporal dimension
-    using the cyclcial phase encoded day-of-year and hour-of-day values extracted from the datetime associated with the input.
-    This represents a natural positional encoding on the temporal cycle related to the solar (tropical) year and the
-    diurnal cycle.
+    This module generates fixed (non-learnable) trigonometric temporal encodings 
+    for the temporal dimension using the cyclcial phase encoded day-of-year and 
+    hour-of-day values extracted from the datetime associated with the input.
+    This represents a natural positional encoding on the temporal cycle related 
+    to the solar (tropical) year and the diurnal cycle.
 
-    The module uses fixed Fourier frequencies and mixed doy-hod terms to expand the cyclic encoding to the embedding dimension
-    and capture time of day and day of year interactions.
-    The returned encodings are intended to be added to embeddings of the input data by the caller. The module does
-    not perform the additon
+    The module uses fixed Fourier frequencies and mixed doy-hod terms to expand 
+    the cyclic encoding to the embedding dimension and capture time of day and 
+    day of year interactions. The returned encodings are intended to be added to 
+    embeddings of the input data by the caller. The module does not perform the 
+    additon.
     """
 
     def __init__(self, embed_dim=128, include_cross=True):
@@ -101,7 +103,8 @@ class CyclicTimeEmbedding(nn.Module):
             embed_dim: Dimension of the embedding.The default is 128.
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
-            include_cross: bool, default True. Also Create phase_doy +/- phase_hod cross term emeddings 
+            include_cross: bool, default True. Also Create phase_doy +/- phase_hod 
+                cross term emeddings 
         """
 
         super().__init__()
