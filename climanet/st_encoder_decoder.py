@@ -82,17 +82,18 @@ class CyclicTimeEmbedding(nn.Module):
     """Cyclical Temporal encoding using day-of-year and hour-of-day values in combination
     sine and cosine functions
 
-    This module generates fixed (non-learnable) sinusoidal temporal encodings for the temporal dimension
-    using the sinusoidally encoded day-of-year and hour-of-day values extracted from the datetime associated with the input.
-    This represents a natural positional encoding on the temporal cycle related to the solar year and the
+    This module generates fixed (non-learnable) trigonometric temporal encodings for the temporal dimension
+    using the cyclcial phase encoded day-of-year and hour-of-day values extracted from the datetime associated with the input.
+    This represents a natural positional encoding on the temporal cycle related to the solar (tropical) year and the
     diurnal cycle.
 
-    The module uses fixed Fourier frequencies to expand the cyclic encoding to the embedding dimension 
-    The returned encodings are intended to be added emddings of the input data by the caller. The module does
+    The module uses fixed Fourier frequencies and mixed doy-hod terms to expand the cyclic encoding to the embedding dimension
+    and capture time of day and day of year interactions.
+    The returned encodings are intended to be added to embeddings of the input data by the caller. The module does
     not perform the additon
     """
 
-    def __init__(self, embed_dim=128, base_dim=4):
+    def __init__(self, embed_dim=128, include_cross=True):
         """
         Initialize temporal encodings
         
@@ -100,24 +101,28 @@ class CyclicTimeEmbedding(nn.Module):
             embed_dim: Dimension of the embedding.The default is 128.
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
-            base_dim: Dimension of the input cyclical encodings of doy and hod. This is 4 by default (sin/cos(doy) sin/cos(hod)) 
+            include_cross: bool, default True. Also Create phase_doy +/- phase_hod cross term emeddings 
         """
 
         super().__init__()
 
-        self.embed_dim = embed_dim
-        self.base_dim = base_dim
+        self.include_cross = include_cross
+
+        num_base_phase = 2
+        num_cross = 2 if include_cross else 0
+        num_phase_terms = num_base_phase + num_cross
 
         #Determine number of frequencies for Fourier expansion in line with embedding dimension
-        if (embed_dim % (2*base_dim)==0):
-            num_frequencies = int(embed_dim/(2*base_dim))
+
+        if (embed_dim % (2*num_phase_terms)==0):
+            num_frequencies = int(embed_dim/(2*num_phase_terms))
             self.num_freqencies = num_frequencies
             freqs = torch.linspace(1.0, num_frequencies, num_frequencies)
             self.register_buffer("freqs", freqs)
         else:
             raise ValueError(
-                f"embed_dim must be an even multiple of 2*base_dim for fixed encoding."
-                f"Got embed_dim: {embed_dim} and base_dim: {base_dim}."
+                f"embed_dim must be an even multiple of num_phase_terms for fixed encoding."
+                f"Got embed_dim: {embed_dim} and num_phase_terms: {num_phase_terms}."
             )
             
     def forward(self, time_features):
@@ -132,19 +137,32 @@ class CyclicTimeEmbedding(nn.Module):
         """
         B, M, T, D = time_features.shape
 
-        #(B, M, T, D, 1)
-        x= time_features.unsqueeze(-1)
+        #extract individual phases from features
+        phase_doy = time_features[...,0]
+        phase_hod = time_features[...,1]
+        phases = [phase_doy,phase_hod]
+
+        #construct cross terms
+        if self.include_cross:
+            phases.append(phase_doy + phase_hod)
+            phases.append(phase_doy - phase_hod)
+
+        #stack these to get (B,M,T,num_terms)
+        x = torch.stack(phases, dim=-1)
+
+        #(B, M, T, num_terms, 1)
+        x= x.unsqueeze(-1)
 
         #(1,1,1,1,F)
         freqs = self.freqs.view(1,1,1,1,-1)
 
         #apply frequencies
-        x = x * freqs # (B, M, T, D, F)
+        x = x * freqs # (B, M, T, num_phase_terms, F)
 
         sinx = torch.sin(x)
         cosx = torch.cos(x)
 
-        emb_encode = torch.cat([sinx,cosx],dim=-1) # (B,M,T,D, 2F)
+        emb_encode = torch.cat([sinx,cosx],dim=-1) # (B,M,T,num_phase_terms, 2F)
 
         emb_encode = emb_encode.view(B,M,T,-1) # flatten
 
@@ -229,7 +247,6 @@ class TemporalAttentionAggregator(nn.Module):
         self.time_embed = CyclicTimeEmbedding(embed_dim=embed_dim)
 
         # Positional encodings for days and months
-        #self.pos_days = TemporalPositionalEncoding(embed_dim, max_len=max_days) REMOVE THIS AND REPLACE WITH time_embed
         self.pos_months = TemporalPositionalEncoding(embed_dim, max_len=max_months)
 
         # Day scorer (within each month)
@@ -265,7 +282,7 @@ class TemporalAttentionAggregator(nn.Module):
             T: number of temporal tokens per month after temporal patching (Tp)
             H: spatial height after spatial patching
             W: spatial width after spatial patching
-            time_features: (B,M,T,4) containing cyclically encoded DOY and HOD 
+            time_features: (B,M,T,2) containing cyclically phase encoded DOY and HOD 
             padded_days_mask: Optional boolean tensor of shape (B, M, T), bool,
                 True indicating which day tokens are padded (because some months
                 have fewer days). This is used to mask out padded tokens in attention computation.
@@ -640,7 +657,7 @@ class SpatioTemporalModel(nn.Module):
             daily_data: Tensor of shape (B, C, M, T, H, W) containing daily
                 data, where C is the number of channels (e.g., 1 for SST)
             daily_mask: Boolean tensor of same shape as daily_data indicating missing values
-            daily_timef: Tensor of shape (B, M, T, 4) containing the cyclically encoded day-of-year 
+            daily_timef: Tensor of shape (B, M, T, 2) containing the cyclically phase encoded day-of-year 
                 and hour-of-day information for the daily data
             land_mask_patch: Boolean tensor of shape (B, H, W) to mask land areas in the output
             padded_days_mask: Optional boolean tensor of shape (B, M, T) indicating which day tokens are padded
