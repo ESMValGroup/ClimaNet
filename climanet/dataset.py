@@ -19,11 +19,13 @@ class STDataset(Dataset):
         time_dim: str = "time",
         spatial_dims: Tuple[str, str] = ("lat", "lon"),
         patch_size: Tuple[int, int] = (16, 16),  # (lat, lon)
+        stride: Tuple[int, int] = None,
     ):
         self.spatial_dims = spatial_dims
         self.patch_size = patch_size
         self.daily_da = daily_da
         self.monthly_da = monthly_da
+        self.stride = stride if stride is not None else patch_size
 
         # Check that the input data has the expected dimensions
         if time_dim not in daily_da.dims or time_dim not in monthly_da.dims:
@@ -33,7 +35,8 @@ class STDataset(Dataset):
                 raise ValueError(f"Spatial dimension '{dim}' not found in input data")
 
         if (
-            patch_size[0] > daily_da.sizes[spatial_dims[0]] or patch_size[1] > daily_da.sizes[spatial_dims[1]]
+            patch_size[0] > daily_da.sizes[spatial_dims[0]]
+            or patch_size[1] > daily_da.sizes[spatial_dims[1]]
         ):
             raise ValueError(
                 f"Patch size {patch_size} is larger than data dimensions {daily_da.sizes[spatial_dims]}"
@@ -55,9 +58,6 @@ class STDataset(Dataset):
         self.lat_coords = daily_da[spatial_dims[0]].to_numpy().copy()
         self.lon_coords = daily_da[spatial_dims[1]].to_numpy().copy()
 
-        # Store the stats of the daily data before filling NaNs
-        self.daily_mean, self.daily_std = calc_stats(self.daily_np)
-
         if land_mask is not None:
             lm = land_mask.to_numpy().copy()
             if lm.ndim == 3:
@@ -70,8 +70,12 @@ class STDataset(Dataset):
         # daily_mask: True where NaN (i.e. missing ocean data, not land)
         self.daily_nan_mask = np.isnan(self.daily_np)  # (M, T=31, H, W)
 
-        # Fill NaNs with 0 in-place
+        # NaNs will be filled with 0 in-place
         np.nan_to_num(self.daily_np, copy=False, nan=0.0)
+
+        # Stats will be set later via set_stats() for train/test datasets
+        self.daily_mean = None
+        self.daily_std = None
 
         # Precompute padded_days_mask as a tensor (same for all patches)
         self.padded_days_tensor = torch.from_numpy(self.padded_mask_np).bool()
@@ -81,37 +85,54 @@ class STDataset(Dataset):
         self.patch_indices = self._compute_patch_indices(H, W)
 
     def _compute_patch_indices(self, H: int, W: int) -> list:
-        """Generate non-overlapping patch start indices with coverage warning."""
+        """Generate patch start indices with coverage warning (overlap support)."""
         ph, pw = self.patch_size
+        sh, sw = self.stride
 
-        # Compute number of full non-overlapping patches
-        n_patches_h = H // ph
-        n_patches_w = W // pw
-
-        # Check for incomplete coverage
-        remainder_h = H % ph
-        remainder_w = W % pw
-
-        if remainder_h > 0 or remainder_w > 0:
+        # Validate stride
+        if sh > ph or sw > pw:
             warnings.warn(
-                f"Patch size {self.patch_size} does not evenly divide image dimensions (H={H}, W={W}). "
-                f"Uncovered pixels: {remainder_h} in height, {remainder_w} in width. "
-                f"Consider adjusting patch_size or image dimensions for full coverage.",
-                UserWarning
+                f"Stride {self.stride} is larger than patch size {self.patch_size}. "
+                f"This will leave gaps between patches.",
+                UserWarning,
             )
 
-        # Generate non-overlapping patch indices
-        i_starts = [i * ph for i in range(n_patches_h)]
-        j_starts = [j * pw for j in range(n_patches_w)]
+        # Compute patch start indices using stride
+        # Ensure we don't go out of bounds
+        i_starts = list(range(0, H - ph + 1, sh))
+        j_starts = list(range(0, W - pw + 1, sw))
+
+        # Warn if there's incomplete coverage at the edges
+        if not i_starts or not j_starts:
+            raise ValueError(
+                f"No valid patches can be extracted. Image size ({H}, {W}) "
+                f"is smaller than patch size {self.patch_size}."
+            )
+
+        # Check edge coverage
+        last_i = i_starts[-1] + ph
+        last_j = j_starts[-1] + pw
+        if last_i < H or last_j < W:
+            warnings.warn(
+                f"Patches do not fully cover the image. "
+                f"Uncovered pixels: {H - last_i} in height, {W - last_j} in width. "
+                f"Consider adjusting stride or adding edge patches.",
+                UserWarning,
+            )
+
+        overlap_h = ph - sh if sh < ph else 0
+        overlap_w = pw - sw if sw < pw else 0
+        print(f"Patch grid: {len(i_starts)} x {len(j_starts)} = {len(i_starts) * len(j_starts)} patches")
+        print(f"Overlap: {overlap_h} pixels (height), {overlap_w} pixels (width)")
 
         return [(i, j) for i in i_starts for j in j_starts]
-
 
     def __len__(self):
         return len(self.patch_indices)
 
     def __getitem__(self, idx):
         """Get a spatiotemporal patch sample based on the index."""
+
         if idx < 0 or idx >= len(self.patch_indices):
             raise IndexError("Index out of range")
 
@@ -157,9 +178,37 @@ class STDataset(Dataset):
             "monthly_patch": monthly_tensor,  # (M, H, W)
             "daily_mask_patch": daily_mask_tensor,  # (C=1, M, T=31, H, W)
             "land_mask_patch": land_tensor,  # (H,W) True=Land
-            "daily_timef_patch": daily_timef_tensor, #(M, T=31, 4)
+            "daily_timef_patch": daily_timef_tensor, #(M, T=31, 2)
             "padded_days_mask": self.padded_days_tensor,  # (M, T=31) True=padded
             "coords": (i, j),
             "lat_patch": lat_patch,  # (H,)
             "lon_patch": lon_patch,  # (W,)
         }
+
+    def compute_stats(self, indices: list = None) -> Tuple[np.ndarray, np.ndarray]:
+        """Compute mean and std from specified indices (or all data if None).
+
+        Args:
+            indices: List of patch indices to compute stats from. If None, use all.
+
+        Returns:
+            Tuple of (mean, std) arrays
+        """
+        if indices is None:
+            data = self.monthly_np  # (M, H, W)
+        else:
+            # Stack selected spatial patches
+            ph, pw = self.patch_size
+            patches = []
+            for idx in indices:
+                i, j = self.patch_indices[idx]
+                patch = self.monthly_np[:, i : i + ph, j : j + pw]
+                patches.append(patch)
+            data = np.concatenate(patches, axis=-1)
+
+        mean, std = calc_stats(data)  # (M,)
+
+        self.daily_mean = mean
+        self.daily_std = std
+
+        return mean, std

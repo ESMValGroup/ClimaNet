@@ -1,30 +1,28 @@
-from pathlib import Path
-
 import numpy as np
 from torch.utils.data import Dataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
 import xarray as xr
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-
-
-def _setup_logging(log_dir: str) -> SummaryWriter:
-    """Set up TensorBoard logging directory and writer."""
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    return SummaryWriter(log_dir)
+from climanet.utils import setup_logging, compute_masked_loss
 
 
 def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
     """Helper function to convert predictions to xarray and save as netCDF."""
     B, M, H, W = predictions.shape
 
-    lats = dataset.monthly_da.coords["lat"].values
-    lons = dataset.monthly_da.coords["lon"].values
-    times = dataset.monthly_da.coords["time"].values
+    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
+    indices = dataset.indices if hasattr(dataset, "indices") else range(len(dataset))
 
-    full_predictions = np.empty((M, len(lats), len(lons)), dtype=predictions.dtype)
-    for i, (lat_start, lon_start) in enumerate(dataset.patch_indices):
+    lats = base_dataset.monthly_da.coords["lat"].values
+    lons = base_dataset.monthly_da.coords["lon"].values
+    times = base_dataset.monthly_da.coords["time"].values
+
+    full_predictions = np.full(
+        (M, len(lats), len(lons)), np.nan, dtype=predictions.dtype
+    )
+    for i, patch_idx in enumerate(indices):
+        lat_start, lon_start = base_dataset.patch_indices[patch_idx]
         full_predictions[:, lat_start : lat_start + H, lon_start : lon_start + W] = (
             predictions[i]
         )
@@ -61,6 +59,7 @@ def predict_monthly_var(
     batch_size: int = 2,
     return_numpy: bool = True,
     save_predictions: bool = True,
+    return_loss: bool = False,
     device: str = "cpu",
     run_dir: str = ".",
     verbose: bool = True,
@@ -76,11 +75,13 @@ def predict_monthly_var(
             Otherwise, returns a PyTorch tensor.
         save_predictions: If True, convert the predictions to xarray and
             save to disk as netCDF files and return the xarray Dataset.
+        return_loss: If True, also return the average loss over the dataset.
         device: The device to run the predictions on (e.g., 'cpu' or 'cuda').
         run_dir: Directory to save log files and predictions.
         verbose: If True, prints progress information during prediction.
     Returns:
         A NumPy array, PyTorch tensor, or xarray Dataset containing the predicted values.
+        If return_loss is True, it also returns the average loss over the dataset.
     """
     # Load the model if a path is provided
     if isinstance(model, str):
@@ -95,15 +96,18 @@ def predict_monthly_var(
     )
 
     # Initialize an empty list to store predictions
-    M = dataset.monthly_np.shape[0]
-    H, W = dataset.patch_size
+    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
+
+    M = base_dataset.monthly_np.shape[0]
+    H, W = base_dataset.patch_size
     all_predictions = torch.empty(len(dataset), M, H, W)
 
     # Set up logging
-    writer = _setup_logging(run_dir)
+    writer = setup_logging(run_dir)
 
     with torch.no_grad():
         idx = 0
+        average_loss = 0.0
         for i, batch in enumerate(dataloader):
             # Move batch to the appropriate device
             predictions = model(
@@ -113,13 +117,28 @@ def predict_monthly_var(
                 batch["land_mask_patch"].to(device, non_blocking=use_cuda),
                 batch["padded_days_mask"].to(device, non_blocking=use_cuda),
             )
+
+            # Compute masked loss
+            loss = compute_masked_loss(
+                predictions, batch["monthly_patch"], batch["land_mask_patch"]
+            )
+            average_loss += loss.item()
+
             all_predictions[idx : idx + predictions.size(0)] = predictions.cpu()
             idx += predictions.size(0)
 
             if verbose:
-                print(f"Processed batch {i + 1}/{len(dataloader)}")
+                print(
+                    f"Processed batch {i + 1}/{len(dataloader)}, with loss: {loss.item():.4f}"
+                )
 
             writer.add_scalar("Progress/Batch", i + 1, idx)
+
+    average_loss = average_loss / len(dataloader)
+
+    if verbose:
+        print(f"Average loss over all batches: {average_loss:.4f}")
+    writer.add_scalar("Loss/Average", average_loss)
 
     if return_numpy:
         all_predictions = all_predictions.numpy()
@@ -136,5 +155,8 @@ def predict_monthly_var(
 
     # Close the writer when done
     writer.close()
+
+    if return_loss:
+        all_predictions = (all_predictions, average_loss)
 
     return all_predictions

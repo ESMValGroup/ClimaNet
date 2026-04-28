@@ -27,7 +27,7 @@ class VideoEncoder(nn.Module):
     https://arxiv.org/abs/2203.12602
     """
 
-    def __init__(self, in_chans=1, embed_dim=128, patch_size=(1, 4, 4), drop=0.0):
+    def __init__(self, in_chans=1, embed_dim=128, patch_size=(1, 4, 4), dropout=0.0):
         """
         Args:
             in_chans: Number of input channels (1 for SST)
@@ -35,7 +35,7 @@ class VideoEncoder(nn.Module):
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
             patch_size: Tuple of (T, H, W) patch size. Default is (1, 4, 4).
-            drop: Probability of an element to be zeroed. Default is 0.0.
+            dropout: Dropout rate for regularization. Default is 0.0.
                 Increase it if there is overfitting.
         """
         super().__init__()
@@ -51,7 +51,7 @@ class VideoEncoder(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
 
         # dropout for regularization
-        self.drop = nn.Dropout(drop)
+        self.drop = nn.Dropout(dropout)
 
     def forward(self, x, mask):
         """Forward pass with masking support via an additional validity channel.
@@ -232,7 +232,7 @@ class TemporalAttentionAggregator(nn.Module):
     months.
     """
 
-    def __init__(self, embed_dim=128, max_days=31, max_months=12):
+    def __init__(self, embed_dim=128, max_days=31, max_months=12, dropout=0.0):
         """Initialize the temporal attention aggregator.
 
         Args:
@@ -244,6 +244,8 @@ class TemporalAttentionAggregator(nn.Module):
             daily data.
             max_months: Maximum number of months (temporal patches) to precompute
             encodings for. Default is 12, which is sufficient for a year of monthly data.
+            dropout: Dropout rate for regularization in the day scorer and
+            cross-month mixing. Default is 0.0. Increase it if there is overfitting.
         """
         super().__init__()
 
@@ -257,6 +259,7 @@ class TemporalAttentionAggregator(nn.Module):
             nn.LayerNorm(embed_dim),  # normalizing features
             nn.Linear(embed_dim, embed_dim),  # learns temporal feature transformation
             nn.GELU(),  # adds non-linearity to capture complex temporal patterns
+            nn.Dropout(dropout),
             nn.Linear(embed_dim, 1),  # project to a single score
         )
 
@@ -265,7 +268,7 @@ class TemporalAttentionAggregator(nn.Module):
         self.month_attn = nn.MultiheadAttention(
             embed_dim=embed_dim,
             num_heads=4,
-            dropout=0.0,
+            dropout=dropout,
             batch_first=True,
         )
         self.month_ffn = nn.Sequential(
@@ -274,7 +277,9 @@ class TemporalAttentionAggregator(nn.Module):
                 embed_dim, 4 * embed_dim
             ),  # 4 is a common factor in transformer feedforward layers
             nn.GELU(),
+            nn.Dropout(dropout),
             nn.Linear(4 * embed_dim, embed_dim),
+            nn.Dropout(dropout),
         )
 
     def forward(self, x, M, T, H, W, time_features, padded_days_mask=None):
@@ -342,7 +347,14 @@ class MonthlyConvDecoder(nn.Module):
     """
 
     def __init__(
-        self, embed_dim=128, patch_h=4, patch_w=4, hidden=128, overlap=1, num_months=12
+        self,
+        embed_dim=128,
+        patch_h=4,
+        patch_w=4,
+        hidden=128,
+        overlap=1,
+        num_months=12,
+        dropout=0.0,
     ):
         """
         Args:
@@ -356,6 +368,7 @@ class MonthlyConvDecoder(nn.Module):
             overlap: Overlap size for deconvolution. It creates smooth blending
                 between adjacent upsampled patches. Default is 1, no overlap at edges.
             num_months: Number of months. Default is 12.
+            dropout: Dropout rate for regularization in the refinement block. Default is 0.0.
         """
         super().__init__()
         self.patch_h = patch_h
@@ -397,9 +410,11 @@ class MonthlyConvDecoder(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
             nn.GroupNorm(num_groups=8, num_channels=out_channels),
             nn.GELU(),
+            nn.Dropout2d(dropout),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.GroupNorm(num_groups=8, num_channels=out_channels),
             nn.GELU(),
+            nn.Dropout2d(dropout),
         )
 
         # Final conv head to map to single-channel output
@@ -609,6 +624,7 @@ class SpatioTemporalModel(nn.Module):
         max_W=256,
         spatial_depth=2,
         spatial_heads=4,
+        dropout=0.0,
     ):
         """Initialize the Spatio-Temporal Model.
 
@@ -625,23 +641,35 @@ class SpatioTemporalModel(nn.Module):
             max_W: Maximum spatial width for 2D positional encoding
             spatial_depth: Number of layers in the spatial Transformer
             spatial_heads: Number of attention heads in the spatial Transformer
+            dropout: Dropout rate for regularization in various components. Increase it if there is overfitting.
         """
         super().__init__()
 
         # Store arguments to be used later for model saving/loading
-        self.config = {k: v for k, v in locals().items() if k not in ('self', '__class__')}
+        self.config = {
+            k: v for k, v in locals().items() if k not in ("self", "__class__")
+        }
 
         self.encoder = VideoEncoder(
-            in_chans=in_chans, embed_dim=embed_dim, patch_size=patch_size
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+            patch_size=patch_size,
+            dropout=dropout,
         )
         self.temporal = TemporalAttentionAggregator(
-            embed_dim=embed_dim, max_days=max_days, max_months=max_months
+            embed_dim=embed_dim,
+            max_days=max_days,
+            max_months=max_months,
+            dropout=dropout,
         )
         self.spatial_pe = SpatialPositionalEncoding2D(
             embed_dim=embed_dim, max_H=max_H, max_W=max_W
         )
         self.spatial_tr = SpatialTransformer(
-            embed_dim=embed_dim, depth=spatial_depth, num_heads=spatial_heads
+            embed_dim=embed_dim,
+            depth=spatial_depth,
+            num_heads=spatial_heads,
+            dropout=dropout,
         )
         self.decoder = MonthlyConvDecoder(
             embed_dim=embed_dim,
@@ -650,6 +678,7 @@ class SpatioTemporalModel(nn.Module):
             hidden=hidden,
             overlap=overlap,
             num_months=num_months,
+            dropout=dropout,
         )
         self.patch_size = patch_size
 
