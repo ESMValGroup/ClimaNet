@@ -22,6 +22,9 @@ def train_monthly_model(
     store_model: bool = True,
     device: str = "cpu",
     verbose: bool = True,
+    dataloader_num_workers: int = 2,
+    training_threads: int = None,
+
 ):
     """Train the model to predict monthly data from daily data.
     Args:
@@ -37,8 +40,9 @@ def train_monthly_model(
         store_model: whether to save the best model to disk
         device: device to run training on ("cpu" or "cuda")
         verbose: whether to print training progress
+        dataloader_num_workers: how many subprocesses to use for data loading.
+            See torch DataLoader docs for details.
     """
-
     # check if dataset has indices attribute for stats calculation
     base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
     indices = dataset.indices if hasattr(dataset, "indices") else None
@@ -46,7 +50,8 @@ def train_monthly_model(
 
     # Initialize the model
     model = model.to(device)
-    decoder = model.decoder
+
+    decoder = model.module.decoder if hasattr(model, 'module') else model.decoder
     with torch.no_grad():
         decoder.bias.copy_(torch.from_numpy(mean))
         decoder.scale.copy_(torch.from_numpy(std) + 1e-6)
@@ -57,6 +62,8 @@ def train_monthly_model(
         batch_size=batch_size,
         shuffle=shuffle,
         pin_memory=False,
+        num_workers=dataloader_num_workers, # for data loading
+        persistent_workers=True,  # keep workers alive between epochs
     )
 
     # Set up logging
@@ -136,6 +143,7 @@ def train_monthly_model(
                 return_loss=True,
                 verbose=False,
                 run_dir=run_dir,
+                dataloader_num_workers=dataloader_num_workers,
             )
             writer.add_scalar("Loss/validation", avg_epoch_loss, epoch)
 

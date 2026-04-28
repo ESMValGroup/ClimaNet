@@ -4,6 +4,7 @@ from typing import Tuple
 import numpy as np
 import xarray as xr
 import torch
+import psutil
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -133,7 +134,7 @@ def add_month_day_dims(
     # Build aligned datetime array (M,T)
     time_da = daily_ts[time_dim]
 
-    #time_indexed is (M,T) with NaT for padded days 
+    #time_indexed is (M,T) with NaT for padded days
     time_indexed = (
         time_da.assign_coords(M=(time_dim, dkey.values),
                               T=(time_dim, time_da.dt.day.values))
@@ -141,7 +142,7 @@ def add_month_day_dims(
         .unstack(time_dim)
         .reindex(T=np.arange(1,32), M=month_keys)
     )
-    
+
     #determine day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
     # here we choose to use the tropical year length (365.2422 day, which we round to 365.24) as the
     # period to return to the position of the sun relative to the Earth
@@ -158,7 +159,7 @@ def add_month_day_dims(
     #create phase from day and hod
     doy_phase = 2*np.pi*doy/doy_period
     hod_phase = 2*np.pi*hod/hod_period
-    
+
 
     #Stack cyclic encodings into time_features (M,T,2)
     time_features = xr.concat([doy_phase,hod_phase],
@@ -254,3 +255,31 @@ def save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
     )
     if verbose:
         print(f"Model saved to {model_path}")
+
+
+def configure_compute_resources(
+    model: torch.nn.Module, device: str, compute_threads: int, dataloader_num_workers: int
+) -> torch.nn.Module:
+    """Configure model for multi-GPU and set CPU thread usage for compute (training or prediction).
+
+    Args:
+        model: the PyTorch model to configure
+        device: device to run on ("cpu" or "cuda")
+        compute_threads: number of threads to use for compute when device is CPU.
+            If None, it will be set automatically.
+        dataloader_num_workers: how many subprocesses to use for data loading.
+            See torch DataLoader docs for details.
+    Returns:
+        The model, potentially wrapped in DataParallel if using multiple GPUs.
+    """
+    if device == "cpu":
+        if compute_threads is None:
+            total_cpus = psutil.cpu_count()
+            # keep 1 for main thread
+            compute_threads = max(1, total_cpus - dataloader_num_workers - 1)
+        torch.set_num_threads(compute_threads)
+    elif device == "cuda":
+        num_gpus = torch.cuda.device_count()
+        if num_gpus > 1:
+            model = torch.nn.DataParallel(model)
+    return model
