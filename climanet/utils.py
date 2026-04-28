@@ -1,8 +1,11 @@
-
+from pathlib import Path
+import random
 from typing import Tuple
 import numpy as np
 import xarray as xr
 import torch
+
+from torch.utils.tensorboard import SummaryWriter
 
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
@@ -189,9 +192,65 @@ def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
 
 
 def calc_stats(arr: np.ndarray, mean_axis: int = 0) -> Tuple[np.ndarray, np.ndarray]:
-    """Calculate mean and std along the specified axis, ignoring NaNs."""
+    """Calculate mean and std along the specified axis, ignoring NaNs.
+
+    Args:
+        arr: Input array containing NaNs to ignore. shape is (M, T, H, W)
+        mean_axis: Axis along which to compute mean and std (default is 0 for month)
+    Returns:
+        mean: Mean values along the specified axis, shape (M,)
+        std: Standard deviation along the specified axis, shape (M,)
+    """
     axes_to_reduce = tuple(i for i in range(arr.ndim) if i != mean_axis)
 
     mean = np.nanmean(arr, axis=axes_to_reduce)  # shape: (M,)
     std = np.nanstd(arr, axis=axes_to_reduce)  # shape: (M,)
     return mean, std
+
+
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # https://docs.pytorch.org/docs/stable/notes/randomness.html
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def setup_logging(log_dir: str) -> SummaryWriter:
+    """Set up TensorBoard logging directory and writer."""
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    return SummaryWriter(log_dir)
+
+
+def compute_masked_loss(
+    pred: torch.Tensor, target: torch.Tensor, land_mask: torch.Tensor
+) -> torch.Tensor:
+    """Compute L1 loss masked to ocean pixels only."""
+    ocean = (~land_mask).to(pred.device).unsqueeze(1)
+
+    # Mask for valid (non-NaN) target values
+    valid = ~torch.isnan(target)
+    target = torch.nan_to_num(target, nan=0.0)
+
+    mask = ocean & valid
+    loss = torch.nn.functional.l1_loss(pred, target, reduction="none")
+    loss = loss * mask
+
+    num = loss.sum(dim=(-2, -1))
+    denom = mask.sum(dim=(-2, -1)).clamp_min(1)
+
+    return (num / denom).mean()
+
+
+def save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
+    """Save model state and config to disk."""
+    model_path = Path(run_dir) / "best_model.pth"
+    torch.save(
+        {"model_state_dict": model.state_dict(), "model_config": model.config},
+        model_path,
+    )
+    if verbose:
+        print(f"Model saved to {model_path}")
