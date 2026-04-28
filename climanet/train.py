@@ -111,6 +111,7 @@ def train_monthly_model(
             pred = model(
                 batch["daily_patch"],
                 batch["daily_mask_patch"],
+                batch["daily_timef_patch"],
                 batch["land_mask_patch"],
                 batch["padded_days_mask"],
             )  # (B, M, H, W)
