@@ -81,4 +81,4 @@ JobID|JobName|Partition|AllocCPUS|Elapsed|TotalCPU|MaxRSS|State|ExitCode
 23743544.extern|extern||256|00:02:44|00:00.001|3752K|COMPLETED|0:0
 ```
 
-The the efficiency of resource usage can be calculated as `TotalCPU / AllocCPUS * Elapsed Time`. In the example above, the CPU time is `04:21:01`, the allocated CPU is `256`, and the elapsed time is `00:02:44`, so the efficiency of resource usage is `4:21:01 / 256 * 00:02:44 = 0.37`.
+The the efficiency of resource usage can be calculated as `TotalCPU / AllocCPUS * Elapsed Time`. In the example above, the CPU time is `04:21:01`, the allocated CPU is `256`, and the elapsed time is `00:02:44`, so the resource usage is `4:21:01 / 256 * 00:02:44 = 0.37`.
