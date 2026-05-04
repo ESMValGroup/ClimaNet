@@ -60,14 +60,15 @@ def main():
     )
     lsm_mask = xr.open_dataset(lsm_file)
 
-    # Excluding lattude values over 80 and under -80
-    # Experiments found including extreme datasets causes loss=inf
+    # Excluding longitudes of the last 0.2 degrees
+    # These are NAN values
+    # Experiments found they causes loss=inf
     # subset data to smaller region for testing
-    lon_subset = slice(-80, 80)
-    lat_subset = slice(-179.99, 179.99)
-    daily_data = daily_data.sel(lon=lon_subset, lat=lat_subset)
-    monthly_data = monthly_data.sel(lon=lon_subset, lat=lat_subset)
-    lsm_mask = lsm_mask.sel(lon=lon_subset, lat=lat_subset)  # True=Land
+    lon_subset = slice(-179.8, 179.8)
+
+    daily_data = daily_data.sel(lon=lon_subset)
+    monthly_data = monthly_data.sel(lon=lon_subset)
+    lsm_mask = lsm_mask.sel(lon=lon_subset)  # True=Land
 
     # create the model
     print("Creating the model...")
