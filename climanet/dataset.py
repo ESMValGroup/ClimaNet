@@ -49,10 +49,10 @@ class STDataset(Dataset):
         )
 
         # Convert to numpy once — all __getitem__ calls use these
-        self.daily_np = daily_mt.to_numpy().copy()  # (M, T=31, H, W) float
-        self.monthly_np = monthly_m.to_numpy().copy()  # (M, H, W) float
+        self.daily_np = daily_mt.to_numpy().copy().astype(np.float32)  # (M, T=31, H, W) float
+        self.monthly_np = monthly_m.to_numpy().copy().astype(np.float32)  # (M, H, W) float
         self.padded_mask_np = padded_days_mask.to_numpy().copy()  # (M, T=31) bool
-        self.daily_timef_np = daily_timef.to_numpy().copy() # (M,T=31, 4)
+        self.daily_timef_np = daily_timef.to_numpy().copy().astype(np.float32) # (M,T=31, 4)
 
         # Store coordinate arrays
         self.lat_coords = daily_da[spatial_dims[0]].to_numpy().copy()
@@ -148,19 +148,19 @@ class STDataset(Dataset):
 
         if self.land_mask_np is not None:
             land_patch = self.land_mask_np[i : i + ph, j : j + pw]  # (H, W)
-            land_tensor = torch.from_numpy(land_patch.copy()).bool()
+            land_tensor = torch.from_numpy(np.ascontiguousarray(land_patch)).bool()
         else:
             land_tensor = torch.zeros(ph, pw, dtype=torch.bool)
 
         # Convert to tensors (from_numpy is zero-copy on contiguous arrays)
         # (1, M, T, H, W)
-        daily_tensor = torch.from_numpy(daily_patch).float().unsqueeze(0)
+        daily_tensor = torch.from_numpy(daily_patch).unsqueeze(0)
         # (M, H, W)
-        monthly_tensor = torch.from_numpy(monthly_patch).float()
+        monthly_tensor = torch.from_numpy(monthly_patch)
         # (1, M, T, H, W)
         daily_nan_mask = torch.from_numpy(daily_nan_mask).unsqueeze(0)
         # ( M, T, 2)
-        daily_timef_tensor = torch.from_numpy(self.daily_timef_np).float()
+        daily_timef_tensor = torch.from_numpy(self.daily_timef_np)
 
         # daily_mask: NaN locations that are NOT land
         # Reshape land_tensor for broadcasting: (H, W) → (1, 1, 1, H, W)
