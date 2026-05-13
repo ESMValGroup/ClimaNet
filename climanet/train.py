@@ -8,6 +8,39 @@ from climanet.predict import predict_monthly_var
 from climanet.utils import setup_logging, compute_masked_loss, save_model
 
 
+def _run_one_batch(model: torch.nn.Module, batch: dict):
+    pred = model(
+        batch["daily_patch"],
+        batch["daily_mask_patch"],
+        batch["daily_timef_patch"],
+        batch["land_mask_patch"],
+        batch["padded_days_mask"],
+    )  # (B, M, H, W)
+
+    # Compute masked loss
+    return compute_masked_loss(
+        pred, batch["monthly_patch"], batch["land_mask_patch"]
+    )
+
+
+def _compute_stats(dataset: Dataset):
+    # check if dataset has indices attribute for stats calculation
+    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
+    indices = dataset.indices if hasattr(dataset, "indices") else None
+    mean, std = base_dataset.compute_stats(indices)
+    return mean, std
+
+
+def _initialize_decoder(model: torch.nn.Module, dataset: Dataset):
+    mean, std = _compute_stats(dataset)
+    decoder = model.module.decoder if hasattr(model, 'module') else model.decoder
+    with torch.no_grad():
+        decoder.bias.copy_(torch.from_numpy(mean))
+        decoder.scale.copy_(torch.from_numpy(std) + 1e-6)
+
+    return model
+
+
 def train_monthly_model(
     model: torch.nn.Module,
     dataset: Dataset,
@@ -23,8 +56,6 @@ def train_monthly_model(
     device: str = "cpu",
     verbose: bool = True,
     dataloader_num_workers: int = 2,
-    training_threads: int = None,
-
 ):
     """Train the model to predict monthly data from daily data.
     Args:
@@ -43,25 +74,17 @@ def train_monthly_model(
         dataloader_num_workers: how many subprocesses to use for data loading.
             See torch DataLoader docs for details.
     """
-    # check if dataset has indices attribute for stats calculation
-    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
-    indices = dataset.indices if hasattr(dataset, "indices") else None
-    mean, std = base_dataset.compute_stats(indices)
-
     # Initialize the model
     model = model.to(device)
-
-    decoder = model.module.decoder if hasattr(model, 'module') else model.decoder
-    with torch.no_grad():
-        decoder.bias.copy_(torch.from_numpy(mean))
-        decoder.scale.copy_(torch.from_numpy(std) + 1e-6)
+    model = _initialize_decoder(model, dataset)
 
     # Create data loader
+    use_cuda = device == "cuda"
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        pin_memory=False,
+        pin_memory=use_cuda,
         num_workers=dataloader_num_workers, # for data loading
         persistent_workers=True,  # keep workers alive between epochs
     )
@@ -93,19 +116,7 @@ def train_monthly_model(
         optimizer.zero_grad()
 
         for i, batch in enumerate(dataloader):
-            # Batch prediction
-            pred = model(
-                batch["daily_patch"],
-                batch["daily_mask_patch"],
-                batch["daily_timef_patch"],
-                batch["land_mask_patch"],
-                batch["padded_days_mask"],
-            )  # (B, M, H, W)
-
-            # Compute masked loss
-            loss = compute_masked_loss(
-                pred, batch["monthly_patch"], batch["land_mask_patch"]
-            )
+            loss = _run_one_batch(model, batch)
 
             # Scale loss for gradient accumulation
             scaled_loss = loss / accumulation_steps
