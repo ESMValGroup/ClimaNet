@@ -8,6 +8,9 @@ import psutil
 
 from torch.utils.tensorboard import SummaryWriter
 
+import matplotlib.pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
+
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
     """
@@ -283,3 +286,61 @@ def configure_compute_resources(
         if num_gpus > 1:
             model = torch.nn.DataParallel(model)
     return model
+
+
+def plot_results(target, predictions, label="SST K", title=("Target", "Prediction"), error=False):
+    fig, axs = plt.subplots(
+        nrows=len(target.time),
+        ncols=2,
+        figsize=(10, 8),
+        constrained_layout=True
+    )
+
+    for t in range(len(target.time)):
+
+        # Select data for this timestep
+        target_t = target.isel(time=t)
+        pred_t = predictions.isel(time=t)
+
+        # Shared color scale for this row
+        target_min, target_max = target_t.min().compute(), target_t.max().compute()
+        pred_min, pred_max = pred_t.min().compute(), pred_t.max().compute()
+
+        abs_max = max(abs(target_min), abs(target_max), abs(pred_min), abs(pred_max))
+
+        norm = None
+        cmap = "RdBu"
+        if error:
+            norm = TwoSlopeNorm(vmin=-abs_max, vcenter=0.0, vmax=abs_max)
+            cmap = "RdBu_r"
+
+        # Left: truth
+        im0 = target_t.plot(
+            ax=axs[t, 0],
+            cmap=cmap,
+            norm=norm,
+            add_colorbar=False
+        )
+
+        # Right: prediction
+        im1 = pred_t.plot(
+            ax=axs[t, 1],
+            cmap=cmap,
+            norm=norm,
+            add_colorbar=False
+        )
+        title_1, title_2 = title
+        axs[t, 0].set_title(f"{title_1}, month={t+1}")
+        axs[t, 1].set_title(f"{title_2}, month={t+1}")
+
+        # One shared colorbar for the row
+        cbar = fig.colorbar(
+            im1,
+            ax=axs[t, :],
+            orientation="vertical",
+            shrink=0.9
+        )
+
+        cbar.set_label(label)
+
+    plt.show()
