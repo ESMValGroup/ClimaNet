@@ -468,6 +468,66 @@ class MonthlyConvDecoder(nn.Module):
         if land_mask is not None:
             out = out.masked_fill(land_mask.bool()[:, None, :, :], 0.0)
         return out  # (B, M, out_H, out_W)
+    
+class GeoPositionScaleEmbedding(nn.Module):
+    """Shere aware encoding of geographical position and patch (resolution) scales.
+
+    This module generates (semi-)learned posiitonal embeddings for patches using
+    static, precomputed geo position and scale features. These are created at the dataset
+    level and passed to the model, together with patch data.
+
+    Geo position uses a sphere-aware patch area average of the  PCA projection of real-valued 
+    spherical harmonics functions up to and including order L ( with dim PCA < (L+1)**2 ) at
+    the resolution of the input data
+
+    Patch scale embedding encodes, patch, scale, anisotropy, linear resolution, and
+    effective harmonic cut-off.
+
+    These embeddings are concatenated with learneable vector valued gains and then projected
+    to the required embedding dimension using a simple dense NN.
+    """
+
+    def __init__(
+            self,
+            sh_dim=96,
+            scale_dim=10,
+            embed_dim=128,
+            hidden_dim=256,
+            dropout=0.0,
+        ):
+        
+        super().__init__()
+
+        self.sh_gain = nn.Parameter(0.1*torch.ones(sh_dim))
+
+        self.scale_gain = nn.Parameter(0.1*torch.ones(scale_dim))
+        self.scale_norm = nn.LayerNorm(scale_dim)
+
+        in_dim= sh_dim + scale_dim
+
+        self.proj = nn.Sequential(
+            nn.LayerNorm(in_dim),
+            nn.Linear(in_dim,hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim,embed_dim),
+        )
+
+    def forward(
+            self,
+            sh_geo_pos,
+            geo_scale_feat,
+    ):
+        sh_geo_pos = self.sh_gain*sh_geo_pos
+        geo_scale_feat = self.scale_norm(geo_scale_feat)
+        geo_scale_feat = self.scale_gain*geo_scale_feat
+
+        x = torch.cat([sh_geo_pos, geo_scale_feat], dim=-1)
+
+        geo_emb = self.proj(x)
+
+        return geo_emb
+
 
 
 class SpatialPositionalEncoding2D(nn.Module):
@@ -625,6 +685,8 @@ class SpatioTemporalModel(nn.Module):
         spatial_depth=2,
         spatial_heads=4,
         dropout=0.0,
+        sh_dim=96,
+        scale_dim=10,
     ):
         """Initialize the Spatio-Temporal Model.
 
@@ -662,8 +724,15 @@ class SpatioTemporalModel(nn.Module):
             max_months=max_months,
             dropout=dropout,
         )
-        self.spatial_pe = SpatialPositionalEncoding2D(
-            embed_dim=embed_dim, max_H=max_H, max_W=max_W
+        #self.spatial_pe = SpatialPositionalEncoding2D(
+        #    embed_dim=embed_dim, max_H=max_H, max_W=max_W
+        #)
+        self.geo_embedding = GeoPositionScaleEmbedding(
+            sh_dim = sh_dim,
+            scale_dim = scale_dim ,
+            embed_dim = embed_dim,
+            hidden_dim = hidden,
+            dropout = dropout, 
         )
         self.spatial_tr = SpatialTransformer(
             embed_dim=embed_dim,
@@ -682,7 +751,7 @@ class SpatioTemporalModel(nn.Module):
         )
         self.patch_size = patch_size
 
-    def forward(self, daily_data, daily_mask, daily_timef, land_mask_patch, padded_days_mask=None,):
+    def forward(self, daily_data, daily_mask, daily_timef, land_mask_patch, geo_pos_embedding_patch, scale_feature_patch, padded_days_mask=None,):
         """Forward pass of the Spatio-Temporal model.
 
         Args:
@@ -747,12 +816,22 @@ class SpatioTemporalModel(nn.Module):
             latent, M, Tp, Hp, Wp, daily_timef, padded_days_mask=padded_days_mask
         )  # (B, M, Hp*Wp, embed_dim)
 
+        geo_emb = self.geo_embedding(geo_pos_embedding_patch,scale_feature_patch,)  # (B, embed_dim)
+
         # Step 3: Add spatial positional encodings and mix spatial features
         # spatial PE output shape = (Hp, Wp, embed_dim)
-        pe = (
-            self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)
-        )  # (Hp, Wp, E)
-        x = agg_latent + pe[None, None, :, :]  # (B, M, Hp*Wp, E)
+        #pe = (
+        #    self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)
+        #)  # (Hp, Wp, E)
+
+        #
+        # same geo embedding for all months
+        #
+
+        geo_emb = geo_emb[:, None, None, :]   # (B,1,1,E)
+
+        x = agg_latent + geo_emb # (B, M, Hp*Wp, E)
+        #x = agg_latent + pe[None, None, :, :]  # (B, M, Hp*Wp, E)
 
         # Step 4: Spatial mixing with Transformer
         # spatial transformer input shape = (B, N, C), output shape = (B, N, C) C: embedding dimension
