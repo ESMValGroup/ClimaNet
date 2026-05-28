@@ -23,7 +23,7 @@ class STDataset(Dataset):
         patch_size: Tuple[int, int] = (16, 16),  # (lat, lon)
         stride: Tuple[int, int] = None,
         sh_pos_table: str = None,
-        sh_embed_dim: int = 96,
+        sh_embed_dim: int = 96, # sh_embed_dim should <= (sh_order_L + 1)**2
         sh_order_L: int = 10,
     ):
         self.spatial_dims = spatial_dims
