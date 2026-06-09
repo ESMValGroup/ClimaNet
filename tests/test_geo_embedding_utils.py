@@ -17,8 +17,8 @@ from climanet.geo_embedding_utils import (
 # real_sph_harm
 def test_real_sph_harm_scalar_output():
     y = real_sph_harm(
-        l=2,
-        m=1,
+        order_l=2,
+        mode_m=1,
         theta=np.pi / 4,
         phi=np.pi / 3,
     )
