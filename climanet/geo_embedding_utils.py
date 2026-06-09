@@ -23,7 +23,7 @@ def real_sph_harm(order_l, mode_m, theta, phi):
 
     if mode_m < 0:
         return np.sqrt(2) * (-1) ** mode_m * Y.imag
-    elif m == 0:
+    elif mode_m == 0:
         return Y.real
     else:
         return np.sqrt(2) * (-1) ** mode_m * Y.real
