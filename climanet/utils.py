@@ -133,16 +133,17 @@ def add_month_day_dims(
     # Build aligned datetime array (M,T)
     time_da = daily_ts[time_dim]
 
-    #time_indexed is (M,T) with NaT for padded days 
+    # time_indexed is (M,T) with NaT for padded days
     time_indexed = (
-        time_da.assign_coords(M=(time_dim, dkey.values),
-                              T=(time_dim, time_da.dt.day.values))
+        time_da.assign_coords(
+            M=(time_dim, dkey.values), T=(time_dim, time_da.dt.day.values)
+        )
         .set_index({time_dim: ("M", "T")})
         .unstack(time_dim)
-        .reindex(T=np.arange(1,32), M=month_keys)
+        .reindex(T=np.arange(1, 32), M=month_keys)
     )
-    
-    #determine day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
+
+    # determine day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
     # here we choose to use the tropical year length (365.2422 day, which we round to 365.24) as the
     # period to return to the position of the sun relative to the Earth
     doy_period = 365.24
@@ -155,15 +156,14 @@ def add_month_day_dims(
     else:
         hod = xr.zeros_like(doy)
 
-    #create phase from day and hod
-    doy_phase = 2*np.pi*doy/doy_period
-    hod_phase = 2*np.pi*hod/hod_period
-    
+    # create phase from day and hod
+    doy_phase = 2 * np.pi * doy / doy_period
+    hod_phase = 2 * np.pi * hod / hod_period
 
-    #Stack cyclic encodings into time_features (M,T,2)
-    time_features = xr.concat([doy_phase,hod_phase],
-                              dim="feature"
-                              ).transpose("M","T","feature")
+    # Stack cyclic encodings into time_features (M,T,2)
+    time_features = xr.concat([doy_phase, hod_phase], dim="feature").transpose(
+        "M", "T", "feature"
+    )
 
     return daily_indexed, monthly_m, padded_days_mask, time_features
 

@@ -46,6 +46,7 @@ def train_monthly_model(
 
     # Initialize the model
     model = model.to(device)
+    use_cuda = device == "cuda"
     decoder = model.decoder
     with torch.no_grad():
         decoder.bias.copy_(torch.from_numpy(mean))
@@ -88,16 +89,20 @@ def train_monthly_model(
         for i, batch in enumerate(dataloader):
             # Batch prediction
             pred = model(
-                batch["daily_patch"],
-                batch["daily_mask_patch"],
-                batch["daily_timef_patch"],
-                batch["land_mask_patch"],
-                batch["padded_days_mask"],
+                batch["daily_patch"].to(device, non_blocking=use_cuda),
+                batch["daily_mask_patch"].to(device, non_blocking=use_cuda),
+                batch["daily_timef_patch"].to(device, non_blocking=use_cuda),
+                batch["land_mask_patch"].to(device, non_blocking=use_cuda),
+                batch["geo_pos_embedding_patch"].to(device, non_blocking=use_cuda),
+                batch["scale_feature_patch"].to(device, non_blocking=use_cuda),
+                batch["padded_days_mask"].to(device, non_blocking=use_cuda),
             )  # (B, M, H, W)
 
             # Compute masked loss
             loss = compute_masked_loss(
-                pred, batch["monthly_patch"], batch["land_mask_patch"]
+                pred,
+                batch["monthly_patch"].to(device, non_blocking=use_cuda),
+                batch["land_mask_patch"].to(device, non_blocking=use_cuda),
             )
 
             # Scale loss for gradient accumulation
