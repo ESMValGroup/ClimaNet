@@ -166,7 +166,7 @@ def apply_sh_pca_projection(
         eps : float ; epsilon for numerical stabalization of division by standard deviation
         clip_scale: float; (approximate) number of standard deviations after which to apply
             tanh soft-clipping (suppression of outliers)
-        emd_scale: flaot ; scaling parameter for embeddings
+        emd_scale: float ; scaling parameter for embeddings
 
     Returns
         sph_emb_grid : (H,W, embed_dim) Spherical harmonics projected to PCA
@@ -194,7 +194,7 @@ def apply_sh_pca_projection(
     return sph_emb_grid
 
 
-def calculate_SH_geo_pos_embeddings(
+def calculate_sh_geo_pos_embeddings(
     lat,
     lon,
     L,
@@ -235,12 +235,19 @@ def calculate_SH_geo_pos_embeddings(
         )
 
     # calculate sperical harmonics on grid
-    sh_grid = compute_sh_on_grid(lat, lon, L)
+    sh_grid = compute_sh_on_grid(lat, lon, L, dtype=dtype)
+
     # perform area-weighted PCA decomposition to specified embedding dimension
     mean_val, pca_components, _ = fit_weighted_sh_pca(sh_grid, lat, sh_embed_dim)
+
     # project grided harmonics to pca basis
     sh_grid_geo_pos_embeddings = apply_sh_pca_projection(
-        sh_grid, mean_val, pca_components
+        sh_grid,
+        mean_val,
+        pca_components,
+        eps=eps,
+        clip_scale=clip_scale,
+        emb_scale=emb_scale,
     )
 
     return sh_grid_geo_pos_embeddings
@@ -259,9 +266,8 @@ def compute_patch_geo_pos_embedding(geo_pos_patch_grid, lat_patch):
     Returns
         geo_pos_patch: tensor; (sh_embed_dim,); weighted mean patch embedding
     """
-    weights = torch.from_numpy(
-        np.clip(np.cos(np.deg2rad(lat_patch)), 1e-3, None)
-    ).float()  # (pH,)
+    lat_rad = torch.deg2rad(torch.as_tensor(lat_patch, dtype=torch.float32))
+    weights = torch.clamp(torch.cos(lat_rad), min=1e-3)  # (pH,)
     weights_2d = weights[:, None, None]  # (pH,1,1)
     # weigthed sum over spatial dimensions
     weighted_sum = (geo_pos_patch_grid * weights_2d).sum(dim=(0, 1))

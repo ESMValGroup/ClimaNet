@@ -471,20 +471,21 @@ class MonthlyConvDecoder(nn.Module):
 
 
 class GeoPositionScaleEmbedding(nn.Module):
-    """Shere aware encoding of geographical position and patch (resolution) scales.
+    """Sphere aware encoding of geographical position and patch (resolution) scales.
 
-    This module generates (semi-)learned posiitonal embeddings for patches using
-    static, precomputed geo position and scale features. These are created at the dataset
+    This module uses static precomputed spherical-harmonic-based geoposition encodings and
+    scale encodings at the patch level to generate learned positonal embedding for patches.
+    The static, precomputed geo position and scale features are created at the dataset
     level and passed to the model, together with patch data.
 
-    Geo position uses a sphere-aware patch area average of the  PCA projection of real-valued
+    Geo position uses a sphere-aware patch area average of the PCA projection of real-valued
     spherical harmonics functions up to and including order L ( with dim PCA < (L+1)**2 ) at
-    the resolution of the input data
+    the resolution of the input data.
 
     Patch scale embedding encodes, patch, scale, anisotropy, linear resolution, and
     effective harmonic cut-off.
 
-    These embeddings are concatenated with learneable vector valued gains and then projected
+    These embeddings are concatenated with learnable vector valued gains and then projected
     to the required embedding dimension using a simple dense NN.
     """
 
@@ -493,18 +494,29 @@ class GeoPositionScaleEmbedding(nn.Module):
         sh_dim=96,
         scale_dim=10,
         embed_dim=128,
-        hidden_dim=256,
         dropout=0.0,
     ):
+        """
+        initialize geo-position and scale embeddings and projection
+
+        Args:
+            sh_dim: int, Dimension of pca of spherical harmonics for embedding. defaults to 96
+            scale_dim: int, Dimension of patch scale feature embedding. default 10
+            embed_dim: int, Dimension of embeddings to be created. default 128
+            dropout: float, Dropout rate for regularization of projection network. default 0.0
+        """
 
         super().__init__()
 
+        # 0.1 is an initialization scale factor
         self.sh_gain = nn.Parameter(0.1 * torch.ones(sh_dim))
 
+        # 0.1 is an initialization scale factor
         self.scale_gain = nn.Parameter(0.1 * torch.ones(scale_dim))
         self.scale_norm = nn.LayerNorm(scale_dim)
 
         in_dim = sh_dim + scale_dim
+        hidden_dim = 2 * embed_dim
 
         self.proj = nn.Sequential(
             nn.LayerNorm(in_dim),
@@ -519,6 +531,20 @@ class GeoPositionScaleEmbedding(nn.Module):
         sh_geo_pos,
         geo_scale_feat,
     ):
+        """
+        Create learned geo-position-and-scale embedding of desired
+        dimension from pre-calculated patch level geo-position and
+        patch scale embeddings
+
+        Args:
+            sh_geo_pos: Tensor of dimension sh_dim. Patch level geo-position
+                embedding using pca of spherical harmonics
+            geo_scale_feat: Tensor of dimension scale_dim. Patch level
+                patch-scale features
+        Returns:
+            geo_emb: Tensor of dimesnion embed_dim. Learned geo-position-and-scale
+                embedding
+        """
         sh_geo_pos = self.sh_gain * sh_geo_pos
         geo_scale_feat = self.scale_norm(geo_scale_feat)
         geo_scale_feat = self.scale_gain * geo_scale_feat
@@ -528,76 +554,6 @@ class GeoPositionScaleEmbedding(nn.Module):
         geo_emb = self.proj(x)
 
         return geo_emb
-
-
-class SpatialPositionalEncoding2D(nn.Module):
-    """2D Spatial Positional Encoding using sine and cosine functions.
-
-    This module generates fixed sinusoidal positional encodings for a 2D spatial
-    grid, following the formulation in "Attention Is All You Need" (Vaswani et al., 2017).
-
-    The returned positional encodings are intended to be added to spatial tokens
-    by the caller. The encodings are **not learnable**.
-    """
-
-    def __init__(self, embed_dim=128, max_H=1024, max_W=1024):
-        """Initialize the positional encoding.
-        Args:
-            embed_dim: Dimension of the embedding, it must be even. The default is 128.
-                Embedding dimensions are usually multiples of 64 (e.g., 64, 128,
-                256). This can be tuned.
-            max_H: Maximum height. Default is 1024, which should be sufficient.
-            max_W: Maximum width. Default is 1024, which should be sufficient.
-        """
-        super().__init__()
-        self.embed_dim = embed_dim
-        self.max_H = max_H
-        self.max_W = max_W
-        self.register_buffer(
-            "pe", self.build_pe(max_H, max_W, embed_dim), persistent=False
-        )
-
-    @staticmethod
-    def build_pe(H, W, embed_dim):
-        """Build the 2D positional encoding encoding tensor.
-        Args:
-            H: Height of the grid
-            W: Width of the grid
-            embed_dim: Dimension of the embedding (must be even)
-        Returns:
-            Tensor of shape (H, W, embed_dim) containing fixed positional encodings.
-            Encodings are constructed by combining sine/cosine encodings along
-            height and width. Not learnable.
-        """
-        assert embed_dim % 2 == 0, "embed_dim must be even"
-        pe_h = torch.zeros(H, embed_dim // 2)
-        pe_w = torch.zeros(W, embed_dim // 2)
-        pos_h = torch.arange(H).unsqueeze(1)
-        pos_w = torch.arange(W).unsqueeze(1)
-        div = torch.exp(
-            torch.arange(0, embed_dim // 2, 2) * (-math.log(10000.0) / (embed_dim // 2))
-        )
-        pe_h[:, 0::2] = torch.sin(pos_h * div)
-        pe_h[:, 1::2] = torch.cos(pos_h * div)
-        pe_w[:, 0::2] = torch.sin(pos_w * div)
-        pe_w[:, 1::2] = torch.cos(pos_w * div)
-        pe_2d = pe_h.unsqueeze(1) + pe_w.unsqueeze(0)  # (H, W, embed_dim/2)
-        # concatenate to reach embed_dim
-        pe = torch.cat([pe_2d, pe_2d], dim=-1)  # (H, W, embed_dim)
-        return pe  # not learned
-
-    def forward(self, Hp, Wp):
-        """Get positional encoding for size (Hp, Wp).
-        Args:
-            Hp: Height after patching (≤ max_H)
-            Wp: Width after patching (≤ max_W)
-        Returns:
-            Tensor of shape (Hp*Wp, embed_dim) containing positional encodings
-            flattened in row-major order (height * width).
-        """
-        # returns (Hp*Wp, embed_dim)
-        pe_hw = self.pe[:Hp, :Wp, :].reshape(Hp * Wp, -1)
-        return pe_hw
 
 
 class SpatialTransformer(nn.Module):
@@ -680,8 +636,6 @@ class SpatioTemporalModel(nn.Module):
         num_months=12,
         hidden=256,
         overlap=1,
-        max_H=256,
-        max_W=256,
         spatial_depth=2,
         spatial_heads=4,
         dropout=0.0,
@@ -704,6 +658,8 @@ class SpatioTemporalModel(nn.Module):
             spatial_depth: Number of layers in the spatial Transformer
             spatial_heads: Number of attention heads in the spatial Transformer
             dropout: Dropout rate for regularization in various components. Increase it if there is overfitting.
+            sh_dim: Dimension of spherical harmonics based pca of geo-position
+            scale_dim: Dimension of patch-level patch-scale features
         """
         super().__init__()
 
@@ -724,14 +680,10 @@ class SpatioTemporalModel(nn.Module):
             max_months=max_months,
             dropout=dropout,
         )
-        # self.spatial_pe = SpatialPositionalEncoding2D(
-        #    embed_dim=embed_dim, max_H=max_H, max_W=max_W
-        # )
         self.geo_embedding = GeoPositionScaleEmbedding(
             sh_dim=sh_dim,
             scale_dim=scale_dim,
             embed_dim=embed_dim,
-            hidden_dim=hidden,
             dropout=dropout,
         )
         self.spatial_tr = SpatialTransformer(
@@ -827,25 +779,16 @@ class SpatioTemporalModel(nn.Module):
             latent, M, Tp, Hp, Wp, daily_timef, padded_days_mask=padded_days_mask
         )  # (B, M, Hp*Wp, embed_dim)
 
+        # Step 3: Add geo position and scale encodings
         geo_emb = self.geo_embedding(
             geo_pos_embedding_patch,
             scale_feature_patch,
         )  # (B, embed_dim)
 
-        # Step 3: Add spatial positional encodings and mix spatial features
-        # spatial PE output shape = (Hp, Wp, embed_dim)
-        # pe = (
-        #    self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)
-        # )  # (Hp, Wp, E)
-
-        #
-        # same geo embedding for all months
-        #
-
+        # Broadcasting: same geo embedding for all M months at each Hp*Wp location
+        # we use weighted mean patch embedding, see `geo_embedding_utils.py`
         geo_emb = geo_emb[:, None, None, :]  # (B,1,1,E)
-
         x = agg_latent + geo_emb  # (B, M, Hp*Wp, E)
-        # x = agg_latent + pe[None, None, :, :]  # (B, M, Hp*Wp, E)
 
         # Step 4: Spatial mixing with Transformer
         # spatial transformer input shape = (B, N, C), output shape = (B, N, C) C: embedding dimension
