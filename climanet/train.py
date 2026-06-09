@@ -95,12 +95,14 @@ def train_monthly_model(
                 batch["land_mask_patch"].to(device, non_blocking=use_cuda),
                 batch["geo_pos_embedding_patch"].to(device, non_blocking=use_cuda),
                 batch["scale_feature_patch"].to(device, non_blocking=use_cuda),
-                batch["padded_days_mask"].to(device, non_blocking=use_cuda)   ,
+                batch["padded_days_mask"].to(device, non_blocking=use_cuda),
             )  # (B, M, H, W)
 
             # Compute masked loss
             loss = compute_masked_loss(
-                pred, batch["monthly_patch"].to(device, non_blocking=use_cuda), batch["land_mask_patch"].to(device, non_blocking=use_cuda)
+                pred,
+                batch["monthly_patch"].to(device, non_blocking=use_cuda),
+                batch["land_mask_patch"].to(device, non_blocking=use_cuda),
             )
 
             # Scale loss for gradient accumulation

@@ -14,7 +14,6 @@ from climanet.geo_embedding_utils import (
 )
 
 
-
 # real_sph_harm
 def test_real_sph_harm_scalar_output():
     y = real_sph_harm(
@@ -45,7 +44,6 @@ def test_real_sph_harm_m0_is_real():
     y = real_sph_harm(4, 0, theta, phi)
 
     assert np.isreal(y)
-
 
 
 # compute_sh_on_grid
@@ -80,7 +78,6 @@ def test_compute_sh_on_grid_finite():
     assert torch.isfinite(sh).all()
 
 
-
 # compute_area_weights
 def test_compute_area_weights_shape():
     lat = np.array([-90, -45, 0, 45, 90])
@@ -105,7 +102,6 @@ def test_compute_area_weights_nonnegative():
     weights = compute_area_weights(lat)
 
     assert torch.all(weights >= 0)
-
 
 
 # fit_weighted_sh_pca
@@ -160,7 +156,6 @@ def test_fit_weighted_sh_pca_components_orthogonal():
     identity = torch.eye(5)
 
     assert torch.allclose(gram, identity, atol=1e-4)
-
 
 
 # apply_sh_pca_projection
@@ -228,7 +223,6 @@ def test_apply_sh_pca_projection_reasonable_scale():
     assert emb.abs().mean() < 0.1
 
 
-
 # calculate_SH_geo_pos_embeddings
 def test_calculate_SH_geo_pos_embeddings_shape():
     lat = np.linspace(-90, 90, 10)
@@ -269,7 +263,6 @@ def test_calculate_SH_geo_pos_embeddings_rank_error():
             L=2,
             sh_embed_dim=20,
         )
-
 
 
 # compute_patch_geo_pos_embedding
@@ -314,7 +307,6 @@ def test_compute_patch_geo_pos_embedding_constant_field():
     expected = torch.full((8,), const_val)
 
     assert torch.allclose(emb, expected, atol=1e-5)
-
 
 
 # compute_patch_scale_features

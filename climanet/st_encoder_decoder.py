@@ -78,33 +78,34 @@ class VideoEncoder(nn.Module):
         x = self.drop(x)
         return x  # (B, N_patches, embed_dim)
 
+
 class CyclicTimeEmbedding(nn.Module):
-    """Cyclical Temporal encoding using day-of-year and hour-of-day values in 
+    """Cyclical Temporal encoding using day-of-year and hour-of-day values in
     combination sine and cosine functions
 
-    This module generates fixed (non-learnable) trigonometric temporal encodings 
-    for the temporal dimension using the cyclcial phase encoded day-of-year and 
+    This module generates fixed (non-learnable) trigonometric temporal encodings
+    for the temporal dimension using the cyclcial phase encoded day-of-year and
     hour-of-day values extracted from the datetime associated with the input.
-    This represents a natural positional encoding on the temporal cycle related 
+    This represents a natural positional encoding on the temporal cycle related
     to the solar (tropical) year and the diurnal cycle.
 
-    The module uses fixed Fourier frequencies and mixed doy-hod terms to expand 
-    the cyclic encoding to the embedding dimension and capture time of day and 
-    day of year interactions. The returned encodings are intended to be added to 
-    embeddings of the input data by the caller. The module does not perform the 
+    The module uses fixed Fourier frequencies and mixed doy-hod terms to expand
+    the cyclic encoding to the embedding dimension and capture time of day and
+    day of year interactions. The returned encodings are intended to be added to
+    embeddings of the input data by the caller. The module does not perform the
     additon.
     """
 
     def __init__(self, embed_dim=128, include_cross=True):
         """
         Initialize temporal encodings
-        
+
         Args:
             embed_dim: Dimension of the embedding.The default is 128.
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
-            include_cross: bool, default True. Also Create phase_doy +/- phase_hod 
-                cross term emeddings 
+            include_cross: bool, default True. Also Create phase_doy +/- phase_hod
+                cross term emeddings
         """
 
         super().__init__()
@@ -115,10 +116,10 @@ class CyclicTimeEmbedding(nn.Module):
         num_cross = 2 if include_cross else 0
         num_phase_terms = num_base_phase + num_cross
 
-        #Determine number of frequencies for Fourier expansion in line with embedding dimension
+        # Determine number of frequencies for Fourier expansion in line with embedding dimension
 
-        if (embed_dim % (2*num_phase_terms)==0):
-            num_frequencies = int(embed_dim/(2*num_phase_terms))
+        if embed_dim % (2 * num_phase_terms) == 0:
+            num_frequencies = int(embed_dim / (2 * num_phase_terms))
             self.num_freqencies = num_frequencies
             freqs = torch.linspace(1.0, num_frequencies, num_frequencies)
             self.register_buffer("freqs", freqs)
@@ -127,11 +128,11 @@ class CyclicTimeEmbedding(nn.Module):
                 f"embed_dim must be an even multiple of num_phase_terms for fixed encoding."
                 f"Got embed_dim: {embed_dim} and num_phase_terms: {num_phase_terms}."
             )
-            
+
     def forward(self, time_features):
         """
         create encodings in of size embedding dimension
-        
+
         Args:
         time_features: (B, M, T, D) ; D is base_dim
 
@@ -140,37 +141,36 @@ class CyclicTimeEmbedding(nn.Module):
         """
         B, M, T, D = time_features.shape
 
-        #extract individual phases from features
-        phase_doy = time_features[...,0]
-        phase_hod = time_features[...,1]
-        phases = [phase_doy,phase_hod]
+        # extract individual phases from features
+        phase_doy = time_features[..., 0]
+        phase_hod = time_features[..., 1]
+        phases = [phase_doy, phase_hod]
 
-        #construct cross terms
+        # construct cross terms
         if self.include_cross:
             phases.append(phase_doy + phase_hod)
             phases.append(phase_doy - phase_hod)
 
-        #stack these to get (B,M,T,num_terms)
+        # stack these to get (B,M,T,num_terms)
         x = torch.stack(phases, dim=-1)
 
-        #(B, M, T, num_terms, 1)
-        x= x.unsqueeze(-1)
+        # (B, M, T, num_terms, 1)
+        x = x.unsqueeze(-1)
 
-        #(1,1,1,1,F)
-        freqs = self.freqs.view(1,1,1,1,-1)
+        # (1,1,1,1,F)
+        freqs = self.freqs.view(1, 1, 1, 1, -1)
 
-        #apply frequencies
-        x = x * freqs # (B, M, T, num_phase_terms, F)
+        # apply frequencies
+        x = x * freqs  # (B, M, T, num_phase_terms, F)
 
         sinx = torch.sin(x)
         cosx = torch.cos(x)
 
-        emb_encode = torch.cat([sinx,cosx],dim=-1) # (B,M,T,num_phase_terms, 2F)
+        emb_encode = torch.cat([sinx, cosx], dim=-1)  # (B,M,T,num_phase_terms, 2F)
 
-        emb_encode = emb_encode.view(B,M,T,-1) # flatten
+        emb_encode = emb_encode.view(B, M, T, -1)  # flatten
 
         return emb_encode
-        
 
 
 class TemporalPositionalEncoding(nn.Module):
@@ -290,7 +290,7 @@ class TemporalAttentionAggregator(nn.Module):
             T: number of temporal tokens per month after temporal patching (Tp)
             H: spatial height after spatial patching
             W: spatial width after spatial patching
-            time_features: (B,M,T,2) containing cyclically phase encoded DOY and HOD 
+            time_features: (B,M,T,2) containing cyclically phase encoded DOY and HOD
             padded_days_mask: Optional boolean tensor of shape (B, M, T), bool,
                 True indicating which day tokens are padded (because some months
                 have fewer days). This is used to mask out padded tokens in attention computation.
@@ -302,13 +302,13 @@ class TemporalAttentionAggregator(nn.Module):
         # Reshape to (B, Hp*Wp, M, Tp, C) for temporal processing
         seq = x.permute(0, 3, 4, 1, 2, 5).reshape(B, Hp * Wp, M, Tp, C)
 
-        temp_emb = self.time_embed(time_features) # (B,M,T,emd_dim)
-        #expand spatially
-        temp_emb = temp_emb[:, None, :, :, :] #[B, 1, M, T, C]
-        temp_emb = temp_emb.expand(-1, H*W, -1, -1, -1)
+        temp_emb = self.time_embed(time_features)  # (B,M,T,emd_dim)
+        # expand spatially
+        temp_emb = temp_emb[:, None, :, :, :]  # [B, 1, M, T, C]
+        temp_emb = temp_emb.expand(-1, H * W, -1, -1, -1)
         pe_months = self.pos_months(M).to(seq.device).to(seq.dtype)  # (M, C)
 
-        seq = seq + temp_emb # add temporal embeddings
+        seq = seq + temp_emb  # add temporal embeddings
         seq = seq + pe_months[None, None, :, None, :]  # add month PE
 
         # Day attention per month
@@ -468,7 +468,8 @@ class MonthlyConvDecoder(nn.Module):
         if land_mask is not None:
             out = out.masked_fill(land_mask.bool()[:, None, :, :], 0.0)
         return out  # (B, M, out_H, out_W)
-    
+
+
 class GeoPositionScaleEmbedding(nn.Module):
     """Shere aware encoding of geographical position and patch (resolution) scales.
 
@@ -476,7 +477,7 @@ class GeoPositionScaleEmbedding(nn.Module):
     static, precomputed geo position and scale features. These are created at the dataset
     level and passed to the model, together with patch data.
 
-    Geo position uses a sphere-aware patch area average of the  PCA projection of real-valued 
+    Geo position uses a sphere-aware patch area average of the  PCA projection of real-valued
     spherical harmonics functions up to and including order L ( with dim PCA < (L+1)**2 ) at
     the resolution of the input data
 
@@ -488,46 +489,45 @@ class GeoPositionScaleEmbedding(nn.Module):
     """
 
     def __init__(
-            self,
-            sh_dim=96,
-            scale_dim=10,
-            embed_dim=128,
-            hidden_dim=256,
-            dropout=0.0,
-        ):
-        
+        self,
+        sh_dim=96,
+        scale_dim=10,
+        embed_dim=128,
+        hidden_dim=256,
+        dropout=0.0,
+    ):
+
         super().__init__()
 
-        self.sh_gain = nn.Parameter(0.1*torch.ones(sh_dim))
+        self.sh_gain = nn.Parameter(0.1 * torch.ones(sh_dim))
 
-        self.scale_gain = nn.Parameter(0.1*torch.ones(scale_dim))
+        self.scale_gain = nn.Parameter(0.1 * torch.ones(scale_dim))
         self.scale_norm = nn.LayerNorm(scale_dim)
 
-        in_dim= sh_dim + scale_dim
+        in_dim = sh_dim + scale_dim
 
         self.proj = nn.Sequential(
             nn.LayerNorm(in_dim),
-            nn.Linear(in_dim,hidden_dim),
+            nn.Linear(in_dim, hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim,embed_dim),
+            nn.Linear(hidden_dim, embed_dim),
         )
 
     def forward(
-            self,
-            sh_geo_pos,
-            geo_scale_feat,
+        self,
+        sh_geo_pos,
+        geo_scale_feat,
     ):
-        sh_geo_pos = self.sh_gain*sh_geo_pos
+        sh_geo_pos = self.sh_gain * sh_geo_pos
         geo_scale_feat = self.scale_norm(geo_scale_feat)
-        geo_scale_feat = self.scale_gain*geo_scale_feat
+        geo_scale_feat = self.scale_gain * geo_scale_feat
 
         x = torch.cat([sh_geo_pos, geo_scale_feat], dim=-1)
 
         geo_emb = self.proj(x)
 
         return geo_emb
-
 
 
 class SpatialPositionalEncoding2D(nn.Module):
@@ -724,15 +724,15 @@ class SpatioTemporalModel(nn.Module):
             max_months=max_months,
             dropout=dropout,
         )
-        #self.spatial_pe = SpatialPositionalEncoding2D(
+        # self.spatial_pe = SpatialPositionalEncoding2D(
         #    embed_dim=embed_dim, max_H=max_H, max_W=max_W
-        #)
+        # )
         self.geo_embedding = GeoPositionScaleEmbedding(
-            sh_dim = sh_dim,
-            scale_dim = scale_dim ,
-            embed_dim = embed_dim,
-            hidden_dim = hidden,
-            dropout = dropout, 
+            sh_dim=sh_dim,
+            scale_dim=scale_dim,
+            embed_dim=embed_dim,
+            hidden_dim=hidden,
+            dropout=dropout,
         )
         self.spatial_tr = SpatialTransformer(
             embed_dim=embed_dim,
@@ -751,14 +751,23 @@ class SpatioTemporalModel(nn.Module):
         )
         self.patch_size = patch_size
 
-    def forward(self, daily_data, daily_mask, daily_timef, land_mask_patch, geo_pos_embedding_patch, scale_feature_patch, padded_days_mask=None,):
+    def forward(
+        self,
+        daily_data,
+        daily_mask,
+        daily_timef,
+        land_mask_patch,
+        geo_pos_embedding_patch,
+        scale_feature_patch,
+        padded_days_mask=None,
+    ):
         """Forward pass of the Spatio-Temporal model.
 
         Args:
             daily_data: Tensor of shape (B, C, M, T, H, W) containing daily
                 data, where C is the number of channels (e.g., 1 for SST)
             daily_mask: Boolean tensor of same shape as daily_data indicating missing values
-            daily_timef: Tensor of shape (B, M, T, 2) containing the cyclically phase encoded day-of-year 
+            daily_timef: Tensor of shape (B, M, T, 2) containing the cyclically phase encoded day-of-year
                 and hour-of-day information for the daily data
             land_mask_patch: Boolean tensor of shape (B, H, W) to mask land areas in the output
             padded_days_mask: Optional boolean tensor of shape (B, M, T) indicating which day tokens are padded
@@ -782,7 +791,9 @@ class SpatioTemporalModel(nn.Module):
         assert T % self.patch_size[0] == 0, "T must be divisible by patch size"
 
         if self.patch_size[0] > 1:
-            daily_timef = daily_timef.view(B, M, Tp, self.patch_size[0], 4).mean(dim=3)  # -> (B,M, Tp, 4)
+            daily_timef = daily_timef.view(B, M, Tp, self.patch_size[0], 4).mean(
+                dim=3
+            )  # -> (B,M, Tp, 4)
 
         if padded_days_mask is not None and self.patch_size[0] > 1:
             B, M, T_days = padded_days_mask.shape
@@ -816,22 +827,25 @@ class SpatioTemporalModel(nn.Module):
             latent, M, Tp, Hp, Wp, daily_timef, padded_days_mask=padded_days_mask
         )  # (B, M, Hp*Wp, embed_dim)
 
-        geo_emb = self.geo_embedding(geo_pos_embedding_patch,scale_feature_patch,)  # (B, embed_dim)
+        geo_emb = self.geo_embedding(
+            geo_pos_embedding_patch,
+            scale_feature_patch,
+        )  # (B, embed_dim)
 
         # Step 3: Add spatial positional encodings and mix spatial features
         # spatial PE output shape = (Hp, Wp, embed_dim)
-        #pe = (
+        # pe = (
         #    self.spatial_pe(Hp, Wp).to(agg_latent.device).to(agg_latent.dtype)
-        #)  # (Hp, Wp, E)
+        # )  # (Hp, Wp, E)
 
         #
         # same geo embedding for all months
         #
 
-        geo_emb = geo_emb[:, None, None, :]   # (B,1,1,E)
+        geo_emb = geo_emb[:, None, None, :]  # (B,1,1,E)
 
-        x = agg_latent + geo_emb # (B, M, Hp*Wp, E)
-        #x = agg_latent + pe[None, None, :, :]  # (B, M, Hp*Wp, E)
+        x = agg_latent + geo_emb  # (B, M, Hp*Wp, E)
+        # x = agg_latent + pe[None, None, :, :]  # (B, M, Hp*Wp, E)
 
         # Step 4: Spatial mixing with Transformer
         # spatial transformer input shape = (B, N, C), output shape = (B, N, C) C: embedding dimension
