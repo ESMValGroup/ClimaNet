@@ -8,7 +8,7 @@ from climanet.geo_embedding_utils import (
     compute_area_weights,
     fit_weighted_sh_pca,
     apply_sh_pca_projection,
-    calculate_SH_geo_pos_embeddings,
+    calculate_sh_geo_pos_embeddings,
     compute_patch_geo_pos_embedding,
     compute_patch_scale_features,
 )
@@ -223,12 +223,12 @@ def test_apply_sh_pca_projection_reasonable_scale():
     assert emb.abs().mean() < 0.1
 
 
-# calculate_SH_geo_pos_embeddings
-def test_calculate_SH_geo_pos_embeddings_shape():
+# calculate_sh_geo_pos_embeddings
+def test_calculate_sh_geo_pos_embeddings_shape():
     lat = np.linspace(-90, 90, 10)
     lon = np.linspace(0, 360, 20, endpoint=False)
 
-    emb = calculate_SH_geo_pos_embeddings(
+    emb = calculate_sh_geo_pos_embeddings(
         lat,
         lon,
         L=5,
@@ -238,11 +238,11 @@ def test_calculate_SH_geo_pos_embeddings_shape():
     assert emb.shape == (10, 20, 12)
 
 
-def test_calculate_SH_geo_pos_embeddings_finite():
+def test_calculate_sh_geo_pos_embeddings_finite():
     lat = np.linspace(-90, 90, 10)
     lon = np.linspace(0, 360, 20, endpoint=False)
 
-    emb = calculate_SH_geo_pos_embeddings(
+    emb = calculate_sh_geo_pos_embeddings(
         lat,
         lon,
         L=5,
@@ -252,12 +252,12 @@ def test_calculate_SH_geo_pos_embeddings_finite():
     assert torch.isfinite(emb).all()
 
 
-def test_calculate_SH_geo_pos_embeddings_rank_error():
+def test_calculate_sh_geo_pos_embeddings_rank_error():
     lat = np.linspace(-90, 90, 10)
     lon = np.linspace(0, 360, 20, endpoint=False)
 
     with pytest.raises(ValueError):
-        calculate_SH_geo_pos_embeddings(
+        calculate_sh_geo_pos_embeddings(
             lat,
             lon,
             L=2,
