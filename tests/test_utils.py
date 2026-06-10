@@ -15,4 +15,5 @@ def test_setup_logging(tmp_path):
 
     # Load the events file with SummaryReader
     reader = SummaryReader(tmp_path)
-    assert reader.text["value"].iloc[0] == log_text
+    assert reader.text["value"].iloc[0] == log_text  # check text
+    assert reader.scalars["value"].iloc[0] == 42  # check scalar
