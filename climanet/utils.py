@@ -4,6 +4,7 @@ from typing import Tuple
 import numpy as np
 import xarray as xr
 import torch
+import time
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -222,7 +223,8 @@ def set_seed(seed: int = 42):
 def setup_logging(log_dir: str) -> SummaryWriter:
     """Set up TensorBoard logging directory and writer."""
     Path(log_dir).mkdir(parents=True, exist_ok=True)
-    return SummaryWriter(log_dir)
+    timestamp_utc = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
+    return SummaryWriter(log_dir, filename_suffix=f'_UTC{timestamp_utc}')
 
 
 def compute_masked_loss(
