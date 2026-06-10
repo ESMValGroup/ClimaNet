@@ -288,7 +288,10 @@ def configure_compute_resources(
     return model
 
 
-def plot_results(target, predictions, label="SST K", title=("Target", "Prediction"), error=False):
+def plot_results(
+        target, predictions, label="SST K", title=("Target", "Prediction"), error=False
+    ):
+
     fig, axs = plt.subplots(
         nrows=len(target.time),
         ncols=2,
@@ -342,5 +345,40 @@ def plot_results(target, predictions, label="SST K", title=("Target", "Predictio
         )
 
         cbar.set_label(label)
+
+    plt.show()
+
+
+def plot_histograms(target, predictions, label="SST K", title=("Target", "Prediction")):
+    fig, axs = plt.subplots(
+        nrows=len(target.time),
+        ncols=2,
+        figsize=(12, 4 * len(target.time)),
+        constrained_layout=True
+    )
+
+    # Handle single timestep case
+    if len(target.time) == 1:
+        axs = axs.reshape(1, -1)
+
+    for t in range(len(target.time)):
+        target_t = target.isel(time=t)
+        pred_t = predictions.isel(time=t)
+
+        title_1, title_2 = title
+
+        # Target histogram
+        axs[t, 0].hist(target_t.values.flatten(), bins=30, alpha=0.7, color='blue', density=True)
+        axs[t, 0].set_title(f"{title_1} Histogram, month={t+1}")
+        axs[t, 0].set_xlabel(label)
+        axs[t, 0].set_ylabel("Frequency")
+        axs[t, 0].grid(True, alpha=0.3)
+
+        # Prediction histogram
+        axs[t, 1].hist(pred_t.values.flatten(), bins=30, alpha=0.7, color='orange', density=True)
+        axs[t, 1].set_title(f"{title_2} Histogram, month={t+1}")
+        axs[t, 1].set_xlabel(label)
+        axs[t, 1].set_ylabel("Frequency")
+        axs[t, 1].grid(True, alpha=0.3)
 
     plt.show()
