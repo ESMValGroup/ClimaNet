@@ -4,8 +4,12 @@ from typing import Tuple
 import numpy as np
 import xarray as xr
 import torch
+import psutil
 
 from torch.utils.tensorboard import SummaryWriter
+
+import matplotlib.pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
 
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
@@ -135,14 +139,15 @@ def add_month_day_dims(
 
     #time_indexed is (M,T) with NaT for padded days
     time_indexed = (
-        time_da.assign_coords(M=(time_dim, dkey.values),
-                              T=(time_dim, time_da.dt.day.values))
+        time_da.assign_coords(
+            M=(time_dim, dkey.values), T=(time_dim, time_da.dt.day.values)
+        )
         .set_index({time_dim: ("M", "T")})
         .unstack(time_dim)
-        .reindex(T=np.arange(1,32), M=month_keys)
+        .reindex(T=np.arange(1, 32), M=month_keys)
     )
 
-    #determine day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
+    # determine day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
     # here we choose to use the tropical year length (365.2422 day, which we round to 365.24) as the
     # period to return to the position of the sun relative to the Earth
     doy_period = 365.24
@@ -155,15 +160,14 @@ def add_month_day_dims(
     else:
         hod = xr.zeros_like(doy)
 
-    #create phase from day and hod
-    doy_phase = 2*np.pi*doy/doy_period
-    hod_phase = 2*np.pi*hod/hod_period
+    # create phase from day and hod
+    doy_phase = 2 * np.pi * doy / doy_period
+    hod_phase = 2 * np.pi * hod / hod_period
 
-
-    #Stack cyclic encodings into time_features (M,T,2)
-    time_features = xr.concat([doy_phase,hod_phase],
-                              dim="feature"
-                              ).transpose("M","T","feature")
+    # Stack cyclic encodings into time_features (M,T,2)
+    time_features = xr.concat([doy_phase, hod_phase], dim="feature").transpose(
+        "M", "T", "feature"
+    )
 
     return daily_indexed, monthly_m, padded_days_mask, time_features
 
@@ -345,3 +349,127 @@ def add_month_hour_dims(
     ).transpose("M", "T", "feature")
 
     return hourly_indexed, monthly_m, padded_hours_mask, time_features
+
+
+def configure_compute_resources(
+    model: torch.nn.Module, device: str, compute_threads: int, dataloader_num_workers: int
+) -> torch.nn.Module:
+    """Configure model for multi-GPU and set CPU thread usage for compute (training or prediction).
+
+    Args:
+        model: the PyTorch model to configure
+        device: device to run on ("cpu" or "cuda")
+        compute_threads: number of threads to use for compute when device is CPU.
+            If None, it will be set automatically.
+        dataloader_num_workers: how many subprocesses to use for data loading.
+            See torch DataLoader docs for details.
+    Returns:
+        The model, potentially wrapped in DataParallel if using multiple GPUs.
+    """
+    if device == "cpu":
+        if compute_threads is None:
+            total_cpus = psutil.cpu_count()
+            # keep 1 for main thread
+            compute_threads = max(1, total_cpus - dataloader_num_workers - 1)
+        torch.set_num_threads(compute_threads)
+    elif device == "cuda":
+        num_gpus = torch.cuda.device_count()
+        if num_gpus > 1:
+            model = torch.nn.DataParallel(model)
+    return model
+
+
+def plot_results(
+        target, predictions, label="SST K", title=("Target", "Prediction"), error=False
+    ):
+
+    fig, axs = plt.subplots(
+        nrows=len(target.time),
+        ncols=2,
+        figsize=(10, 8),
+        constrained_layout=True
+    )
+
+    for t in range(len(target.time)):
+
+        # Select data for this timestep
+        target_t = target.isel(time=t)
+        pred_t = predictions.isel(time=t)
+
+        # Shared color scale for this row
+        target_min, target_max = target_t.min().compute(), target_t.max().compute()
+        pred_min, pred_max = pred_t.min().compute(), pred_t.max().compute()
+
+        abs_max = max(abs(target_min), abs(target_max), abs(pred_min), abs(pred_max))
+
+        norm = None
+        cmap = "RdBu"
+        if error:
+            norm = TwoSlopeNorm(vmin=-abs_max, vcenter=0.0, vmax=abs_max)
+            cmap = "RdBu_r"
+
+        # Left: truth
+        im0 = target_t.plot(
+            ax=axs[t, 0],
+            cmap=cmap,
+            norm=norm,
+            add_colorbar=False
+        )
+
+        # Right: prediction
+        im1 = pred_t.plot(
+            ax=axs[t, 1],
+            cmap=cmap,
+            norm=norm,
+            add_colorbar=False
+        )
+        title_1, title_2 = title
+        axs[t, 0].set_title(f"{title_1}, month={t+1}")
+        axs[t, 1].set_title(f"{title_2}, month={t+1}")
+
+        # One shared colorbar for the row
+        cbar = fig.colorbar(
+            im1,
+            ax=axs[t, :],
+            orientation="vertical",
+            shrink=0.9
+        )
+
+        cbar.set_label(label)
+
+    plt.show()
+
+
+def plot_histograms(target, predictions, label="SST K", title=("Target", "Prediction")):
+    fig, axs = plt.subplots(
+        nrows=len(target.time),
+        ncols=2,
+        figsize=(12, 4 * len(target.time)),
+        constrained_layout=True
+    )
+
+    # Handle single timestep case
+    if len(target.time) == 1:
+        axs = axs.reshape(1, -1)
+
+    for t in range(len(target.time)):
+        target_t = target.isel(time=t)
+        pred_t = predictions.isel(time=t)
+
+        title_1, title_2 = title
+
+        # Target histogram
+        axs[t, 0].hist(target_t.values.flatten(), bins=30, alpha=0.7, color='blue', density=True)
+        axs[t, 0].set_title(f"{title_1} Histogram, month={t+1}")
+        axs[t, 0].set_xlabel(label)
+        axs[t, 0].set_ylabel("Frequency")
+        axs[t, 0].grid(True, alpha=0.3)
+
+        # Prediction histogram
+        axs[t, 1].hist(pred_t.values.flatten(), bins=30, alpha=0.7, color='orange', density=True)
+        axs[t, 1].set_title(f"{title_2} Histogram, month={t+1}")
+        axs[t, 1].set_xlabel(label)
+        axs[t, 1].set_ylabel("Frequency")
+        axs[t, 1].grid(True, alpha=0.3)
+
+    plt.show()

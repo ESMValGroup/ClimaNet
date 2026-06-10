@@ -63,6 +63,8 @@ def predict_monthly_var(
     device: str = "cpu",
     run_dir: str = ".",
     verbose: bool = True,
+    dataloader_num_workers: int = 2,
+    predict_threads: int | None = None,
 ):
     """
     Predicts monthly variable values using a trained model and a provided dataset.
@@ -79,6 +81,8 @@ def predict_monthly_var(
         device: The device to run the predictions on (e.g., 'cpu' or 'cuda').
         run_dir: Directory to save log files and predictions.
         verbose: If True, prints progress information during prediction.
+        dataloader_num_workers: how many subprocesses to use for data loading.
+            See torch DataLoader docs for details.
     Returns:
         A NumPy array, PyTorch tensor, or xarray Dataset containing the predicted values.
         If return_loss is True, it also returns the average loss over the dataset.
@@ -92,7 +96,12 @@ def predict_monthly_var(
 
     use_cuda = device == "cuda"
     dataloader = DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, pin_memory=use_cuda
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        pin_memory=use_cuda,
+        num_workers=dataloader_num_workers,# for data loading
+        persistent_workers=True,  # keep workers alive between epochs
     )
 
     # Initialize an empty list to store predictions
@@ -113,14 +122,18 @@ def predict_monthly_var(
             predictions = model(
                 batch["daily_patch"].to(device, non_blocking=use_cuda),
                 batch["daily_mask_patch"].to(device, non_blocking=use_cuda),
-                batch["daily_timef_patch"].to(device,non_blocking=use_cuda),
+                batch["daily_timef_patch"].to(device, non_blocking=use_cuda),
                 batch["land_mask_patch"].to(device, non_blocking=use_cuda),
+                batch["geo_pos_embedding_patch"].to(device, non_blocking=use_cuda),
+                batch["scale_feature_patch"].to(device, non_blocking=use_cuda),
                 batch["padded_days_mask"].to(device, non_blocking=use_cuda),
             )
 
             # Compute masked loss
             loss = compute_masked_loss(
-                predictions, batch["monthly_patch"], batch["land_mask_patch"]
+                predictions,
+                batch["monthly_patch"].to(device, non_blocking=use_cuda),
+                batch["land_mask_patch"].to(device, non_blocking=use_cuda),
             )
             average_loss += loss.item()
 
