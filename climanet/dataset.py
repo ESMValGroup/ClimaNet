@@ -1,7 +1,7 @@
 import warnings
 
 import numpy as np
-from .utils import add_month_day_dims, calc_stats
+from .utils import add_month_day_dims, calc_stats, add_month_hour_dims
 import xarray as xr
 import torch
 from torch.utils.data import Dataset
@@ -20,7 +20,21 @@ class STDataset(Dataset):
         spatial_dims: Tuple[str, str] = ("lat", "lon"),
         patch_size: Tuple[int, int] = (16, 16),  # (lat, lon)
         stride: Tuple[int, int] = None,
+        is_hourly: bool = False,
     ):
+        """Initialize the dataset with daily and monthly data, and optional land mask.
+
+        Args:
+            daily_da: xarray DataArray with daily data (M, time, H, W)
+            monthly_da: xarray DataArray with monthly data (M, H, W)
+            land_mask: Optional xarray DataArray with land mask (H, W) or (1, H, W)
+            time_dim: Name of the time dimension in the input data
+            spatial_dims: Tuple of (lat_dim, lon_dim) names in the input data
+            patch_size: Tuple of (patch_height, patch_width) in pixels
+            stride: Tuple of (stride_height, stride_width) in pixels. If None, defaults to patch_size (non-overlapping patches).
+            is_hourly: Whether the daily data is hourly (T=31*24) or daily (T=31).
+
+        """
         self.spatial_dims = spatial_dims
         self.patch_size = patch_size
         self.daily_da = daily_da
@@ -42,11 +56,19 @@ class STDataset(Dataset):
                 f"Patch size {patch_size} is larger than data dimensions {daily_da.sizes[spatial_dims]}"
             )
 
-        # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
-        # and get padded_days_mask → (M, T=31)
-        daily_mt, monthly_m, padded_days_mask, daily_timef = add_month_day_dims(
-            daily_da, monthly_da, time_dim=time_dim
-        )
+        if is_hourly:
+            # hours_per_day == 24
+            # Reshape daily → (M, T=31*24, H, W), monthly → (M, H, W),
+            # and get padded_days_mask → (M, T=31*24)
+            daily_mt, monthly_m, padded_days_mask, daily_timef = add_month_hour_dims(
+                daily_da, monthly_da, time_dim=time_dim
+            )
+        else:
+            # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
+            # and get padded_days_mask → (M, T=31)
+            daily_mt, monthly_m, padded_days_mask, daily_timef = add_month_day_dims(
+                daily_da, monthly_da, time_dim=time_dim
+            )
 
         # Convert to numpy once — all __getitem__ calls use these
         self.daily_np = daily_mt.to_numpy().copy()  # (M, T=31, H, W) float
