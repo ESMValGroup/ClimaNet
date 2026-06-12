@@ -719,7 +719,7 @@ class SpatioTemporalModel(nn.Module):
             daily_data: Tensor of shape (B, C, M, T, H, W) containing daily
                 data, where C is the number of channels (e.g., 1 for SST)
             daily_mask: Boolean tensor of same shape as daily_data indicating missing values
-            daily_timef: Tensor of shape (B, M, T, 4) containing the cyclically phase encoded day-of-year
+            daily_timef: Tensor of shape (B, M, T, 2) containing the cyclically phase encoded day-of-year
                 and hour-of-day information for the daily data
             land_mask_patch: Boolean tensor of shape (B, H, W) to mask land areas in the output
             padded_days_mask: Optional boolean tensor of shape (B, M, T) indicating which day tokens are padded
@@ -741,21 +741,6 @@ class SpatioTemporalModel(nn.Module):
             "H and W must be divisible by patch size"
         )
         assert T % self.patch_size[0] == 0, "T must be divisible by patch size"
-
-        if self.patch_size[0] > 1:
-            daily_timef = daily_timef.view(B, M, Tp, self.patch_size[0], 4).mean(
-                dim=3
-            )  # -> (B,M, Tp, 4)
-
-        if padded_days_mask is not None and self.patch_size[0] > 1:
-            B, M, T_days = padded_days_mask.shape
-            if T_days % self.patch_size[0] != 0:
-                raise ValueError(
-                    f"T_days={T_days} must be divisible by patch_size[0]={self.patch_size[0]}"
-                )
-            padded_days_mask = padded_days_mask.view(
-                B, M, T_days // self.patch_size[0], self.patch_size[0]
-            ).all(dim=-1)  # (B, M, Tp)
 
         # Step 1: Encode spatio-temporal patches
         # each month independently by folding M into batch
