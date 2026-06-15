@@ -44,8 +44,8 @@ def main():
     run_dir = "./runs"  # Directory to save logs and model checkpoints
 
     # Get list of daily and monthly files, sort by time
-    daily_files = sorted(data_folder.rglob("20*_day_ERA5_masked_ts.nc"))
-    monthly_files = sorted(data_folder.rglob("20*_mon_ERA5_full_ts.nc"))
+    daily_files = sorted(data_folder.rglob("20*day_ERA5dc_masked_tos.nc"))
+    monthly_files = sorted(data_folder.rglob("20*mon_ERA5dc_full_tos.nc"))
 
     # Set seed for reproducibility
     set_seed()
