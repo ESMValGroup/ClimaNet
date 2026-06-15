@@ -1,45 +1,52 @@
 import copy
-from pathlib import Path
 from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 import torch
 
-
-def _setup_logging(log_dir: str) -> SummaryWriter:
-    """Set up TensorBoard logging directory and writer."""
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    return SummaryWriter(log_dir)
+from climanet.predict import predict_monthly_var
+from climanet.utils import setup_logging, compute_masked_loss, save_model
 
 
-def _compute_masked_loss(
-    pred: torch.Tensor, target: torch.Tensor, land_mask: torch.Tensor
-) -> torch.Tensor:
-    """Compute L1 loss masked to ocean pixels only."""
-    ocean = (~land_mask).to(pred.device).unsqueeze(1).float()
-    loss = torch.nn.functional.l1_loss(pred, target, reduction="none") * ocean
+def _run_one_batch(model: torch.nn.Module, batch: dict):
+    pred = model(
+        batch["daily_patch"],
+        batch["daily_mask_patch"],
+        batch["daily_timef_patch"],
+        batch["land_mask_patch"],
+        batch["geo_pos_embedding_patch"],
+        batch["scale_feature_patch"],
+        batch["padded_days_mask"],
+    )  # (B, M, H, W)
 
-    num = loss.sum(dim=(-2, -1))
-    denom = ocean.sum(dim=(-2, -1)).clamp_min(1)
-
-    return (num / denom).mean()
-
-
-def _save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
-    """Save model state and config to disk."""
-    model_path = Path(run_dir) / "best_model.pth"
-    torch.save(
-        {"model_state_dict": model.state_dict(), "model_config": model.config},
-        model_path,
+    # Compute masked loss
+    return compute_masked_loss(
+        pred, batch["monthly_patch"], batch["land_mask_patch"]
     )
-    if verbose:
-        print(f"Model saved to {model_path}")
+
+
+def _compute_stats(dataset: Dataset):
+    # check if dataset has indices attribute for stats calculation
+    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
+    indices = dataset.indices if hasattr(dataset, "indices") else None
+    mean, std = base_dataset.compute_stats(indices)
+    return mean, std
+
+
+def _initialize_decoder(model: torch.nn.Module, dataset: Dataset):
+    mean, std = _compute_stats(dataset)
+    decoder = model.module.decoder if hasattr(model, 'module') else model.decoder
+    with torch.no_grad():
+        decoder.bias.copy_(torch.from_numpy(mean))
+        decoder.scale.copy_(torch.from_numpy(std) + 1e-6)
+
+    return model
 
 
 def train_monthly_model(
     model: torch.nn.Module,
     dataset: Dataset,
+    validation_dataset: Dataset | None = None,
     shuffle: bool = True,
     batch_size: int = 2,
     num_epoch: int = 100,
@@ -47,9 +54,10 @@ def train_monthly_model(
     accumulation_steps: int = 1,
     optimizer_lr: float = 1e-3,
     run_dir: str = ".",
-    save_model: bool = True,
+    store_model: bool = True,
     device: str = "cpu",
     verbose: bool = True,
+    dataloader_num_workers: int = 2,
 ):
     """Train the model to predict monthly data from daily data.
     Args:
@@ -62,31 +70,34 @@ def train_monthly_model(
         accumulation_steps: number of batches to accumulate gradients over before updating weights
         optimizer_lr: learning rate for the optimizer
         run_dir: directory to save logs and model
-        save_model: whether to save the best model to disk
+        store_model: whether to save the best model to disk
         device: device to run training on ("cpu" or "cuda")
         verbose: whether to print training progress
+        dataloader_num_workers: how many subprocesses to use for data loading.
+            See torch DataLoader docs for details.
     """
-
     # Initialize the model
     model = model.to(device)
-    decoder = model.decoder
-    with torch.no_grad():
-        decoder.bias.copy_(torch.from_numpy(dataset.daily_mean))
-        decoder.scale.copy_(torch.from_numpy(dataset.daily_std) + 1e-6)
+    model = _initialize_decoder(model, dataset)
 
     # Create data loader
+    use_cuda = device == "cuda"
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        pin_memory=False,
+        pin_memory=use_cuda,
+        num_workers=dataloader_num_workers, # for data loading
+        persistent_workers=True,  # keep workers alive between epochs
     )
 
     # Set up logging
-    writer = _setup_logging(run_dir)
+    writer = setup_logging(run_dir)
 
     # Set the optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=optimizer_lr, weight_decay=1e-2
+    )
     best_loss = float("inf")
     counter = 0
     best_state_dict = None  # Store best model state
@@ -101,24 +112,13 @@ def train_monthly_model(
     )
 
     model.train()
-    for epoch in range(num_epoch):
+    for epoch in range(num_epoch + 1):
         epoch_loss = 0.0
 
         optimizer.zero_grad()
 
         for i, batch in enumerate(dataloader):
-            # Batch prediction
-            pred = model(
-                batch["daily_patch"],
-                batch["daily_mask_patch"],
-                batch["land_mask_patch"],
-                batch["padded_days_mask"],
-            )  # (B, M, H, W)
-
-            # Compute masked loss
-            loss = _compute_masked_loss(
-                pred, batch["monthly_patch"], batch["land_mask_patch"]
-            )
+            loss = _run_one_batch(model, batch)
 
             # Scale loss for gradient accumulation
             scaled_loss = loss / accumulation_steps
@@ -139,6 +139,30 @@ def train_monthly_model(
 
         # Calculate average epoch loss
         avg_epoch_loss = epoch_loss / (i + 1)
+        writer.add_scalar("Loss/train", avg_epoch_loss, epoch)
+
+        # Validation loss (optional)
+        if validation_dataset is not None:
+            # Store train loss for gap calculation
+            avg_train_loss = avg_epoch_loss
+
+            _, avg_epoch_loss = predict_monthly_var(
+                model,
+                validation_dataset,
+                batch_size=batch_size,
+                device=device,
+                return_numpy=False,
+                save_predictions=False,
+                return_loss=True,
+                verbose=False,
+                run_dir=run_dir,
+                dataloader_num_workers=dataloader_num_workers,
+            )
+            writer.add_scalar("Loss/validation", avg_epoch_loss, epoch)
+
+            if verbose and epoch % 20 == 0:
+                gap = avg_epoch_loss - avg_train_loss
+                print(f"Epoch {epoch}: gap between train and val loss: {gap:.6f}")
 
         # Step scheduler
         scheduler.step(avg_epoch_loss)
@@ -148,7 +172,8 @@ def train_monthly_model(
         writer.add_scalar("Loss/best", best_loss, epoch)
 
         # Early stopping check
-        if avg_epoch_loss < best_loss:
+        # Consider improvement only if loss decreases more than a small threshold
+        if avg_epoch_loss < best_loss - 1e-4:
             best_loss = avg_epoch_loss
             best_state_dict = copy.deepcopy(model.state_dict())
             counter = 0
@@ -174,7 +199,7 @@ def train_monthly_model(
     if verbose:
         print(f"Training complete. Best loss: {best_loss:.6f}")
 
-    if save_model:
-        _save_model(model, run_dir, verbose)
+    if store_model:
+        save_model(model, run_dir, verbose)
 
     return model
