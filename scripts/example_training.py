@@ -39,8 +39,8 @@ def main():
     batch_size = 10  # Number of samples per batch in training
     num_epoch = 501  # Maximum number of epochs to train
     accumulation_steps = 2  # Number of batches to accumulate gradients over
-    sh_embed_dim = (96,)
-    sh_order_L = (10,)
+    sh_embed_dim = 96
+    sh_order_L = 10
     compute_threads = 96
     dataloader_num_workers = 32
     run_dir = "./runs"  # Directory to save logs and model checkpoints
