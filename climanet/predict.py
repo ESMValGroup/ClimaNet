@@ -64,7 +64,6 @@ def predict_monthly_var(
     run_dir: str = ".",
     verbose: bool = True,
     dataloader_num_workers: int = 2,
-    predict_threads: int | None = None,
 ):
     """
     Predicts monthly variable values using a trained model and a provided dataset.
