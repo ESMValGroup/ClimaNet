@@ -25,7 +25,7 @@ def main():
 
     # Training settings
     patch_size_model = (1, 4, 4)  # Size of model encoder (time, lat, lon).
-    num_patches = (60, 60)  # Number of patches in spatial dimensions
+    num_patches = (30, 30)  # Number of patches in spatial dimensions
     spatial_patch_size = (
         patch_size_model[1] * num_patches[0],
         patch_size_model[2] * num_patches[1],
@@ -67,6 +67,10 @@ def main():
         compat="override",
         parallel=False,
     )
+    daily_data = daily_data.chunk(
+        {"time": 1, "lat": spatial_patch_size[0] * 2, "lon": spatial_patch_size[1] * 2}
+    )  # Mannually chunk the dataset after opening
+
     monthly_data = xr.open_mfdataset(
         monthly_files,
         combine="by_coords",
@@ -80,6 +84,10 @@ def main():
         compat="override",
         parallel=False,
     )
+    monthly_data = monthly_data.chunk(
+        {"time": 1, "lat": spatial_patch_size[0] * 2, "lon": spatial_patch_size[1] * 2}
+    )  # Mannually chunk the dataset after opening
+
     lsm_mask = xr.open_dataset(lsm_file)
 
     # create the model
