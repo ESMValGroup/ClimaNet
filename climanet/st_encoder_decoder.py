@@ -9,9 +9,6 @@ import torch.nn as nn
 from einops import rearrange
 
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-
 class VideoEncoder(nn.Module):
     """Video Encoder with spatio-temporal patch embedding.
 
