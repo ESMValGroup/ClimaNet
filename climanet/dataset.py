@@ -50,7 +50,7 @@ class STDataset(Dataset):
             or patch_size[1] > daily_da.sizes[spatial_dims[1]]
         ):
             raise ValueError(
-                f"Patch size {patch_size} is larger than data dimensions {daily_da.sizes[spatial_dims]}"
+                f"Patch size {patch_size} is larger than data dimensions {daily_da.sizes}"
             )
 
         # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
