@@ -17,7 +17,7 @@ from torch.utils.data import random_split
 def main():
     # Data settings
     # Data folder
-    data_folder = Path(" /work/bd0854/b380103/eso4clima/output/concatenated/")
+    data_folder = Path("/work/bd0854/b380103/eso4clima/output/concatenated/")
     # Path to land-sea mask file (need to setup in the experiment directory)
     lsm_file = "/home/b/b383704/eso4clima/data/era5_lsm_bool.nc"
     # Must be divisible by the model patch size
@@ -32,7 +32,7 @@ def main():
     )  # Spatial dimensions of the input data
     stride = (spatial_patch_size[0] // 5, spatial_patch_size[1] // 5)
     overlap = 2  # Overlap between patches (in pixels).
-    num_months = 24  # Number of months to predict (model output channels)
+    num_months = 12  # Number of months to predict (model output channels)
     embed_dim = 64
     dropout = 0.2
     hidden = 64
@@ -41,6 +41,8 @@ def main():
     accumulation_steps = 2  # Number of batches to accumulate gradients over
     sh_embed_dim = (96,)
     sh_order_L = (10,)
+    compute_threads = 96
+    dataloader_num_workers = 32
     run_dir = "./runs"  # Directory to save logs and model checkpoints
 
     # Get list of daily and monthly files, sort by time
@@ -94,8 +96,8 @@ def main():
     # Make a dataset
     print("Creating the dataset...")
     dataset = STDataset(
-        daily_da=daily_data["ts"],
-        monthly_da=monthly_data["ts"],
+        daily_da=daily_data["tos"],
+        monthly_da=monthly_data["tos"],
         land_mask=lsm_mask["lsm"],
         patch_size=spatial_patch_size,  # based on the patch_size in model
         stride=stride,
@@ -118,7 +120,10 @@ def main():
 
     # Device and resources
     model = configure_compute_resources(
-        model, device="cpu", compute_threads=96, dataloader_num_workers=32
+        model,
+        device="cpu",
+        compute_threads=compute_threads,
+        dataloader_num_workers=dataloader_num_workers,
     )
 
     # Train the model
@@ -132,6 +137,7 @@ def main():
         num_epoch=num_epoch,
         accumulation_steps=accumulation_steps,
         run_dir=run_dir,
+        dataloader_num_workers=dataloader_num_workers,
     )
 
 
