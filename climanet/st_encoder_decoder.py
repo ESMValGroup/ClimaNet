@@ -232,16 +232,13 @@ class TemporalAttentionAggregator(nn.Module):
     months.
     """
 
-    def __init__(self, embed_dim=128, max_days=31, max_months=12, dropout=0.0):
+    def __init__(self, embed_dim=128, max_months=12, dropout=0.0):
         """Initialize the temporal attention aggregator.
 
         Args:
             embed_dim: Dimension of the embedding. The default is 128.
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
-            max_days: Maximum length of the temporal dimension to precompute
-            encodings for. Default is 31, which is sufficient for a month of
-            daily data.
             max_months: Maximum number of months (temporal patches) to precompute
             encodings for. Default is 12, which is sufficient for a year of monthly data.
             dropout: Dropout rate for regularization in the day scorer and
@@ -631,7 +628,6 @@ class SpatioTemporalModel(nn.Module):
         in_chans=1,
         embed_dim=128,
         patch_size=(1, 4, 4),
-        max_days=31,
         max_months=12,
         num_months=12,
         hidden=256,
@@ -648,7 +644,6 @@ class SpatioTemporalModel(nn.Module):
             in_chans: Number of input channels (e.g., 1 for SST, additional channels possible)
             embed_dim: Dimension of the patch embedding
             patch_size: Tuple of (T, H, W) patch sizes for temporal and spatial patching
-            max_days: Maximum number of days for temporal positional encoding
             max_months: Maximum number of months for temporal positional encoding
             num_months: Number of months to predict (output channels in decoder)
             hidden: Hidden dimension used in the decoder
@@ -676,7 +671,6 @@ class SpatioTemporalModel(nn.Module):
         )
         self.temporal = TemporalAttentionAggregator(
             embed_dim=embed_dim,
-            max_days=max_days,
             max_months=max_months,
             dropout=dropout,
         )
