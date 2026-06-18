@@ -333,8 +333,8 @@ def plot_results(
             add_colorbar=False
         )
         title_1, title_2 = title
-        axs[t, 0].set_title(f"{title_1}, month={t+1}")
-        axs[t, 1].set_title(f"{title_2}, month={t+1}")
+        axs[t, 0].set_title(f"{title_1}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}")
+        axs[t, 1].set_title(f"{title_2}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}")
 
         # One shared colorbar for the row
         cbar = fig.colorbar(
@@ -369,14 +369,14 @@ def plot_histograms(target, predictions, label="SST K", title=("Target", "Predic
 
         # Target histogram
         axs[t, 0].hist(target_t.values.flatten(), bins=30, alpha=0.7, color='blue', density=True)
-        axs[t, 0].set_title(f"{title_1} Histogram, month={t+1}")
+        axs[t, 0].set_title(f"{title_1} Histogram, month={target.time.dt.strftime('%Y-%m-%d').values[t]}")
         axs[t, 0].set_xlabel(label)
         axs[t, 0].set_ylabel("Frequency")
         axs[t, 0].grid(True, alpha=0.3)
 
         # Prediction histogram
         axs[t, 1].hist(pred_t.values.flatten(), bins=30, alpha=0.7, color='orange', density=True)
-        axs[t, 1].set_title(f"{title_2} Histogram, month={t+1}")
+        axs[t, 1].set_title(f"{title_2} Histogram, month={target.time.dt.strftime('%Y-%m-%d').values[t]}")
         axs[t, 1].set_xlabel(label)
         axs[t, 1].set_ylabel("Frequency")
         axs[t, 1].grid(True, alpha=0.3)
