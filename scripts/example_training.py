@@ -32,12 +32,12 @@ def main():
     )  # Spatial dimensions of the input data
     stride = (spatial_patch_size[0] // 5, spatial_patch_size[1] // 5)
     overlap = 2  # Overlap between patches (in pixels).
-    num_months = 12  # Number of months to predict (model output channels)
-    embed_dim = 64
+    num_months = 2  # Number of months to predict (model output channels)
+    embed_dim = 128
     dropout = 0.2
-    hidden = 64
-    batch_size = 10  # Number of samples per batch in training
-    num_epoch = 501  # Maximum number of epochs to train
+    hidden = 128
+    batch_size = 50  # Number of samples per batch in training
+    num_epoch = 100  # Maximum number of epochs to train
     accumulation_steps = 2  # Number of batches to accumulate gradients over
     sh_embed_dim = 96
     sh_order_L = 10
