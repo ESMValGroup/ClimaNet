@@ -112,7 +112,7 @@ def train_monthly_model(
     )
 
     model.train()
-    for epoch in range(num_epoch + 1):
+    for epoch in range(num_epoch):
         epoch_loss = 0.0
 
         optimizer.zero_grad()

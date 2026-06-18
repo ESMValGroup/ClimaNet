@@ -6,7 +6,6 @@ The main model class is SpatioTemporalModel.
 import math
 import torch
 import torch.nn as nn
-from einops import rearrange
 
 
 class VideoEncoder(nn.Module):
@@ -66,11 +65,16 @@ class VideoEncoder(nn.Module):
             as an additional input channel
         """
         # x: (B,1,T,H,W), mask: (B,1,T,H,W) where True means missing
-        valid = (~mask).float()
+        valid = mask.logical_not().to(x.dtype)
         x = x * valid  # zero-out missing values
         x = torch.cat([x, valid], dim=1)  # add validity as a channel
+
         x = self.proj(x)  # (B, C, T', H', W')
-        x = rearrange(x, "b c t h w -> b (t h w) c")
+
+        B, C, Tp, Hp, Wp = x.shape
+        x = x.contiguous()
+        x = x.permute(0, 2, 3, 4, 1).reshape(B, Tp * Hp * Wp, C)
+
         x = self.norm(x)
         x = self.drop(x)
         return x  # (B, N_patches, embed_dim)
@@ -276,6 +280,10 @@ class TemporalAttentionAggregator(nn.Module):
             nn.Dropout(dropout),
         )
 
+        # Pre-compute and register as buffer — auto-moves with .to(device/dtype)
+        pe = self.pos_months(max_months)  # (max_months, C)
+        self.register_buffer("pe_months_cache", pe)  # tracks device/dtype automatically
+
     def forward(self, x, M, T, H, W, time_features, padded_days_mask=None):
         """
         Args:
@@ -292,41 +300,35 @@ class TemporalAttentionAggregator(nn.Module):
             Tensor of shape (B, M, H*W, C) with one temporally aggregated, where C is the embedding dimension.
         """
         B, M, Tp, Hp, Wp, C = x.shape
+        HW = Hp * Wp
 
         # Reshape to (B, Hp*Wp, M, Tp, C) for temporal processing
-        seq = x.permute(0, 3, 4, 1, 2, 5).reshape(B, Hp * Wp, M, Tp, C)
+        seq = x.permute(0, 3, 4, 1, 2, 5).reshape(B, HW, M, Tp, C)
 
-        temp_emb = self.time_embed(time_features)  # (B,M,T,emd_dim)
-        # expand spatially
-        temp_emb = temp_emb[:, None, :, :, :]  # [B, 1, M, T, C]
-        temp_emb = temp_emb.expand(-1, H * W, -1, -1, -1)
-        pe_months = self.pos_months(M).to(seq.device).to(seq.dtype)  # (M, C)
+        temp_emb = self.time_embed(time_features)
 
-        seq = seq + temp_emb  # add temporal embeddings
-        seq = seq + pe_months[None, None, :, None, :]  # add month PE
+        pe_months = self.pe_months_cache[:M]
+        token_emb = temp_emb + pe_months[None, :, None, :]  # (B, M, T, C)
 
-        # Day attention per month
-        day_logits = self.day_scorer(seq).squeeze(-1)  # (B, HW, M, T)
+        day_logits = self.day_scorer(token_emb).squeeze(-1)  # (B, M, T)
 
-        # padded_days_mask is (B, M, T) true=padded, -> (B, HW, M, T)
         if padded_days_mask is not None:
-            pad = padded_days_mask[:, None, :, :].expand(B, H * W, M, T)
-            day_logits = day_logits.masked_fill(pad, float("-inf"))
+            day_logits = day_logits.masked_fill(padded_days_mask, float("-inf"))
+        day_w = torch.softmax(day_logits, dim=-1)            # (B, M, T)
 
-        day_w = torch.softmax(day_logits, dim=-1)  # turns inf to 0
-        month_tokens = (seq * day_w.unsqueeze(-1)).sum(dim=3)  # (B, HW, M, C)
+        month_tokens = torch.einsum("bmt,bhmtc->bhmc", day_w, seq)  # (B, HW, M, C)
 
-        # Cross-month attention at each spatial location
-        z = rearrange(month_tokens, "b s m c -> (b s) m c")
+        month_emb = torch.einsum("bmt,bmtc->bmc", day_w, token_emb)  # (B, M, C)
+        month_tokens = month_tokens + month_emb[:, None, :, :]
+
+        z = month_tokens.reshape(B * HW, M, C)
         z_ln = self.month_ln(z)
         attn_out, _ = self.month_attn(z_ln, z_ln, z_ln, need_weights=False)
         z = z + attn_out
         z = z + self.month_ffn(z)
+        out = z.view(B, HW, M, C).permute(0, 2, 1, 3)
 
-        # Back to (B, M, Hp*Wp, C)
-        z = z.view(B, Hp * Wp, M, C)
-        out = z.permute(0, 2, 1, 3)  # (B, M, Hp*Wp, C)
-        return out  # (B, M, H*W, C)  C: embedding dimension
+        return out # (B, M, H*W, C)  C: embedding dimension
 
 
 class MonthlyConvDecoder(nn.Module):
@@ -769,6 +771,7 @@ class SpatioTemporalModel(nn.Module):
         # Step 4: Spatial mixing with Transformer
         # spatial transformer input shape = (B, N, C), output shape = (B, N, C) C: embedding dimension
         # M is folded in B.
+
         C = x.shape[-1]
         x = x.reshape(B * M, Hp * Wp, C)
         x = self.spatial_tr(x)
