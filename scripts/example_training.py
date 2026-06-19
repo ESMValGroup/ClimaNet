@@ -91,9 +91,9 @@ def main():
     lsm_mask = xr.open_dataset(lsm_file)
 
     # Use Monthly residuals as target
-    daily_subset_averaged = daily_data.resample(time="MS").mean(skipna=True)
-    daily_subset_averaged["time"] = monthly_data["time"]
-    monthly_subset_res = monthly_data - daily_subset_averaged
+    daily_data_averaged = daily_data.resample(time="MS").mean(skipna=True)
+    daily_data_averaged["time"] = monthly_data["time"]
+    monthly_data_res = monthly_data - daily_data_averaged
 
     # create the model
     print("Creating the model...")
@@ -110,7 +110,7 @@ def main():
     print("Creating the dataset...")
     dataset = STDataset(
         daily_da=daily_data["tos"],
-        monthly_da=monthly_subset_res["tos"],
+        monthly_da=monthly_data_res["tos"],
         land_mask=lsm_mask["lsm"],
         patch_size=spatial_patch_size,  # based on the patch_size in model
         stride=stride,
