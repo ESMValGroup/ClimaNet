@@ -137,7 +137,7 @@ def add_month_day_dims(
     # Build aligned datetime array (M,T)
     time_da = daily_ts[time_dim]
 
-    #time_indexed is (M,T) with NaT for padded days
+    # time_indexed is (M,T) with NaT for padded days
     time_indexed = (
         time_da.assign_coords(
             M=(time_dim, dkey.values), T=(time_dim, time_da.dt.day.values)
@@ -261,7 +261,10 @@ def save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
 
 
 def configure_compute_resources(
-    model: torch.nn.Module, device: str, compute_threads: int, dataloader_num_workers: int
+    model: torch.nn.Module,
+    device: str,
+    compute_threads: int,
+    dataloader_num_workers: int,
 ) -> torch.nn.Module:
     """Configure model for multi-GPU and set CPU thread usage for compute (training or prediction).
 
@@ -289,18 +292,13 @@ def configure_compute_resources(
 
 
 def plot_results(
-        target, predictions, label="SST K", title=("Target", "Prediction"), error=False
-    ):
-
+    target, predictions, label="SST K", title=("Target", "Prediction"), error=False
+):
     fig, axs = plt.subplots(
-        nrows=len(target.time),
-        ncols=2,
-        figsize=(10, 8),
-        constrained_layout=True
+        nrows=len(target.time), ncols=2, figsize=(10, 8), constrained_layout=True
     )
 
     for t in range(len(target.time)):
-
         # Select data for this timestep
         target_t = target.isel(time=t)
         pred_t = predictions.isel(time=t)
@@ -312,37 +310,26 @@ def plot_results(
         abs_max = max(abs(target_min), abs(target_max), abs(pred_min), abs(pred_max))
 
         norm = None
-        cmap = "RdBu"
+        cmap = "RdBu_r"
         if error:
             norm = TwoSlopeNorm(vmin=-abs_max, vcenter=0.0, vmax=abs_max)
             cmap = "RdBu_r"
 
         # Left: truth
-        im0 = target_t.plot(
-            ax=axs[t, 0],
-            cmap=cmap,
-            norm=norm,
-            add_colorbar=False
-        )
+        _ = target_t.plot(ax=axs[t, 0], cmap=cmap, norm=norm, add_colorbar=False)
 
         # Right: prediction
-        im1 = pred_t.plot(
-            ax=axs[t, 1],
-            cmap=cmap,
-            norm=norm,
-            add_colorbar=False
-        )
+        im1 = pred_t.plot(ax=axs[t, 1], cmap=cmap, norm=norm, add_colorbar=False)
         title_1, title_2 = title
-        axs[t, 0].set_title(f"{title_1}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}")
-        axs[t, 1].set_title(f"{title_2}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}")
+        axs[t, 0].set_title(
+            f"{title_1}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
+        )
+        axs[t, 1].set_title(
+            f"{title_2}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
+        )
 
         # One shared colorbar for the row
-        cbar = fig.colorbar(
-            im1,
-            ax=axs[t, :],
-            orientation="vertical",
-            shrink=0.9
-        )
+        cbar = fig.colorbar(im1, ax=axs[t, :], orientation="vertical", shrink=0.9)
 
         cbar.set_label(label)
 
@@ -354,7 +341,7 @@ def plot_histograms(target, predictions, label="SST K", title=("Target", "Predic
         nrows=len(target.time),
         ncols=2,
         figsize=(12, 4 * len(target.time)),
-        constrained_layout=True
+        constrained_layout=True,
     )
 
     # Handle single timestep case
@@ -368,15 +355,23 @@ def plot_histograms(target, predictions, label="SST K", title=("Target", "Predic
         title_1, title_2 = title
 
         # Target histogram
-        axs[t, 0].hist(target_t.values.flatten(), bins=30, alpha=0.7, color='blue', density=True)
-        axs[t, 0].set_title(f"{title_1} Histogram, month={target.time.dt.strftime('%Y-%m-%d').values[t]}")
+        axs[t, 0].hist(
+            target_t.values.flatten(), bins=30, alpha=0.7, color="blue", density=True
+        )
+        axs[t, 0].set_title(
+            f"{title_1} Histogram, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
+        )
         axs[t, 0].set_xlabel(label)
         axs[t, 0].set_ylabel("Frequency")
         axs[t, 0].grid(True, alpha=0.3)
 
         # Prediction histogram
-        axs[t, 1].hist(pred_t.values.flatten(), bins=30, alpha=0.7, color='orange', density=True)
-        axs[t, 1].set_title(f"{title_2} Histogram, month={target.time.dt.strftime('%Y-%m-%d').values[t]}")
+        axs[t, 1].hist(
+            pred_t.values.flatten(), bins=30, alpha=0.7, color="orange", density=True
+        )
+        axs[t, 1].set_title(
+            f"{title_2} Histogram, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
+        )
         axs[t, 1].set_xlabel(label)
         axs[t, 1].set_ylabel("Frequency")
         axs[t, 1].grid(True, alpha=0.3)
