@@ -369,7 +369,7 @@ def plot_histograms(
         )
         axs[t].legend(legend_labels)
         axs[t].set_title(
-            f"Histogram {legend_labels[0]} vs {legend_labels[1]}, month={t + 1}"
+            f"Histogram {legend_labels[0]} vs {legend_labels[1]}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
         )
 
     plt.show()
