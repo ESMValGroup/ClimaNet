@@ -67,8 +67,8 @@ class VideoEncoder(nn.Module):
         x = self.proj(x)  # (B, C, T', H', W')
 
         B, C, Tp, Hp, Wp = x.shape
-        x = x.contiguous()
-        x = x.permute(0, 2, 3, 4, 1).reshape(B, Tp * Hp * Wp, C)
+        x = x.reshape(B, C, Tp * Hp * Wp)
+        x = x.transpose(1, 2)  # (B, N, C)
 
         x = self.norm(x)
         return x  # (B, N_patches, embed_dim)
@@ -431,7 +431,7 @@ class MonthlyConvDecoder(nn.Module):
 
         # transforms the latent tensor from sequence format to image format for
         # convolution operations;
-        out = latent.view(B, M, Hp, Wp, C).permute(0, 1, 4, 2, 3).contiguous()
+        out = latent.view(B, M, Hp, Wp, C).permute(0, 1, 4, 2, 3)
         out = out.view(B * M, C, Hp, Wp)
 
         # Apply 1x1 convolution to mix features
