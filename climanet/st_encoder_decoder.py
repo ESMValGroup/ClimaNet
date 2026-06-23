@@ -23,7 +23,7 @@ class VideoEncoder(nn.Module):
     https://arxiv.org/abs/2203.12602
     """
 
-    def __init__(self, in_chans=1, embed_dim=128, patch_size=(1, 4, 4), dropout=0.0):
+    def __init__(self, in_chans=1, embed_dim=128, patch_size=(1, 4, 4)):
         """
         Args:
             in_chans: Number of input channels (1 for SST)
@@ -31,8 +31,6 @@ class VideoEncoder(nn.Module):
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
             patch_size: Tuple of (T, H, W) patch size. Default is (1, 4, 4).
-            dropout: Dropout rate for regularization. Default is 0.0.
-                Increase it if there is overfitting.
         """
         super().__init__()
         self.patch_size = patch_size
@@ -45,9 +43,6 @@ class VideoEncoder(nn.Module):
 
         # norm is LayerNorm over the embedding dimension to normalize patch embeddings
         self.norm = nn.LayerNorm(embed_dim)
-
-        # dropout for regularization
-        self.drop = nn.Dropout(dropout)
 
     def forward(self, x, mask):
         """Forward pass with masking support via an additional validity channel.
@@ -76,7 +71,6 @@ class VideoEncoder(nn.Module):
         x = x.permute(0, 2, 3, 4, 1).reshape(B, Tp * Hp * Wp, C)
 
         x = self.norm(x)
-        x = self.drop(x)
         return x  # (B, N_patches, embed_dim)
 
 
@@ -277,7 +271,6 @@ class TemporalAttentionAggregator(nn.Module):
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(4 * embed_dim, embed_dim),
-            nn.Dropout(dropout),
         )
 
         # Pre-compute and register as buffer — auto-moves with .to(device/dtype)
@@ -410,7 +403,6 @@ class MonthlyConvDecoder(nn.Module):
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.GroupNorm(num_groups=8, num_channels=out_channels),
             nn.GELU(),
-            nn.Dropout2d(dropout),
         )
 
         # Final conv head to map to single-channel output
@@ -490,7 +482,6 @@ class GeoPositionScaleEmbedding(nn.Module):
         sh_dim=96,
         scale_dim=10,
         embed_dim=128,
-        dropout=0.0,
     ):
         """
         initialize geo-position and scale embeddings and projection
@@ -499,7 +490,6 @@ class GeoPositionScaleEmbedding(nn.Module):
             sh_dim: int, Dimension of pca of spherical harmonics for embedding. defaults to 96
             scale_dim: int, Dimension of patch scale feature embedding. default 10
             embed_dim: int, Dimension of embeddings to be created. default 128
-            dropout: float, Dropout rate for regularization of projection network. default 0.0
         """
 
         super().__init__()
@@ -518,7 +508,6 @@ class GeoPositionScaleEmbedding(nn.Module):
             nn.LayerNorm(in_dim),
             nn.Linear(in_dim, hidden_dim),
             nn.GELU(),
-            nn.Dropout(dropout),
             nn.Linear(hidden_dim, embed_dim),
         )
 
@@ -666,7 +655,6 @@ class SpatioTemporalModel(nn.Module):
             in_chans=in_chans,
             embed_dim=embed_dim,
             patch_size=patch_size,
-            dropout=dropout,
         )
         self.temporal = TemporalAttentionAggregator(
             embed_dim=embed_dim,
@@ -677,7 +665,6 @@ class SpatioTemporalModel(nn.Module):
             sh_dim=sh_dim,
             scale_dim=scale_dim,
             embed_dim=embed_dim,
-            dropout=dropout,
         )
         self.spatial_tr = SpatialTransformer(
             embed_dim=embed_dim,
