@@ -262,7 +262,7 @@ class STDataset(Dataset):
         scale_feature_tensor = self.patch_scale_features[idx]  # (10,)
 
         # Convert to tensors
-        return {
+        return  {
             "daily_patch": daily_tensor,  # (C=1, M, T=31, pH, pW)
             "monthly_patch": monthly_tensor,  # (M, pH, pW)
             "daily_mask_patch": daily_mask_tensor,  # (C=1, M, T=31, pH, pW)
@@ -274,7 +274,7 @@ class STDataset(Dataset):
             "sh_embed_dim": self.sh_embed_dim_t,
             "harmonic_order": self.harmonic_order_t,
             "scale_f_dim": self.scale_f_dim,
-            "coords": (i, j),
+            "coords": torch.tensor([i, j]),
             "lat_patch": lat_patch,  # (pH,)
             "lon_patch": lon_patch,  # (pW,)
         }
