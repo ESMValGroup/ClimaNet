@@ -451,7 +451,7 @@ def plot_histograms(
             target_t.values.flatten(), bins=bins, alpha=0.7, color="blue", density=True
         )
         axs[t].set_xlabel(label)
-        axs[t].set_ylabel("Frequency")
+        axs[t].set_ylabel("Probability Density")
         axs[t].grid(True, alpha=0.3)
 
         # Prediction histogram (overlaid)
