@@ -296,10 +296,11 @@ class TemporalAttentionAggregator(nn.Module):
         HW = Hp * Wp
 
         # Reshape to (B, Hp*Wp, M, Tp, C) for temporal processing
-        seq = x.permute(0, 3, 4, 1, 2, 5).reshape(B, HW, M, Tp, C)
+        x = x.reshape(B, Hp, Wp, M, Tp, C)
+        x = x.permute(0, 3, 4, 1, 2, 5).contiguous()  # (B, M, Tp, Hp, Wp, C)
+        seq = x.reshape(B, M, Tp, HW, C).permute(0, 3, 1, 2, 4)
 
         temp_emb = self.time_embed(time_features)
-
         pe_months = self.pe_months_cache[:M]
         token_emb = temp_emb + pe_months[None, :, None, :]  # (B, M, T, C)
 
@@ -307,19 +308,24 @@ class TemporalAttentionAggregator(nn.Module):
 
         if padded_days_mask is not None:
             day_logits = day_logits.masked_fill(padded_days_mask, float("-inf"))
+
         day_w = torch.softmax(day_logits, dim=-1)            # (B, M, T)
+        day_w = day_w.unsqueeze(1).unsqueeze(-1)
 
-        month_tokens = torch.einsum("bmt,bhmtc->bhmc", day_w, seq)  # (B, HW, M, C)
+        month_tokens = (seq * day_w).sum(dim=3)
+        month_emb = (token_emb * day_w.squeeze(1)).sum(dim=2)
 
-        month_emb = torch.einsum("bmt,bmtc->bmc", day_w, token_emb)  # (B, M, C)
         month_tokens = month_tokens + month_emb[:, None, :, :]
 
         z = month_tokens.reshape(B * HW, M, C)
-        z_ln = self.month_ln(z)
-        attn_out, _ = self.month_attn(z_ln, z_ln, z_ln, need_weights=False)
+        z= self.month_ln(z)
+        attn_out, _ = self.month_attn(z, z, z, need_weights=False)
+
         z = z + attn_out
         z = z + self.month_ffn(z)
-        out = z.view(B, HW, M, C).permute(0, 2, 1, 3)
+
+        z = z.reshape(B, HW, M, C)
+        out = z.permute(0, 2, 1, 3).contiguous()
 
         return out # (B, M, H*W, C)  C: embedding dimension
 
