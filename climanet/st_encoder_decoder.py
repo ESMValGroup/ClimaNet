@@ -64,6 +64,7 @@ class VideoEncoder(nn.Module):
         x = x * valid  # zero-out missing values
         x = torch.cat([x, valid], dim=1)  # add validity as a channel
 
+        x = x.contiguous()
         x = self.proj(x)  # (B, C, T', H', W')
 
         B, C, Tp, Hp, Wp = x.shape
