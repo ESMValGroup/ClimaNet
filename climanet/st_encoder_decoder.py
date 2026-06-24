@@ -431,8 +431,9 @@ class MonthlyConvDecoder(nn.Module):
 
         # transforms the latent tensor from sequence format to image format for
         # convolution operations;
-        out = latent.view(B, M, Hp, Wp, C).permute(0, 1, 4, 2, 3)
-        out = out.view(B * M, C, Hp, Wp)
+        out = latent.reshape(B, M, Hp, Wp, C)
+        out = out.permute(0, 1, 4, 2, 3).contiguous()
+        out = out.reshape(B * M, C, Hp, Wp)
 
         # Apply 1x1 convolution to mix features
         out = self.proj(out)  # (B*M, hidden, Hp, Wp)
