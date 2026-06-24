@@ -6,6 +6,7 @@ The main model class is SpatioTemporalModel.
 import math
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint
 
 
 class VideoEncoder(nn.Module):
@@ -322,8 +323,7 @@ class TemporalAttentionAggregator(nn.Module):
         z= self.month_ln(z)
         attn_out, _ = self.month_attn(z, z, z, need_weights=False)
 
-        z = z + attn_out
-        z = z + self.month_ffn(z)
+        z = z + attn_out + self.month_ffn(z)
 
         z = z.reshape(B, HW, M, C)
         out = z.permute(0, 2, 1, 3).contiguous()
@@ -539,8 +539,7 @@ class GeoPositionScaleEmbedding(nn.Module):
                 embedding
         """
         sh_geo_pos = self.sh_gain * sh_geo_pos
-        geo_scale_feat = self.scale_norm(geo_scale_feat)
-        geo_scale_feat = self.scale_gain * geo_scale_feat
+        geo_scale_feat = self.scale_gain * self.scale_norm(geo_scale_feat)
 
         x = torch.cat([sh_geo_pos, geo_scale_feat], dim=-1)
 
@@ -738,8 +737,11 @@ class SpatioTemporalModel(nn.Module):
         daily_data_reshaped = daily_data.reshape(B * M, C, T, H, W)
         daily_mask_reshaped = daily_mask.reshape(B * M, C, T, H, W)
 
-        latent = self.encoder(
-            daily_data_reshaped, daily_mask_reshaped
+        latent = checkpoint(
+            self.encoder,
+            daily_data_reshaped,
+            daily_mask_reshaped,
+            use_reentrant=False,
         )  # (B*M, N_patches, embed_dim)
 
         # Step 2: Aggregate temporal information for each spatial patch
@@ -748,19 +750,20 @@ class SpatioTemporalModel(nn.Module):
         embed_dim = latent.shape[-1]
         latent = latent.view(B, M, Tp, Hp, Wp, embed_dim)
 
-        agg_latent = self.temporal(
-            latent, M, Tp, Hp, Wp, daily_timef, padded_days_mask=padded_days_mask
+        agg_latent = checkpoint(
+            self.temporal, latent, M, Tp, Hp, Wp, daily_timef, padded_days_mask, use_reentrant=False
         )  # (B, M, Hp*Wp, embed_dim)
 
         # Step 3: Add geo position and scale encodings
-        geo_emb = self.geo_embedding(
+        geo_emb = checkpoint(
+            self.geo_embedding,
             geo_pos_embedding_patch,
             scale_feature_patch,
-        )  # (B, embed_dim)
+            use_reentrant=False,
+        )[:, None, None, :]  # (B,1,1,E)
 
         # Broadcasting: same geo embedding for all M months at each Hp*Wp location
         # we use weighted mean patch embedding, see `geo_embedding_utils.py`
-        geo_emb = geo_emb[:, None, None, :]  # (B,1,1,E)
         x = agg_latent + geo_emb  # (B, M, Hp*Wp, E)
 
         # Step 4: Spatial mixing with Transformer
@@ -775,5 +778,5 @@ class SpatioTemporalModel(nn.Module):
         # Step 5: Decode to full-resolution 2D map
         # decoder input shape is (B, M*Hp*Wp, C), C: embedding dimension
         # decoder output shape is (B, M, H, W)
-        monthly_pred = self.decoder(x, M, H, W, land_mask_patch)  # (B, M, H, W)
+        monthly_pred = checkpoint(self.decoder, x, M, H, W, land_mask_patch, use_reentrant=False)  # (B, M, H, W)
         return monthly_pred
