@@ -118,21 +118,25 @@ def predict_monthly_var(
         average_loss = 0.0
         for i, batch in enumerate(dataloader):
             # Move batch to the appropriate device
+            batch = {
+                k: v.to(device, non_blocking=use_cuda)
+                for k, v in batch.items()
+            }
             predictions = model(
-                batch["daily_patch"].to(device, non_blocking=use_cuda),
-                batch["daily_mask_patch"].to(device, non_blocking=use_cuda),
-                batch["daily_timef_patch"].to(device, non_blocking=use_cuda),
-                batch["land_mask_patch"].to(device, non_blocking=use_cuda),
-                batch["geo_pos_embedding_patch"].to(device, non_blocking=use_cuda),
-                batch["scale_feature_patch"].to(device, non_blocking=use_cuda),
-                batch["padded_days_mask"].to(device, non_blocking=use_cuda),
+                batch["daily_patch"],
+                batch["daily_mask_patch"],
+                batch["daily_timef_patch"],
+                batch["land_mask_patch"],
+                batch["geo_pos_embedding_patch"],
+                batch["scale_feature_patch"],
+                batch["padded_days_mask"],
             )
 
             # Compute masked loss
             loss = compute_masked_loss(
                 predictions,
-                batch["monthly_patch"].to(device, non_blocking=use_cuda),
-                batch["land_mask_patch"].to(device, non_blocking=use_cuda),
+                batch["monthly_patch"],
+                batch["land_mask_patch"],
             )
             average_loss += loss.item()
 
