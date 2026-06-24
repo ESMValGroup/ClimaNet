@@ -60,7 +60,7 @@ class VideoEncoder(nn.Module):
             as an additional input channel
         """
         # x: (B,1,T,H,W), mask: (B,1,T,H,W) where True means missing
-        valid = mask.logical_not().to(x.dtype)
+        valid = mask.logical_not()
         x = x * valid  # zero-out missing values
         x = torch.cat([x, valid], dim=1)  # add validity as a channel
 
