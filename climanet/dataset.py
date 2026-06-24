@@ -29,6 +29,23 @@ class STDataset(Dataset):
         sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
         sh_order_L: int = 10,
     ):
+        """Initialize the dataset with daily and monthly data, land mask, and patching parameters.
+
+        Parameters
+        ----------
+        daily_da : xr.DataArray
+            Daily data array.
+        monthly_da : xr.DataArray
+            Monthly data array.
+        land_mask : xr.DataArray, optional
+            Land mask array, by default None
+        time_dim : str, optional
+            Name of the time dimension, by default "time"
+        spatial_dims : Tuple[str, str], optional
+            Names of the spatial dimensions, by default ("lat", "lon")
+        patch_size : Tuple[int, int], optional
+            Size of the patches, by default (16, 16)
+        """
         self.spatial_dims = spatial_dims
         self.patch_size = patch_size
         self.daily_da = daily_da
