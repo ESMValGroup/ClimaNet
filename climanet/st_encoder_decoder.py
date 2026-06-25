@@ -54,26 +54,25 @@ class VideoEncoder(nn.Module):
 
         Returns:
             Embedded patches of shape (B, N_patches, embed_dim)
-
         Notes:
             - Masked pixels are zeroed out before patch embedding
             - A validity mask (1 = observed, 0 = missing) is concatenated
             as an additional input channel
         """
-        # x: (B,1,T,H,W), mask: (B,1,T,H,W) where True means missing
-        valid = mask.logical_not()
-        x = x * valid  # zero-out missing values
-        x = torch.cat([x, valid], dim=1)  # add validity as a channel
+        valid = (~mask).to(dtype=x.dtype)
 
-        x = x.contiguous()
-        x = self.proj(x)  # (B, C, T', H', W')
+        if valid.shape != x.shape:
+            valid = valid.expand_as(x)
 
-        B, C, Tp, Hp, Wp = x.shape
-        x = x.reshape(B, C, Tp * Hp * Wp)
-        x = x.transpose(1, 2)  # (B, N, C)
+        x = x.masked_fill(mask, 0.0)
+        x = torch.cat((x, valid), dim=1)
+
+        x = x.contiguous(memory_format=torch.channels_last_3d)
+        x = self.proj(x)
+        x = x.flatten(2).transpose(1, 2)
 
         x = self.norm(x)
-        return x  # (B, N_patches, embed_dim)
+        return x
 
 
 class CyclicTimeEmbedding(nn.Module):
@@ -297,38 +296,51 @@ class TemporalAttentionAggregator(nn.Module):
         B, M, Tp, Hp, Wp, C = x.shape
         HW = Hp * Wp
 
-        # Reshape to (B, Hp*Wp, M, Tp, C) for temporal processing
         x = x.reshape(B, Hp, Wp, M, Tp, C)
-        x = x.permute(0, 3, 4, 1, 2, 5).contiguous()  # (B, M, Tp, Hp, Wp, C)
+        x = x.permute(0, 3, 4, 1, 2, 5)
         seq = x.reshape(B, M, Tp, HW, C).permute(0, 3, 1, 2, 4)
 
         temp_emb = self.time_embed(time_features)
         pe_months = self.pe_months_cache[:M]
-        token_emb = temp_emb + pe_months[None, :, None, :]  # (B, M, T, C)
+        token_emb = temp_emb + pe_months[None, :, None, :]
 
-        day_logits = self.day_scorer(token_emb).squeeze(-1)  # (B, M, T)
+        day_logits = self.day_scorer(token_emb).squeeze(-1)
 
         if padded_days_mask is not None:
             day_logits = day_logits.masked_fill(padded_days_mask, float("-inf"))
 
-        day_w = torch.softmax(day_logits, dim=-1)            # (B, M, T)
+        day_w = torch.softmax(day_logits, dim=-1)
         day_w = day_w.unsqueeze(1).unsqueeze(-1)
 
-        month_tokens = (seq * day_w).sum(dim=3)
-        month_emb = (token_emb * day_w.squeeze(1)).sum(dim=2)
+        # avoid implicit expand copies
+        seq = seq.reshape(B, HW, M, Tp, C)
+        token_emb_seq = token_emb.unsqueeze(1)
 
-        month_tokens = month_tokens + month_emb[:, None, :, :]
+        month_tokens = (seq * day_w).sum(dim=3)
+
+        # avoid broadcast materialization
+        month_emb = (token_emb_seq * day_w).sum(dim=3)
+
+        month_tokens = month_tokens + month_emb
 
         z = month_tokens.reshape(B * HW, M, C)
-        z= self.month_ln(z)
-        attn_out, _ = self.month_attn(z, z, z, need_weights=False)
+
+        z = self.month_ln(z)
+
+        attn_out, _ = self.month_attn(
+            z,
+            z,
+            z,
+            need_weights=False,
+            is_causal=False
+        )
 
         z = z + attn_out + self.month_ffn(z)
 
         z = z.reshape(B, HW, M, C)
-        out = z.permute(0, 2, 1, 3).contiguous()
+        out = z.permute(0, 2, 1, 3)
 
-        return out # (B, M, H*W, C)  C: embedding dimension
+        return out
 
 
 class MonthlyConvDecoder(nn.Module):
