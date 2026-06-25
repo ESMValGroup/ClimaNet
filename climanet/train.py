@@ -180,7 +180,7 @@ def train_monthly_model(
         # Consider improvement only if loss decreases more than a small threshold
         if avg_epoch_loss < best_loss - 1e-4:
             best_loss = avg_epoch_loss
-            best_state_dict = {k: v.clone() for k, v in model.state_dict().items()}
+            best_state_dict = {k: v.detach() for k, v in model.state_dict().items()}
             counter = 0
         else:
             counter += 1
