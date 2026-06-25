@@ -108,12 +108,12 @@ def predict_monthly_var(
 
     M = base_dataset.monthly_t.shape[0]
     H, W = base_dataset.patch_size
-    all_predictions = torch.empty(len(dataset), M, H, W)
+    all_predictions = torch.empty(len(dataset), M, H, W, device=device)
 
     # Set up logging
     writer = setup_logging(run_dir)
 
-    with torch.no_grad():
+    with torch.inference_mode():
         idx = 0
         average_loss = 0.0
         for i, batch in enumerate(dataloader):
@@ -122,6 +122,7 @@ def predict_monthly_var(
                 k: v.to(device, non_blocking=use_cuda)
                 for k, v in batch.items()
             }
+
             predictions = model(
                 batch["daily_patch"],
                 batch["daily_mask_patch"],
@@ -138,9 +139,9 @@ def predict_monthly_var(
                 batch["monthly_patch"],
                 batch["land_mask_patch"],
             )
-            average_loss += loss.item()
+            average_loss += loss.detach()
 
-            all_predictions[idx : idx + predictions.size(0)] = predictions.cpu()
+            all_predictions[idx : idx + predictions.size(0)] = predictions.detach()
             idx += predictions.size(0)
 
             if verbose:
@@ -150,7 +151,7 @@ def predict_monthly_var(
 
             writer.add_scalar("Progress/Batch", i + 1, idx)
 
-    average_loss = average_loss / len(dataloader)
+    average_loss = average_loss.item() / len(dataloader)
 
     if verbose:
         print(f"Average loss over all batches: {average_loss:.4f}")

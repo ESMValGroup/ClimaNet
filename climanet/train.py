@@ -123,34 +123,34 @@ def train_monthly_model(
                 k: v.to(device, non_blocking=use_cuda)
                 for k, v in batch.items()
             }
+
             loss = _run_one_batch(model, batch)
 
             # Scale loss for gradient accumulation
-            scaled_loss = loss / accumulation_steps
+            scaled_loss = loss * (1.0 / accumulation_steps)
             scaled_loss.backward()
 
             # Track unscaled loss for logging
-            epoch_loss += loss.item()
+            epoch_loss += loss.detach()
 
             # Update weights every accumulation_steps batches
             if (i + 1) % accumulation_steps == 0:
                 optimizer.step()
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
 
         # Handle remaining gradients if num_batches is not divisible by accumulation_steps
         if (i + 1) % accumulation_steps != 0:
             optimizer.step()
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
 
         # Calculate average epoch loss
-        avg_epoch_loss = epoch_loss / (i + 1)
+        avg_epoch_loss = epoch_loss.item() / (i + 1)
         writer.add_scalar("Loss/train", avg_epoch_loss, epoch)
 
         # Validation loss (optional)
         if validation_dataset is not None:
             # Store train loss for gap calculation
             avg_train_loss = avg_epoch_loss
-
             _, avg_epoch_loss = predict_monthly_var(
                 model,
                 validation_dataset,
@@ -180,7 +180,7 @@ def train_monthly_model(
         # Consider improvement only if loss decreases more than a small threshold
         if avg_epoch_loss < best_loss - 1e-4:
             best_loss = avg_epoch_loss
-            best_state_dict = copy.deepcopy(model.state_dict())
+            best_state_dict = {k: v.clone() for k, v in model.state_dict().items()}
             counter = 0
         else:
             counter += 1
