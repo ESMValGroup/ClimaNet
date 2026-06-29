@@ -18,6 +18,16 @@ This will create a virtual environment in the `.venv` folder with all the requir
 source .venv/bin/activate
 ```
 
+### For development
+
+For developers who want to make changes to the code, please install the `pre-commit` hooks for code formatting and linting. You can do this by running:
+
+```sh
+pre-commit install
+```
+
+After this, every time you make a commit, the code will be automatically formatted and linted according to the rules defined in the `.pre-commit-config.yaml` file.
+
 <!-- start-spatio-temporal -->
 ## Spatio Temporal Model Architecture
 
