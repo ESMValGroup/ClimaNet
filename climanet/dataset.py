@@ -232,7 +232,7 @@ class STDataset(Dataset):
 
         # Extract spatial patch via numpy slicing — faster than xarray indexing
         # (M, T, H, W) -> (M,T,pH, pW)
-        daily_tensor = self.daily_t[:, :, i : i + ph, j : j + pw ].unsqueeze(0)
+        daily_tensor = self.daily_t[:, :, i : i + ph, j : j + pw].unsqueeze(0)
 
         # (M, H, W) -> (M, pH, pW)
         monthly_tensor = self.monthly_t[:, i : i + ph, j : j + pw]
@@ -262,7 +262,7 @@ class STDataset(Dataset):
         scale_feature_tensor = self.patch_scale_features[idx]  # (10,)
 
         # Convert to tensors
-        return  {
+        return {
             "daily_patch": daily_tensor,  # (C=1, M, T=31, pH, pW)
             "monthly_patch": monthly_tensor,  # (M, pH, pW)
             "daily_mask_patch": daily_mask_tensor,  # (C=1, M, T=31, pH, pW)

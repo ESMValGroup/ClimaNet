@@ -99,7 +99,7 @@ def predict_monthly_var(
         batch_size=batch_size,
         shuffle=False,
         pin_memory=use_cuda,
-        num_workers=dataloader_num_workers,# for data loading
+        num_workers=dataloader_num_workers,  # for data loading
         persistent_workers=True,  # keep workers alive between epochs
     )
 
@@ -118,10 +118,7 @@ def predict_monthly_var(
         average_loss = 0.0
         for i, batch in enumerate(dataloader):
             # Move batch to the appropriate device
-            batch = {
-                k: v.to(device, non_blocking=use_cuda)
-                for k, v in batch.items()
-            }
+            batch = {k: v.to(device, non_blocking=use_cuda) for k, v in batch.items()}
 
             predictions = model(
                 batch["daily_patch"],

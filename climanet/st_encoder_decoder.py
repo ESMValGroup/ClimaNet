@@ -278,7 +278,7 @@ class TemporalAttentionAggregator(nn.Module):
         pe = self.pos_months(max_months)  # (max_months, C)
         self.register_buffer("pe_months_cache", pe)  # tracks device/dtype automatically
 
-    def forward(self, x, M, T, H, W, time_features, padded_days_mask=None):
+    def forward(self, x, M, time_features, padded_days_mask=None):
         """
         Args:
             x: (B, M, T, H, W, C) containing spatio-temporal tokens, where C is the embedding dimension.
@@ -327,14 +327,7 @@ class TemporalAttentionAggregator(nn.Module):
 
         z = self.month_ln(z)
 
-        attn_out, _ = self.month_attn(
-            z,
-            z,
-            z,
-            need_weights=False,
-            is_causal=False
-        )
-
+        attn_out, _ = self.month_attn(z, z, z, need_weights=False, is_causal=False)
         z = z + attn_out + self.month_ffn(z)
 
         z = z.reshape(B, HW, M, C)
@@ -763,7 +756,7 @@ class SpatioTemporalModel(nn.Module):
         latent = latent.view(B, M, Tp, Hp, Wp, embed_dim)
 
         agg_latent = checkpoint(
-            self.temporal, latent, M, Tp, Hp, Wp, daily_timef, padded_days_mask, use_reentrant=False
+            self.temporal, latent, M, daily_timef, padded_days_mask, use_reentrant=False
         )  # (B, M, Hp*Wp, embed_dim)
 
         # Step 3: Add geo position and scale encodings
@@ -790,5 +783,7 @@ class SpatioTemporalModel(nn.Module):
         # Step 5: Decode to full-resolution 2D map
         # decoder input shape is (B, M*Hp*Wp, C), C: embedding dimension
         # decoder output shape is (B, M, H, W)
-        monthly_pred = checkpoint(self.decoder, x, M, H, W, land_mask_patch, use_reentrant=False)  # (B, M, H, W)
+        monthly_pred = checkpoint(
+            self.decoder, x, M, H, W, land_mask_patch, use_reentrant=False
+        )  # (B, M, H, W)
         return monthly_pred

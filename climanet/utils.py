@@ -294,10 +294,7 @@ def add_month_hour_dims(
 
     # Add M (month key) and T (hour of month) coordinates to hourly data
     hourly_indexed = (
-        hourly_ts.assign_coords(
-            M=(time_dim, hkey.values),
-            T=(time_dim, hour_of_month)
-        )
+        hourly_ts.assign_coords(M=(time_dim, hkey.values), T=(time_dim, hour_of_month))
         .set_index({time_dim: ("M", "T")})
         .unstack(time_dim)
         .reindex(T=np.arange(1, 745), M=month_keys)  # 744 = 31 days * 24 hours
@@ -322,10 +319,7 @@ def add_month_hour_dims(
 
     # time_indexed is (M, T) with NaT for padded hours
     time_indexed = (
-        time_da.assign_coords(
-            M=(time_dim, hkey.values),
-            T=(time_dim, hour_of_month)
-        )
+        time_da.assign_coords(M=(time_dim, hkey.values), T=(time_dim, hour_of_month))
         .set_index({time_dim: ("M", "T")})
         .unstack(time_dim)
         .reindex(T=np.arange(1, 745), M=month_keys)
@@ -343,10 +337,9 @@ def add_month_hour_dims(
     hod_phase = 2 * np.pi * hod / hod_period
 
     # Stack cyclic encodings into time_features (M, T, 2)
-    time_features = xr.concat(
-        [doy_phase, hod_phase],
-        dim="feature"
-    ).transpose("M", "T", "feature")
+    time_features = xr.concat([doy_phase, hod_phase], dim="feature").transpose(
+        "M", "T", "feature"
+    )
 
     return hourly_indexed, monthly_m, padded_hours_mask, time_features
 
