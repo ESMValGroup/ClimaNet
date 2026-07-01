@@ -47,7 +47,7 @@ class STDataset(Dataset):
         self.patch_size = patch_size
         self.daily_da = daily_da
         self.monthly_da = monthly_da
-        self.stride = stride if stride is not None else patch_size
+        self.stride = stride if stride is not None else (patch_size[1], patch_size[2])
 
         self.sh_embed_dim = sh_embed_dim
         self.sh_order_L = sh_order_L
@@ -60,8 +60,8 @@ class STDataset(Dataset):
                 raise ValueError(f"Spatial dimension '{dim}' not found in input data")
 
         if (
-            patch_size[0] > daily_da.sizes[spatial_dims[0]]
-            or patch_size[1] > daily_da.sizes[spatial_dims[1]]
+            patch_size[1] > daily_da.sizes[spatial_dims[0]]
+            or patch_size[2] > daily_da.sizes[spatial_dims[1]]
         ):
             raise ValueError(
                 f"Patch size {patch_size} is larger than data dimensions {daily_da.sizes}"
