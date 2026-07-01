@@ -23,7 +23,7 @@ class STDataset(Dataset):
         land_mask: xr.DataArray = None,
         time_dim: str = "time",
         spatial_dims: Tuple[str, str] = ("lat", "lon"),
-        patch_size: Tuple[int, int] = (16, 16),  # (lat, lon)
+        patch_size: Tuple[int, int, int] = (1, 16, 16),  # (M, lat, lon)
         stride: Tuple[int, int] = None,
         sh_pos_table: str = None,  # Optional; str formatted path to precomputed table of sh
         sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
@@ -33,12 +33,12 @@ class STDataset(Dataset):
         """Initialize the dataset with daily and monthly data, and optional land mask.
 
         Args:
-            daily_da: xarray DataArray with daily data (M, time, H, W)
+            daily_da: xarray DataArray with daily data (time, H, W)
             monthly_da: xarray DataArray with monthly data (M, H, W)
             land_mask: Optional xarray DataArray with land mask (H, W) or (1, H, W)
             time_dim: Name of the time dimension in the input data
             spatial_dims: Tuple of (lat_dim, lon_dim) names in the input data
-            patch_size: Tuple of (patch_height, patch_width) in pixels
+            patch_size: Tuple of (patch_time, patch_height, patch_width) in time unit and pixels
             stride: Tuple of (stride_height, stride_width) in pixels. If None, defaults to patch_size (non-overlapping patches).
             is_hourly: Whether the daily data is hourly (T=31*24) or daily (T=31).
 
@@ -111,12 +111,12 @@ class STDataset(Dataset):
         self.daily_std = None
 
         # Pre-build zero land tensor for the no-mask case
-        ph, pw = self.patch_size
+        _, ph, pw = self.patch_size
         self._zero_land = torch.zeros(ph, pw, dtype=torch.bool)
 
         # Precompute lazy index mapping for patches
-        H, W = self.daily_t.shape[2], self.daily_t.shape[3]
-        self.patch_indices = self._compute_patch_indices(H, W)
+        M, H, W = self.daily_t.shape[0], self.daily_t.shape[2], self.daily_t.shape[3]
+        self.patch_indices = self._compute_patch_indices(M, H, W)
 
         # Precompute geoposition and scale embeddings for patches
         self.sh_geo_pos = None
@@ -143,10 +143,18 @@ class STDataset(Dataset):
             # compatability of L and sh_dim between requested
             # and loaded. Raise error if not consistent
 
-    def _compute_patch_indices(self, H: int, W: int) -> list:
+    def _compute_patch_indices(self, M: int, H: int, W: int) -> list:
         """Generate patch start indices with coverage warning (overlap support)."""
-        ph, pw = self.patch_size
+        pm, ph, pw = self.patch_size
         sh, sw = self.stride
+
+        # validate temporal patch size
+        if pm > M:
+            raise ValueError(
+                f"Temporal patch size {pm} is larger than available months {M}."
+            )
+        if pm < 1:
+            raise ValueError(f"Temporal patch size {pm} must be at least 1.")
 
         # Validate stride
         if sh > ph or sw > pw:
@@ -158,35 +166,41 @@ class STDataset(Dataset):
 
         # Compute patch start indices using stride
         # Ensure we don't go out of bounds
+        m_starts = list(range(0, M - pm + 1, pm))  # Temporal patches are non-overlapping
         i_starts = list(range(0, H - ph + 1, sh))
         j_starts = list(range(0, W - pw + 1, sw))
 
         # Warn if there's incomplete coverage at the edges
-        if not i_starts or not j_starts:
+        if not i_starts or not j_starts or not m_starts:
             raise ValueError(
-                f"No valid patches can be extracted. Image size ({H}, {W}) "
+                f"No valid patches can be extracted. Image size ({M}, {H}, {W}) "
                 f"is smaller than patch size {self.patch_size}."
             )
 
         # Check edge coverage
+        last_m = m_starts[-1] + pm
         last_i = i_starts[-1] + ph
         last_j = j_starts[-1] + pw
-        if last_i < H or last_j < W:
+        if last_m < M or last_i < H or last_j < W:
             warnings.warn(
                 f"Patches do not fully cover the image. "
-                f"Uncovered pixels: {H - last_i} in height, {W - last_j} in width. "
+                f"Uncovered pixels: {M - last_m} in time, {H - last_i} in height, {W - last_j} in width. "
                 f"Consider adjusting stride or adding edge patches.",
                 UserWarning,
             )
 
         overlap_h = ph - sh if sh < ph else 0
         overlap_w = pw - sw if sw < pw else 0
+
+        len_m = len(m_starts)
+        len_i = len(i_starts)
+        len_j = len(j_starts)
         print(
-            f"Patch grid: {len(i_starts)} x {len(j_starts)} = {len(i_starts) * len(j_starts)} patches"
+            f"Patch grid (m x i x j): {len_m} x {len_i} x {len_j} = {len_m * len_i * len_j} patches"
         )
         print(f"Overlap: {overlap_h} pixels (height), {overlap_w} pixels (width)")
 
-        return [(i, j) for i in i_starts for j in j_starts]
+        return [(m, i, j) for m in m_starts for i in i_starts for j in j_starts]
 
     def _compute_geoscalepatch_embeddings(self):
         patch_geo_embeddings = []
@@ -227,18 +241,18 @@ class STDataset(Dataset):
         if idx < 0 or idx >= len(self.patch_indices):
             raise IndexError("Index out of range")
 
-        i, j = self.patch_indices[idx]
-        ph, pw = self.patch_size
+        m, i, j = self.patch_indices[idx]
+        pm, ph, pw = self.patch_size
 
         # Extract spatial patch via numpy slicing — faster than xarray indexing
         # (M, T, H, W) -> (M,T,pH, pW)
-        daily_tensor = self.daily_t[:, :, i : i + ph, j : j + pw].unsqueeze(0)
+        daily_tensor = self.daily_t[m : m + pm, :, i : i + ph, j : j + pw].unsqueeze(0)
 
         # (M, H, W) -> (M, pH, pW)
-        monthly_tensor = self.monthly_t[:, i : i + ph, j : j + pw]
+        monthly_tensor = self.monthly_t[m : m + pm, i : i + ph, j : j + pw]
 
         # (M, T, H, W) -> (M, T, pH, pW)
-        daily_nan_mask = self.daily_nan_mask[:, :, i : i + ph, j : j + pw].unsqueeze(0)
+        daily_nan_mask = self.daily_nan_mask[m : m + pm, :, i : i + ph, j : j + pw].unsqueeze(0)
 
         if self.land_mask_t is not None:
             land_tensor = self.land_mask_t[i : i + ph, j : j + pw]  # (H, W)
@@ -263,18 +277,18 @@ class STDataset(Dataset):
 
         # Convert to tensors
         return {
-            "daily_patch": daily_tensor,  # (C=1, M, T=31, pH, pW)
-            "monthly_patch": monthly_tensor,  # (M, pH, pW)
-            "daily_mask_patch": daily_mask_tensor,  # (C=1, M, T=31, pH, pW)
+            "daily_patch": daily_tensor,  # (C=1, pm, T=31, pH, pW)
+            "monthly_patch": monthly_tensor,  # (pm, pH, pW)
+            "daily_mask_patch": daily_mask_tensor,  # (C=1, pm, T=31, pH, pW)
             "land_mask_patch": land_tensor,  # (pH,pW) True=Land
-            "daily_timef_patch": self.daily_timef_t,  # (M, T=31, 2)
-            "padded_days_mask": self.padded_days_tensor,  # (M, T=31) True=padded
+            "daily_timef_patch": self.daily_timef_t,  # (pm, T=31, 2)
+            "padded_days_mask": self.padded_days_tensor,  # (pm, T=31) True=padded
             "scale_feature_patch": scale_feature_tensor,  # (10,)
             "geo_pos_embedding_patch": geo_pos_embedding_tensor,  # (sh_embed_dim,)
             "sh_embed_dim": self.sh_embed_dim_t,
             "harmonic_order": self.harmonic_order_t,
             "scale_f_dim": self.scale_f_dim,
-            "coords": torch.tensor([i, j]),
+            "coords": torch.tensor([m, i, j]),
             "lat_patch": lat_patch,  # (pH,)
             "lon_patch": lon_patch,  # (pW,)
         }
@@ -292,15 +306,15 @@ class STDataset(Dataset):
             data = self.monthly_t.numpy()  # (M, H, W)
         else:
             # Stack selected spatial patches
-            ph, pw = self.patch_size
+            pm, ph, pw = self.patch_size
             patches = []
             for idx in indices:
-                i, j = self.patch_indices[idx]
-                patch = self.monthly_t[:, i : i + ph, j : j + pw].numpy()
+                m, i, j = self.patch_indices[idx]
+                patch = self.monthly_t[m : m + pm, i : i + ph, j : j + pw].numpy()
                 patches.append(patch)
             data = np.concatenate(patches, axis=-1)
 
-        mean, std = calc_stats(data)  # (M,)
+        mean, std = calc_stats(data)  # (pm,)
 
         self.daily_mean = mean
         self.daily_std = std
