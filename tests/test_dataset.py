@@ -60,7 +60,7 @@ def test_len_and_shapes():
     assert len(dataset) == 4
 
     sample = dataset[0]
-    assert sample["coords"] == (0, 0)
+    assert torch.equal(sample["coords"], torch.tensor([0, 0]))
     assert sample["daily_patch"].shape == (1, 1, 31, 2, 2)
     assert sample["monthly_patch"].shape == (1, 2, 2)
     assert sample["daily_mask_patch"].shape == (1, 1, 31, 2, 2)
@@ -97,7 +97,7 @@ def test_index_mapping_and_mask_values():
     )
 
     sample = dataset[3]
-    assert sample["coords"] == (2, 2)
+    assert torch.equal(sample["coords"], torch.tensor([2, 2]))
 
     expected_mask = land_mask.isel(lat=slice(2, 4), lon=slice(2, 4)).to_numpy()
     assert torch.equal(sample["land_mask_patch"], torch.from_numpy(expected_mask))
