@@ -118,10 +118,7 @@ def train_monthly_model(
 
         for i, batch in enumerate(dataloader):
             # Move batch to the appropriate device
-            batch = {
-                k: v.to(device, non_blocking=use_cuda)
-                for k, v in batch.items()
-            }
+            batch = {k: v.to(device, non_blocking=use_cuda) for k, v in batch.items()}
 
             loss = _run_one_batch(model, batch)
 
