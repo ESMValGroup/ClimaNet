@@ -67,6 +67,12 @@ X_mixed (MonthlyConvDecoder)---------> Output
 We explain the model architecture in more detail in the [code and math
 description](docs/code_math_description.md) document.
 
+## Using HPC (Levante)
+
+If you have access to the Levante HPC cluster, you can run the workflow using
+`slurm` or `jupyter hub`. Please refer to the [Levante usage
+instructions](docs/levante_usage.md) for more details.
+
 ## References
 
 - [Attention is all you need](https://doi.org/10.48550/arXiv.1706.03762)
