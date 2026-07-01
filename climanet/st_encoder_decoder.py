@@ -6,10 +6,7 @@ The main model class is SpatioTemporalModel.
 import math
 import torch
 import torch.nn as nn
-from einops import rearrange
-
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
+from torch.utils.checkpoint import checkpoint
 
 
 class VideoEncoder(nn.Module):
@@ -27,7 +24,7 @@ class VideoEncoder(nn.Module):
     https://arxiv.org/abs/2203.12602
     """
 
-    def __init__(self, in_chans=1, embed_dim=128, patch_size=(1, 4, 4), dropout=0.0):
+    def __init__(self, in_chans=1, embed_dim=128, patch_size=(1, 4, 4)):
         """
         Args:
             in_chans: Number of input channels (1 for SST)
@@ -35,8 +32,6 @@ class VideoEncoder(nn.Module):
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
             patch_size: Tuple of (T, H, W) patch size. Default is (1, 4, 4).
-            dropout: Dropout rate for regularization. Default is 0.0.
-                Increase it if there is overfitting.
         """
         super().__init__()
         self.patch_size = patch_size
@@ -50,9 +45,6 @@ class VideoEncoder(nn.Module):
         # norm is LayerNorm over the embedding dimension to normalize patch embeddings
         self.norm = nn.LayerNorm(embed_dim)
 
-        # dropout for regularization
-        self.drop = nn.Dropout(dropout)
-
     def forward(self, x, mask):
         """Forward pass with masking support via an additional validity channel.
         Args:
@@ -62,21 +54,25 @@ class VideoEncoder(nn.Module):
 
         Returns:
             Embedded patches of shape (B, N_patches, embed_dim)
-
         Notes:
             - Masked pixels are zeroed out before patch embedding
             - A validity mask (1 = observed, 0 = missing) is concatenated
             as an additional input channel
         """
-        # x: (B,1,T,H,W), mask: (B,1,T,H,W) where True means missing
-        valid = (~mask).float()
-        x = x * valid  # zero-out missing values
-        x = torch.cat([x, valid], dim=1)  # add validity as a channel
-        x = self.proj(x)  # (B, C, T', H', W')
-        x = rearrange(x, "b c t h w -> b (t h w) c")
+        valid = (~mask).to(dtype=x.dtype)
+
+        if valid.shape != x.shape:
+            valid = valid.expand_as(x)
+
+        x = x.masked_fill(mask, 0.0)
+        x = torch.cat((x, valid), dim=1)
+
+        x = x.contiguous(memory_format=torch.channels_last_3d)
+        x = self.proj(x)
+        x = x.flatten(2).transpose(1, 2)
+
         x = self.norm(x)
-        x = self.drop(x)
-        return x  # (B, N_patches, embed_dim)
+        return x
 
 
 class CyclicTimeEmbedding(nn.Module):
@@ -232,16 +228,13 @@ class TemporalAttentionAggregator(nn.Module):
     months.
     """
 
-    def __init__(self, embed_dim=128, max_days=31, max_months=12, dropout=0.0):
+    def __init__(self, embed_dim=128, max_months=12, dropout=0.0):
         """Initialize the temporal attention aggregator.
 
         Args:
             embed_dim: Dimension of the embedding. The default is 128.
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
-            max_days: Maximum length of the temporal dimension to precompute
-            encodings for. Default is 31, which is sufficient for a month of
-            daily data.
             max_months: Maximum number of months (temporal patches) to precompute
             encodings for. Default is 12, which is sufficient for a year of monthly data.
             dropout: Dropout rate for regularization in the day scorer and
@@ -279,10 +272,13 @@ class TemporalAttentionAggregator(nn.Module):
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(4 * embed_dim, embed_dim),
-            nn.Dropout(dropout),
         )
 
-    def forward(self, x, M, T, H, W, time_features, padded_days_mask=None):
+        # Pre-compute and register as buffer — auto-moves with .to(device/dtype)
+        pe = self.pos_months(max_months)  # (max_months, C)
+        self.register_buffer("pe_months_cache", pe)  # tracks device/dtype automatically
+
+    def forward(self, x, M, time_features, padded_days_mask=None):
         """
         Args:
             x: (B, M, T, H, W, C) containing spatio-temporal tokens, where C is the embedding dimension.
@@ -298,41 +294,46 @@ class TemporalAttentionAggregator(nn.Module):
             Tensor of shape (B, M, H*W, C) with one temporally aggregated, where C is the embedding dimension.
         """
         B, M, Tp, Hp, Wp, C = x.shape
+        HW = Hp * Wp
 
-        # Reshape to (B, Hp*Wp, M, Tp, C) for temporal processing
-        seq = x.permute(0, 3, 4, 1, 2, 5).reshape(B, Hp * Wp, M, Tp, C)
+        x = x.reshape(B, Hp, Wp, M, Tp, C)
+        x = x.permute(0, 3, 4, 1, 2, 5)
+        seq = x.reshape(B, M, Tp, HW, C).permute(0, 3, 1, 2, 4)
 
-        temp_emb = self.time_embed(time_features)  # (B,M,T,emd_dim)
-        # expand spatially
-        temp_emb = temp_emb[:, None, :, :, :]  # [B, 1, M, T, C]
-        temp_emb = temp_emb.expand(-1, H * W, -1, -1, -1)
-        pe_months = self.pos_months(M).to(seq.device).to(seq.dtype)  # (M, C)
+        temp_emb = self.time_embed(time_features)
+        pe_months = self.pe_months_cache[:M]
+        token_emb = temp_emb + pe_months[None, :, None, :]
 
-        seq = seq + temp_emb  # add temporal embeddings
-        seq = seq + pe_months[None, None, :, None, :]  # add month PE
+        day_logits = self.day_scorer(token_emb).squeeze(-1)
 
-        # Day attention per month
-        day_logits = self.day_scorer(seq).squeeze(-1)  # (B, HW, M, T)
-
-        # padded_days_mask is (B, M, T) true=padded, -> (B, HW, M, T)
         if padded_days_mask is not None:
-            pad = padded_days_mask[:, None, :, :].expand(B, H * W, M, T)
-            day_logits = day_logits.masked_fill(pad, float("-inf"))
+            day_logits = day_logits.masked_fill(padded_days_mask, float("-inf"))
 
-        day_w = torch.softmax(day_logits, dim=-1)  # turns inf to 0
-        month_tokens = (seq * day_w.unsqueeze(-1)).sum(dim=3)  # (B, HW, M, C)
+        day_w = torch.softmax(day_logits, dim=-1)
+        day_w = day_w.unsqueeze(1).unsqueeze(-1)
 
-        # Cross-month attention at each spatial location
-        z = rearrange(month_tokens, "b s m c -> (b s) m c")
-        z_ln = self.month_ln(z)
-        attn_out, _ = self.month_attn(z_ln, z_ln, z_ln, need_weights=False)
-        z = z + attn_out
-        z = z + self.month_ffn(z)
+        # avoid implicit expand copies
+        seq = seq.reshape(B, HW, M, Tp, C)
+        token_emb_seq = token_emb.unsqueeze(1)
 
-        # Back to (B, M, Hp*Wp, C)
-        z = z.view(B, Hp * Wp, M, C)
-        out = z.permute(0, 2, 1, 3)  # (B, M, Hp*Wp, C)
-        return out  # (B, M, H*W, C)  C: embedding dimension
+        month_tokens = (seq * day_w).sum(dim=3)
+
+        # avoid broadcast materialization
+        month_emb = (token_emb_seq * day_w).sum(dim=3)
+
+        month_tokens = month_tokens + month_emb
+
+        z = month_tokens.reshape(B * HW, M, C)
+
+        z = self.month_ln(z)
+
+        attn_out, _ = self.month_attn(z, z, z, need_weights=False, is_causal=False)
+        z = z + attn_out + self.month_ffn(z)
+
+        z = z.reshape(B, HW, M, C)
+        out = z.permute(0, 2, 1, 3)
+
+        return out
 
 
 class MonthlyConvDecoder(nn.Module):
@@ -414,7 +415,6 @@ class MonthlyConvDecoder(nn.Module):
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.GroupNorm(num_groups=8, num_channels=out_channels),
             nn.GELU(),
-            nn.Dropout2d(dropout),
         )
 
         # Final conv head to map to single-channel output
@@ -443,8 +443,9 @@ class MonthlyConvDecoder(nn.Module):
 
         # transforms the latent tensor from sequence format to image format for
         # convolution operations;
-        out = latent.view(B, M, Hp, Wp, C).permute(0, 1, 4, 2, 3).contiguous()
-        out = out.view(B * M, C, Hp, Wp)
+        out = latent.reshape(B, M, Hp, Wp, C)
+        out = out.permute(0, 1, 4, 2, 3).contiguous()
+        out = out.reshape(B * M, C, Hp, Wp)
 
         # Apply 1x1 convolution to mix features
         out = self.proj(out)  # (B*M, hidden, Hp, Wp)
@@ -494,7 +495,6 @@ class GeoPositionScaleEmbedding(nn.Module):
         sh_dim=96,
         scale_dim=10,
         embed_dim=128,
-        dropout=0.0,
     ):
         """
         initialize geo-position and scale embeddings and projection
@@ -503,7 +503,6 @@ class GeoPositionScaleEmbedding(nn.Module):
             sh_dim: int, Dimension of pca of spherical harmonics for embedding. defaults to 96
             scale_dim: int, Dimension of patch scale feature embedding. default 10
             embed_dim: int, Dimension of embeddings to be created. default 128
-            dropout: float, Dropout rate for regularization of projection network. default 0.0
         """
 
         super().__init__()
@@ -522,7 +521,6 @@ class GeoPositionScaleEmbedding(nn.Module):
             nn.LayerNorm(in_dim),
             nn.Linear(in_dim, hidden_dim),
             nn.GELU(),
-            nn.Dropout(dropout),
             nn.Linear(hidden_dim, embed_dim),
         )
 
@@ -546,8 +544,7 @@ class GeoPositionScaleEmbedding(nn.Module):
                 embedding
         """
         sh_geo_pos = self.sh_gain * sh_geo_pos
-        geo_scale_feat = self.scale_norm(geo_scale_feat)
-        geo_scale_feat = self.scale_gain * geo_scale_feat
+        geo_scale_feat = self.scale_gain * self.scale_norm(geo_scale_feat)
 
         x = torch.cat([sh_geo_pos, geo_scale_feat], dim=-1)
 
@@ -631,7 +628,6 @@ class SpatioTemporalModel(nn.Module):
         in_chans=1,
         embed_dim=128,
         patch_size=(1, 4, 4),
-        max_days=31,
         max_months=12,
         num_months=12,
         hidden=256,
@@ -641,6 +637,7 @@ class SpatioTemporalModel(nn.Module):
         dropout=0.0,
         sh_dim=96,
         scale_dim=10,
+        use_checkpoint=True,
     ):
         """Initialize the Spatio-Temporal Model.
 
@@ -648,7 +645,6 @@ class SpatioTemporalModel(nn.Module):
             in_chans: Number of input channels (e.g., 1 for SST, additional channels possible)
             embed_dim: Dimension of the patch embedding
             patch_size: Tuple of (T, H, W) patch sizes for temporal and spatial patching
-            max_days: Maximum number of days for temporal positional encoding
             max_months: Maximum number of months for temporal positional encoding
             num_months: Number of months to predict (output channels in decoder)
             hidden: Hidden dimension used in the decoder
@@ -668,15 +664,15 @@ class SpatioTemporalModel(nn.Module):
             k: v for k, v in locals().items() if k not in ("self", "__class__")
         }
 
+        self.use_checkpoint = use_checkpoint
+
         self.encoder = VideoEncoder(
             in_chans=in_chans,
             embed_dim=embed_dim,
             patch_size=patch_size,
-            dropout=dropout,
         )
         self.temporal = TemporalAttentionAggregator(
             embed_dim=embed_dim,
-            max_days=max_days,
             max_months=max_months,
             dropout=dropout,
         )
@@ -684,7 +680,6 @@ class SpatioTemporalModel(nn.Module):
             sh_dim=sh_dim,
             scale_dim=scale_dim,
             embed_dim=embed_dim,
-            dropout=dropout,
         )
         self.spatial_tr = SpatialTransformer(
             embed_dim=embed_dim,
@@ -742,21 +737,6 @@ class SpatioTemporalModel(nn.Module):
         )
         assert T % self.patch_size[0] == 0, "T must be divisible by patch size"
 
-        if self.patch_size[0] > 1:
-            daily_timef = daily_timef.view(B, M, Tp, self.patch_size[0], 4).mean(
-                dim=3
-            )  # -> (B,M, Tp, 4)
-
-        if padded_days_mask is not None and self.patch_size[0] > 1:
-            B, M, T_days = padded_days_mask.shape
-            if T_days % self.patch_size[0] != 0:
-                raise ValueError(
-                    f"T_days={T_days} must be divisible by patch_size[0]={self.patch_size[0]}"
-                )
-            padded_days_mask = padded_days_mask.view(
-                B, M, T_days // self.patch_size[0], self.patch_size[0]
-            ).all(dim=-1)  # (B, M, Tp)
-
         # Step 1: Encode spatio-temporal patches
         # each month independently by folding M into batch
         # encoder input shape = (B, C, T, H, W) where C is channel.
@@ -765,9 +745,15 @@ class SpatioTemporalModel(nn.Module):
         daily_data_reshaped = daily_data.reshape(B * M, C, T, H, W)
         daily_mask_reshaped = daily_mask.reshape(B * M, C, T, H, W)
 
-        latent = self.encoder(
-            daily_data_reshaped, daily_mask_reshaped
-        )  # (B*M, N_patches, embed_dim)
+        if self.use_checkpoint:
+            latent = checkpoint(
+                self.encoder,
+                daily_data_reshaped,
+                daily_mask_reshaped,
+                use_reentrant=False,
+            )  # (B*M, N_patches, embed_dim)
+        else:
+            latent = self.encoder(daily_data_reshaped, daily_mask_reshaped)  # (B*M, N_patches, embed_dim)
 
         # Step 2: Aggregate temporal information for each spatial patch
         # temporal input shape = (B, M*T*H*W, C),  C: embedding dimension
@@ -775,24 +761,32 @@ class SpatioTemporalModel(nn.Module):
         embed_dim = latent.shape[-1]
         latent = latent.view(B, M, Tp, Hp, Wp, embed_dim)
 
-        agg_latent = self.temporal(
-            latent, M, Tp, Hp, Wp, daily_timef, padded_days_mask=padded_days_mask
-        )  # (B, M, Hp*Wp, embed_dim)
+        if self.use_checkpoint:
+            agg_latent = checkpoint(
+                self.temporal, latent, M, daily_timef, padded_days_mask, use_reentrant=False
+            )  # (B, M, Hp*Wp, embed_dim)
+        else:
+            agg_latent = self.temporal(latent, M, daily_timef, padded_days_mask)  # (B, M, Hp*Wp, embed_dim)
 
         # Step 3: Add geo position and scale encodings
-        geo_emb = self.geo_embedding(
-            geo_pos_embedding_patch,
-            scale_feature_patch,
-        )  # (B, embed_dim)
+        if self.use_checkpoint:
+            geo_emb = checkpoint(
+                self.geo_embedding,
+                geo_pos_embedding_patch,
+                scale_feature_patch,
+                use_reentrant=False,
+            )[:, None, None, :]  # (B,1,1,E)
+        else:
+            geo_emb = self.geo_embedding(geo_pos_embedding_patch, scale_feature_patch)[:, None, None, :]  # (B,1,1,E)
 
         # Broadcasting: same geo embedding for all M months at each Hp*Wp location
         # we use weighted mean patch embedding, see `geo_embedding_utils.py`
-        geo_emb = geo_emb[:, None, None, :]  # (B,1,1,E)
         x = agg_latent + geo_emb  # (B, M, Hp*Wp, E)
 
         # Step 4: Spatial mixing with Transformer
         # spatial transformer input shape = (B, N, C), output shape = (B, N, C) C: embedding dimension
         # M is folded in B.
+
         C = x.shape[-1]
         x = x.reshape(B * M, Hp * Wp, C)
         x = self.spatial_tr(x)
@@ -801,5 +795,8 @@ class SpatioTemporalModel(nn.Module):
         # Step 5: Decode to full-resolution 2D map
         # decoder input shape is (B, M*Hp*Wp, C), C: embedding dimension
         # decoder output shape is (B, M, H, W)
-        monthly_pred = self.decoder(x, M, H, W, land_mask_patch)  # (B, M, H, W)
+        if self.use_checkpoint:
+            monthly_pred = checkpoint(self.decoder, x, M, H, W, land_mask_patch, use_reentrant=False)  # (B, M, H, W)
+        else:
+            monthly_pred = self.decoder(x, M, H, W, land_mask_patch)  # (B, M, H, W)
         return monthly_pred

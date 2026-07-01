@@ -252,12 +252,97 @@ def compute_masked_loss(
 def save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
     """Save model state and config to disk."""
     model_path = Path(run_dir) / "best_model.pth"
+    model = model.module if hasattr(model, "module") else model
     torch.save(
         {"model_state_dict": model.state_dict(), "model_config": model.config},
         model_path,
     )
     if verbose:
         print(f"Model saved to {model_path}")
+
+
+def add_month_hour_dims(
+    hourly_ts: xr.DataArray,  # (time, H, W) hourly
+    monthly_ts: xr.DataArray,  # (time, H, W) monthly
+    time_dim: str = "time",
+    spatial_dims: Tuple[str, str] = ("lat", "lon"),
+):
+    """Reshape hourly and monthly data to have explicit month (M) and hour (T) dimensions.
+
+    Here we assume maximum 31 days in a month with 24 hours per day = 744 hours maximum.
+    Invalid hour entries will be padded with NaN.
+
+    Returns
+    -------
+    hourly_m : xr.DataArray - dims: (M, T=744, H, W)
+    monthly_m : xr.DataArray - dims: (M, H, W)
+    padded_hours_mask : xr.DataArray - dims: (M, T=744), bool, True where hour is padded
+    time_features : xr.DataArray - dims: (M, T=744, 2)
+    """
+    # Month key as integer YYYYMM
+    hkey = hourly_ts[time_dim].dt.year * 100 + hourly_ts[time_dim].dt.month
+    mkey = monthly_ts[time_dim].dt.year * 100 + monthly_ts[time_dim].dt.month
+
+    # Unique month keys preserving order
+    _, idx = np.unique(hkey.values, return_index=True)
+    month_keys = hkey.values[np.sort(idx)]
+
+    # Create hour-of-month coordinate (1-744)
+    # hour_of_month = (day_of_month - 1) * 24 + hour_of_day + 1
+    day_of_month = hourly_ts[time_dim].dt.day.values
+    hour_of_day = hourly_ts[time_dim].dt.hour.values
+    hour_of_month = (day_of_month - 1) * 24 + hour_of_day + 1
+
+    # Add M (month key) and T (hour of month) coordinates to hourly data
+    hourly_indexed = (
+        hourly_ts.assign_coords(M=(time_dim, hkey.values), T=(time_dim, hour_of_month))
+        .set_index({time_dim: ("M", "T")})
+        .unstack(time_dim)
+        .reindex(T=np.arange(1, 745), M=month_keys)  # 744 = 31 days * 24 hours
+    )
+    # Force dim order: (M, T, H, W)
+    other_dims = [d for d in hourly_ts.dims if d != time_dim]
+    hourly_indexed = hourly_indexed.transpose("M", "T", *other_dims)
+
+    # Build padded hours mask from hourly_indexed (NaN locations)
+    padded_hours_mask = ~hourly_indexed.notnull().any(dim=spatial_dims)
+
+    # Align monthly data to same month keys/order
+    monthly_m = (
+        monthly_ts.assign_coords(M=(time_dim, mkey.values))
+        .swap_dims({time_dim: "M"})
+        .drop_vars(time_dim)
+        .sel(M=month_keys)
+    )
+
+    # Build aligned datetime array (M, T)
+    time_da = hourly_ts[time_dim]
+
+    # time_indexed is (M, T) with NaT for padded hours
+    time_indexed = (
+        time_da.assign_coords(M=(time_dim, hkey.values), T=(time_dim, hour_of_month))
+        .set_index({time_dim: ("M", "T")})
+        .unstack(time_dim)
+        .reindex(T=np.arange(1, 745), M=month_keys)
+    )
+
+    # Determine day-of-year (doy) and hour-of-day (hod)
+    doy_period = 365.24
+    hod_period = 24.0
+
+    doy = time_indexed.dt.dayofyear.fillna(0)
+    hod = time_indexed.dt.hour.fillna(0)
+
+    # Create phase from day and hour
+    doy_phase = 2 * np.pi * doy / doy_period
+    hod_phase = 2 * np.pi * hod / hod_period
+
+    # Stack cyclic encodings into time_features (M, T, 2)
+    time_features = xr.concat([doy_phase, hod_phase], dim="feature").transpose(
+        "M", "T", "feature"
+    )
+
+    return hourly_indexed, monthly_m, padded_hours_mask, time_features
 
 
 def configure_compute_resources(
@@ -360,7 +445,7 @@ def plot_histograms(
             target_t.values.flatten(), bins=bins, alpha=0.7, color="blue", density=True
         )
         axs[t].set_xlabel(label)
-        axs[t].set_ylabel("Frequency")
+        axs[t].set_ylabel("Probability Density")
         axs[t].grid(True, alpha=0.3)
 
         # Prediction histogram (overlaid)
