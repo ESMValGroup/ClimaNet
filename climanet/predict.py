@@ -106,8 +106,7 @@ def predict_monthly_var(
     # Initialize an empty list to store predictions
     base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
 
-    M = base_dataset.monthly_t.shape[0]
-    H, W = base_dataset.patch_size
+    M, H, W = base_dataset.patch_size
     all_predictions = torch.empty(len(dataset), M, H, W, device=device)
 
     # Set up logging

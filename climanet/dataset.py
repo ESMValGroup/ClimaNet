@@ -206,8 +206,8 @@ class STDataset(Dataset):
         patch_geo_embeddings = []
         patch_scale_features = []
 
-        for i, j in self.patch_indices:
-            ph, pw = self.patch_size
+        for _, i, j in self.patch_indices:
+            _, ph, pw = self.patch_size
             geo_pos_tensor = self.sh_geo_pos[
                 i : i + ph,
                 j : j + pw,
@@ -281,8 +281,8 @@ class STDataset(Dataset):
             "monthly_patch": monthly_tensor,  # (pm, pH, pW)
             "daily_mask_patch": daily_mask_tensor,  # (C=1, pm, T=31, pH, pW)
             "land_mask_patch": land_tensor,  # (pH,pW) True=Land
-            "daily_timef_patch": self.daily_timef_t,  # (pm, T=31, 2)
-            "padded_days_mask": self.padded_days_tensor,  # (pm, T=31) True=padded
+            "daily_timef_patch": self.daily_timef_t[m : m + pm],  # (pm, T=31, 2)
+            "padded_days_mask": self.padded_days_tensor[m : m + pm],  # (pm, T=31) True=padded
             "scale_feature_patch": scale_feature_tensor,  # (10,)
             "geo_pos_embedding_patch": geo_pos_embedding_tensor,  # (sh_embed_dim,)
             "sh_embed_dim": self.sh_embed_dim_t,
