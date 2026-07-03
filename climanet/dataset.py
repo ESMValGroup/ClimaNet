@@ -81,7 +81,7 @@ class STDataset(Dataset):
                 daily_da, monthly_da, time_dim=time_dim
             )
 
-        # Convert to numpy once — all __getitem__ calls use these
+        # Convert to tensor once — all __getitem__ calls use these
         self.daily_t = torch.from_numpy(daily_mt.values.astype(np.float32))  # (M, T=31, H, W)
         self.monthly_t = torch.from_numpy(monthly_m.values.astype(np.float32))  # (M, H, W)
         self.padded_days_tensor = torch.from_numpy(padded_days_mask.values.copy()).bool()  # (M, T=31)
@@ -230,7 +230,7 @@ class STDataset(Dataset):
         i, j = self.patch_indices[idx]
         ph, pw = self.patch_size
 
-        # Extract spatial patch via numpy slicing — faster than xarray indexing
+        # Extract spatial patch via slicing — faster than xarray indexing
         # (M, T, H, W) -> (M,T,pH, pW)
         daily_tensor = self.daily_t[:, :, i : i + ph, j : j + pw].unsqueeze(0)
 
