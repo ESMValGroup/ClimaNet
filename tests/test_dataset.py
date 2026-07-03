@@ -51,7 +51,7 @@ def _make_datasets():
 def test_len_and_shapes():
     daily_da, monthly_da, land_mask = _make_datasets()
     dataset = STDataset(
-        daily_da=daily_da,
+        input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),
@@ -60,7 +60,7 @@ def test_len_and_shapes():
     assert len(dataset) == 4
 
     sample = dataset[0]
-    assert sample["coords"] == (0, 0)
+    assert torch.equal(sample["coords"], torch.tensor([0, 0]))
     assert sample["daily_patch"].shape == (1, 1, 31, 2, 2)
     assert sample["monthly_patch"].shape == (1, 2, 2)
     assert sample["daily_mask_patch"].shape == (1, 1, 31, 2, 2)
@@ -74,7 +74,7 @@ def test_len_and_shapes():
 def test_index_bounds():
     daily_da, monthly_da, land_mask = _make_datasets()
     dataset = STDataset(
-        daily_da=daily_da,
+        input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),
@@ -90,14 +90,14 @@ def test_index_bounds():
 def test_index_mapping_and_mask_values():
     daily_da, monthly_da, land_mask = _make_datasets()
     dataset = STDataset(
-        daily_da=daily_da,
+        input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),
     )
 
     sample = dataset[3]
-    assert sample["coords"] == (2, 2)
+    assert torch.equal(sample["coords"], torch.tensor([2, 2]))
 
     expected_mask = land_mask.isel(lat=slice(2, 4), lon=slice(2, 4)).to_numpy()
     assert torch.equal(sample["land_mask_patch"], torch.from_numpy(expected_mask))
@@ -106,7 +106,7 @@ def test_index_mapping_and_mask_values():
 def test_time_feature_generation():
     daily_da, monthly_da, land_mask = _make_datasets()
     dataset = STDataset(
-        daily_da=daily_da,
+        input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),
