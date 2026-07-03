@@ -113,5 +113,7 @@ def test_time_feature_generation():
     )
 
     sample = dataset[0]
-    expected_time_feature=torch.tensor([np.float32(2*np.pi*6/365.24),np.float32(0.)])
-    assert torch.equal(sample["daily_timef_patch"][0,5,:], expected_time_feature)
+    expected_time_feature = torch.tensor(
+        [np.float32(2 * np.pi * 6 / 365.24), np.float32(0.0)]
+    )
+    assert torch.equal(sample["daily_timef_patch"][0, 5, :], expected_time_feature)
