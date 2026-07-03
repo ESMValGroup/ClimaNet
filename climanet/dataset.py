@@ -18,7 +18,7 @@ class STDataset(Dataset):
 
     def __init__(
         self,
-        daily_da: xr.DataArray,
+        input_da: xr.DataArray,
         monthly_da: xr.DataArray,
         land_mask: xr.DataArray = None,
         time_dim: str = "time",
@@ -33,7 +33,7 @@ class STDataset(Dataset):
         """Initialize the dataset with daily and monthly data, and optional land mask.
 
         Args:
-            daily_da: xarray DataArray with daily data (M, time, H, W)
+            input_da: xarray DataArray with daily data (M, time, H, W) or hourly data (M, time, H, W)
             monthly_da: xarray DataArray with monthly data (M, H, W)
             land_mask: Optional xarray DataArray with land mask (H, W) or (1, H, W)
             time_dim: Name of the time dimension in the input data
@@ -45,7 +45,7 @@ class STDataset(Dataset):
         """
         self.spatial_dims = spatial_dims
         self.patch_size = patch_size
-        self.daily_da = daily_da
+        self.input_da = input_da
         self.monthly_da = monthly_da
         self.stride = stride if stride is not None else patch_size
 
@@ -53,18 +53,18 @@ class STDataset(Dataset):
         self.sh_order_L = sh_order_L
 
         # Check that the input data has the expected dimensions
-        if time_dim not in daily_da.dims or time_dim not in monthly_da.dims:
+        if time_dim not in input_da.dims or time_dim not in monthly_da.dims:
             raise ValueError(f"Time dimension '{time_dim}' not found in input data")
         for dim in spatial_dims:
-            if dim not in daily_da.dims or dim not in monthly_da.dims:
+            if dim not in input_da.dims or dim not in monthly_da.dims:
                 raise ValueError(f"Spatial dimension '{dim}' not found in input data")
 
         if (
-            patch_size[0] > daily_da.sizes[spatial_dims[0]]
-            or patch_size[1] > daily_da.sizes[spatial_dims[1]]
+            patch_size[0] > input_da.sizes[spatial_dims[0]]
+            or patch_size[1] > input_da.sizes[spatial_dims[1]]
         ):
             raise ValueError(
-                f"Patch size {patch_size} is larger than data dimensions {daily_da.sizes}"
+                f"Patch size {patch_size} is larger than data dimensions {input_da.sizes}"
             )
 
         if is_hourly:
@@ -72,13 +72,13 @@ class STDataset(Dataset):
             # Reshape daily → (M, T=31*24, H, W), monthly → (M, H, W),
             # and get padded_days_mask → (M, T=31*24)
             daily_mt, monthly_m, padded_days_mask, daily_timef = add_month_hour_dims(
-                daily_da, monthly_da, time_dim=time_dim
+                input_da, monthly_da, time_dim=time_dim
             )
         else:
             # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
             # and get padded_days_mask → (M, T=31)
             daily_mt, monthly_m, padded_days_mask, daily_timef = add_month_day_dims(
-                daily_da, monthly_da, time_dim=time_dim
+                input_da, monthly_da, time_dim=time_dim
             )
 
         # Convert to tensor once — all __getitem__ calls use these
@@ -88,8 +88,8 @@ class STDataset(Dataset):
         self.daily_timef_t = torch.from_numpy(daily_timef.values.astype(np.float32))  # (M, T=31, 4)
 
         # Store coordinate arrays
-        self.lat_coords = daily_da[spatial_dims[0]].to_numpy().copy()
-        self.lon_coords = daily_da[spatial_dims[1]].to_numpy().copy()
+        self.lat_coords = input_da[spatial_dims[0]].to_numpy().copy()
+        self.lon_coords = input_da[spatial_dims[1]].to_numpy().copy()
 
         if land_mask is not None:
             lm = torch.from_numpy(land_mask.values.copy()).bool()
