@@ -17,7 +17,7 @@ wget -qO- https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env
 ```
 
-2. Create a new conda environment and install ipykernel and climanet:
+2. Create a new environment and install ipykernel and climanet:
 
 ```bash
 cd ClimaNet
@@ -28,7 +28,7 @@ uv sync
 uv add ipykernel
 ```
 
-3. Make the just created conda environment available as a notebook kernel by
+3. Make the just created environment available as a notebook kernel by
    running the following command:
 
 ```bash
