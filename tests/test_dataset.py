@@ -51,7 +51,7 @@ def _make_datasets():
 def test_len_and_shapes():
     daily_da, monthly_da, land_mask = _make_datasets()
     dataset = STDataset(
-        daily_da=daily_da,
+        input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),
@@ -74,7 +74,7 @@ def test_len_and_shapes():
 def test_index_bounds():
     daily_da, monthly_da, land_mask = _make_datasets()
     dataset = STDataset(
-        daily_da=daily_da,
+        input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),
@@ -90,7 +90,7 @@ def test_index_bounds():
 def test_index_mapping_and_mask_values():
     daily_da, monthly_da, land_mask = _make_datasets()
     dataset = STDataset(
-        daily_da=daily_da,
+        input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),
@@ -106,7 +106,7 @@ def test_index_mapping_and_mask_values():
 def test_time_feature_generation():
     daily_da, monthly_da, land_mask = _make_datasets()
     dataset = STDataset(
-        daily_da=daily_da,
+        input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(2, 2),

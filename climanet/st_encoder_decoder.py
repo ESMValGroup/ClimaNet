@@ -700,7 +700,7 @@ class SpatioTemporalModel(nn.Module):
 
     def forward(
         self,
-        daily_data,
+        input_data,
         daily_mask,
         daily_timef,
         land_mask_patch,
@@ -711,9 +711,9 @@ class SpatioTemporalModel(nn.Module):
         """Forward pass of the Spatio-Temporal model.
 
         Args:
-            daily_data: Tensor of shape (B, C, M, T, H, W) containing daily
+            input_data: Tensor of shape (B, C, M, T, H, W) containing daily
                 data, where C is the number of channels (e.g., 1 for SST)
-            daily_mask: Boolean tensor of same shape as daily_data indicating missing values
+            daily_mask: Boolean tensor of same shape as input_data indicating missing values
             daily_timef: Tensor of shape (B, M, T, 2) containing the cyclically phase encoded day-of-year
                 and hour-of-day information for the daily data
             land_mask_patch: Boolean tensor of shape (B, H, W) to mask land areas in the output
@@ -722,15 +722,15 @@ class SpatioTemporalModel(nn.Module):
         Returns:
             monthly_pred: Tensor of shape (B, M, H, W) representing the reconstructed monthly map
         """
-        B, C, M, T, H, W = daily_data.shape
+        B, C, M, T, H, W = input_data.shape
 
         Tp = T // self.patch_size[0]
         Hp = H // self.patch_size[1]
         Wp = W // self.patch_size[2]
 
         # check shape and patch compatibility
-        assert daily_mask.shape == daily_data.shape, (
-            "daily_mask must have the same shape as daily_data"
+        assert daily_mask.shape == input_data.shape, (
+            "daily_mask must have the same shape as input_data"
         )
         assert H % self.patch_size[1] == 0 and W % self.patch_size[2] == 0, (
             "H and W must be divisible by patch size"
@@ -742,18 +742,18 @@ class SpatioTemporalModel(nn.Module):
         # encoder input shape = (B, C, T, H, W) where C is channel.
         # encoder output shape = (B, N_patches, embed_dim)
         # so M is folded into B, and T, H, W are the spatio-temporal dimensions to be patched.
-        daily_data_reshaped = daily_data.reshape(B * M, C, T, H, W)
+        input_data_reshaped = input_data.reshape(B * M, C, T, H, W)
         daily_mask_reshaped = daily_mask.reshape(B * M, C, T, H, W)
 
         if self.use_checkpoint:
             latent = checkpoint(
                 self.encoder,
-                daily_data_reshaped,
+                input_data_reshaped,
                 daily_mask_reshaped,
                 use_reentrant=False,
             )  # (B*M, N_patches, embed_dim)
         else:
-            latent = self.encoder(daily_data_reshaped, daily_mask_reshaped)  # (B*M, N_patches, embed_dim)
+            latent = self.encoder(input_data_reshaped, daily_mask_reshaped)  # (B*M, N_patches, embed_dim)
 
         # Step 2: Aggregate temporal information for each spatial patch
         # temporal input shape = (B, M*T*H*W, C),  C: embedding dimension
