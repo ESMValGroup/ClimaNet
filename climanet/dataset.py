@@ -84,7 +84,7 @@ class STDataset(Dataset):
         # Convert to tensor once — all __getitem__ calls use these
         self.daily_t = torch.from_numpy(daily_mt.values.astype(np.float32))  # (M, T=31, H, W)
         self.monthly_t = torch.from_numpy(monthly_m.values.astype(np.float32))  # (M, H, W)
-        self.padded_days_tensor = torch.from_numpy(padded_days_mask.values.copy()).bool()  # (M, T=31)
+        self.padded_days_t = torch.from_numpy(padded_days_mask.values.copy()).bool()  # (M, T=31)
         self.daily_timef_t = torch.from_numpy(daily_timef.values.astype(np.float32))  # (M, T=31, 4)
 
         # Store coordinate arrays
@@ -101,7 +101,7 @@ class STDataset(Dataset):
 
         # Precompute the NaN mask before filling NaNs
         # daily_mask: True where NaN (i.e. missing ocean data, not land)
-        self.daily_nan_mask = torch.isnan(self.daily_t)  # (M, T=31, H, W)
+        self.daily_nan_mask_t = torch.isnan(self.daily_t)  # (M, T=31, H, W)
 
         # NaNs will be filled with 0 in-place
         self.daily_t.nan_to_num_(nan=0.0)
@@ -232,23 +232,23 @@ class STDataset(Dataset):
 
         # Extract spatial patch via slicing — faster than xarray indexing
         # (M, T, H, W) -> (M,T,pH, pW)
-        daily_tensor = self.daily_t[:, :, i : i + ph, j : j + pw].unsqueeze(0)
+        daily_t_patch = self.daily_t[:, :, i : i + ph, j : j + pw].unsqueeze(0)
 
         # (M, H, W) -> (M, pH, pW)
-        monthly_tensor = self.monthly_t[:, i : i + ph, j : j + pw]
+        monthly_t_patch = self.monthly_t[:, i : i + ph, j : j + pw]
 
         # (M, T, H, W) -> (M, T, pH, pW)
-        daily_nan_mask = self.daily_nan_mask[:, :, i : i + ph, j : j + pw].unsqueeze(0)
+        daily_nan_mask_t_patch = self.daily_nan_mask_t[:, :, i : i + ph, j : j + pw].unsqueeze(0)
 
         if self.land_mask_t is not None:
-            land_tensor = self.land_mask_t[i : i + ph, j : j + pw]  # (H, W)
+            land_t_patch = self.land_mask_t[i : i + ph, j : j + pw]  # (H, W)
         else:
-            land_tensor = self._zero_land
+            land_t_patch = self._zero_land
 
         # daily_mask: NaN locations that are NOT land
         # Reshape land_tensor for broadcasting: (pH, pW) → (1, 1, 1, pH, pW)
-        daily_mask_tensor = daily_nan_mask & (
-            ~land_tensor.unsqueeze(0).unsqueeze(0).unsqueeze(0)
+        daily_mask_t_patch = daily_nan_mask_t_patch & (
+            ~land_t_patch.unsqueeze(0).unsqueeze(0).unsqueeze(0)
         )
 
         # Extract lat/lon coordinates for this patch
@@ -256,21 +256,21 @@ class STDataset(Dataset):
         lon_patch = self.lon_coords[j : j + pw]  # (W,) -> (pW,)
 
         # get patch geo pos embedding
-        geo_pos_embedding_tensor = self.patch_geo_embeddings[idx]  # (sh_dim,)
+        geo_pos_embedding_t = self.patch_geo_embeddings[idx]  # (sh_dim,)
 
         # get scale feature for patch
-        scale_feature_tensor = self.patch_scale_features[idx]  # (10,)
+        scale_feature_t = self.patch_scale_features[idx]  # (10,)
 
         # Convert to tensors
         return {
-            "daily_patch": daily_tensor,  # (C=1, M, T=31, pH, pW)
-            "monthly_patch": monthly_tensor,  # (M, pH, pW)
-            "daily_mask_patch": daily_mask_tensor,  # (C=1, M, T=31, pH, pW)
-            "land_mask_patch": land_tensor,  # (pH,pW) True=Land
+            "daily_patch": daily_t_patch,  # (C=1, M, T=31, pH, pW)
+            "monthly_patch": monthly_t_patch,  # (M, pH, pW)
+            "daily_mask_patch": daily_mask_t_patch,  # (C=1, M, T=31, pH, pW)
+            "land_mask_patch": land_t_patch,  # (pH,pW) True=Land
             "daily_timef_patch": self.daily_timef_t,  # (M, T=31, 2)
-            "padded_days_mask": self.padded_days_tensor,  # (M, T=31) True=padded
-            "scale_feature_patch": scale_feature_tensor,  # (10,)
-            "geo_pos_embedding_patch": geo_pos_embedding_tensor,  # (sh_embed_dim,)
+            "padded_days_mask": self.padded_days_t,  # (M, T=31) True=padded
+            "scale_feature_patch": scale_feature_t,  # (10,)
+            "geo_pos_embedding_patch": geo_pos_embedding_t,  # (sh_embed_dim,)
             "sh_embed_dim": self.sh_embed_dim_t,
             "harmonic_order": self.harmonic_order_t,
             "scale_f_dim": self.scale_f_dim,
