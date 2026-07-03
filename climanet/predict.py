@@ -19,11 +19,11 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
     times = base_dataset.monthly_da.coords["time"].values
 
     full_predictions = np.full(
-        (M, len(lats), len(lons)), np.nan, dtype=predictions.dtype
+        (len(times), len(lats), len(lons)), np.nan, dtype=predictions.dtype
     )
     for i, patch_idx in enumerate(indices):
-        lat_start, lon_start = base_dataset.patch_indices[patch_idx]
-        full_predictions[:, lat_start : lat_start + H, lon_start : lon_start + W] = (
+        month_start, lat_start, lon_start = base_dataset.patch_indices[patch_idx]
+        full_predictions[month_start : month_start + M, lat_start : lat_start + H, lon_start : lon_start + W] = (
             predictions[i]
         )
 
