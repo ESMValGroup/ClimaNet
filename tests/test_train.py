@@ -95,3 +95,5 @@ def test_model_fake_tensor(create_dummy_batch):
         batch = {k: mode.from_tensor(v) for k, v in batch.items()}
         loss = _run_one_batch(model, batch)
         loss.backward()
+
+    assert loss.device.type == "cpu"
