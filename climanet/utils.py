@@ -469,3 +469,37 @@ def plot_histograms(
         )
 
     plt.show()
+
+
+def data_split(
+        data_folder,
+        filename_pattern="*_hr_ERA5dc_masked_tos.nc",
+        train_range=(2018, 2020),
+        validation_range=(2021, 2021),
+        test_range=(2022, 2022)
+    ):
+    """
+    Split the data into training, validation, and test sets based on the provided year ranges.
+    """
+    data_folder = Path(data_folder)
+
+    splits = {
+        "train": [],
+        "validation": [],
+        "test": [],
+    }
+
+    for file in data_folder.rglob(filename_pattern):
+        year = int(file.stem[:4])
+
+        if train_range[0] <= year <= train_range[1]:
+            splits["train"].append(file)
+        elif validation_range[0] <= year <= validation_range[1]:
+            splits["validation"].append(file)
+        elif test_range[0] <= year <= test_range[1]:
+            splits["test"].append(file)
+
+    for lst in splits.values():
+        lst.sort()
+
+    return splits

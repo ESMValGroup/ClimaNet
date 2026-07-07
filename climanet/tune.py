@@ -1,20 +1,20 @@
 from pathlib import Path
-import tempfile
+import xarray as xr
 
-from ray import tune
+from ray import init, tune
 from ray.tune.schedulers import ASHAScheduler
 import torch
 
+from climanet.dataset import STDataset
 from climanet.predict import predict_monthly_var
 from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import train_monthly_model
-from climanet.utils import configure_compute_resources, save_model
+from climanet.utils import configure_compute_resources, save_model, set_seed
 
 
 def _train(tune_config):
 
     device = tune_config["device"]
-    compute_threads = tune_config["compute_threads"]
     dataloader_num_workers = tune_config["dataloader_num_workers"]
     train_dataset = tune_config["train_dataset"]
     validation_dataset = tune_config["validation_dataset"]
@@ -28,21 +28,16 @@ def _train(tune_config):
     run_dir = tune_config["run_dir"]
     num_epoch = tune_config["num_epoch"]
 
+    set_seed()
+
     model = SpatioTemporalModel(
-        patch_size=patch_size,
+        patch_size=(1, patch_size, patch_size),
         overlap=overlap,
         embed_dim=embed_dim,
         dropout=dropout,
         hidden=hidden,
         spatial_depth=spatial_depth,
         spatial_heads=spatial_heads,
-    )
-
-    model = configure_compute_resources(
-        model,
-        device=device,
-        compute_threads=compute_threads,
-        dataloader_num_workers=dataloader_num_workers
     )
 
     batch_size = tune_config["batch_size"]
@@ -66,27 +61,73 @@ def _train(tune_config):
     )
 
 
+def _data_preparation(data_config):
+    """
+    Prepare the data for training and validation.
+    """
+    input_data = xr.open_mfdataset(data_config["input_filenames"])
+    monthly_data = xr.open_mfdataset(data_config["monthly_filenames"])
+    lsm_mask = xr.open_dataset(data_config["landmask_filename"])
+
+    # calculate residuals as target
+    input_data_averaged = input_data.resample(time="MS").mean(skipna=True)
+    input_data_averaged["time"] = monthly_data["time"]
+
+    # Residuals
+    monthly_data_res = monthly_data - input_data_averaged
+
+    var_name = data_config["var_name"]
+
+    spatial_patch_size = (32, 32) # based on the patch_size in model
+    stride = (spatial_patch_size[0] // 5, spatial_patch_size[1] // 5)
+
+    dataset = STDataset(
+        input_da=input_data[var_name],
+        monthly_da=monthly_data_res[var_name],
+        land_mask=lsm_mask["lsm"],
+        patch_size=spatial_patch_size,
+        stride=stride,
+        sh_embed_dim=96,
+        sh_order_L = 10,
+        is_hourly=True,
+
+    )
+    return dataset
+
+
 def run_tune(
         tune_config: dict,
     ):
 
-    max_t = tune_config["max_num_epochs"]
+    # data preparation
+    tune_config["train_dataset"] = _data_preparation(tune_config["data_config_train"])
+    tune_config["validation_dataset"] = _data_preparation(tune_config["data_config_validation"])
+
+    # setup Ray Tune
+    init(address="auto", ignore_reinit_error=True)
+
     scheduler = ASHAScheduler(
         time_attr="training_iteration",
-        max_t=max_t,
+        max_t=tune_config["max_num_epochs"],
         grace_period=1,
         reduction_factor=2)
 
-    num_samples = tune_config["num_trials"]
     tuner = tune.Tuner(
-        _train,
+        tune.with_resources(
+            tune.with_parameters(_train),
+            resources={
+                "cpu": tune_config["cpu_per_trial"], "gpu": tune_config["gpu_per_trial"]
+            }
+        ),
         tune_config=tune.TuneConfig(
             metric="loss",
             mode="min",
             scheduler=scheduler,
-            num_samples=num_samples,
+            num_samples=tune_config["num_trials"],
+            max_concurrent_trials=tune_config["max_concurrent_trials"],
         ),
         param_space=tune_config,
+        run_config=tune.RunConfig(local_dir=tune_config["run_dir"]),
     )
     results = tuner.fit()
     return results
