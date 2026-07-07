@@ -39,7 +39,6 @@ def test_model_meta_device(create_dummy_batch):
     model = SpatioTemporalModel(
         patch_size=(1, 4, 4),
         overlap=2,
-        num_months=2,
         embed_dim=64,
         dropout=0.2,
         hidden=64,
@@ -48,12 +47,6 @@ def test_model_meta_device(create_dummy_batch):
     device = "meta"
 
     model = model.to(device)
-    decoder = model.decoder
-    mean, std = torch.rand(1), torch.rand(1)
-    with torch.no_grad():
-        decoder.bias.copy_(mean)
-        decoder.scale.copy_(std + 1e-6)
-
     batch = {k: v.to(device, non_blocking=False) for k, v in batch.items()}
 
     model.train()
@@ -76,7 +69,6 @@ def test_model_fake_tensor(create_dummy_batch):
     model = SpatioTemporalModel(
         patch_size=(1, 4, 4),
         overlap=2,
-        num_months=2,
         embed_dim=64,
         dropout=0.2,
         hidden=64,
@@ -85,11 +77,6 @@ def test_model_fake_tensor(create_dummy_batch):
     device = "cpu"
 
     model = model.to(device)
-    decoder = model.decoder
-    mean, std = torch.rand(1), torch.rand(1)
-    with torch.no_grad():
-        decoder.bias.copy_(mean)
-        decoder.scale.copy_(std + 1e-6)
 
     with FakeTensorMode(allow_non_fake_inputs=True) as mode:
         batch = {k: mode.from_tensor(v) for k, v in batch.items()}
