@@ -228,7 +228,7 @@ class TemporalAttentionAggregator(nn.Module):
     months.
     """
 
-    def __init__(self, embed_dim=128, max_months=12, dropout=0.0):
+    def __init__(self, embed_dim=128, max_months=12, dropout=0.0, chunk_size=1024):
         """Initialize the temporal attention aggregator.
 
         Args:
@@ -239,10 +239,14 @@ class TemporalAttentionAggregator(nn.Module):
             encodings for. Default is 12, which is sufficient for a year of monthly data.
             dropout: Dropout rate for regularization in the day scorer and
             cross-month mixing. Default is 0.0. Increase it if there is overfitting.
+            chunk_size: Number of chunks to process for memory efficiency. This
+                is related to PyTorch limitation in PyTorch's efficient attention
+                kernels. Default is 1024.
         """
         super().__init__()
 
         self.time_embed = CyclicTimeEmbedding(embed_dim=embed_dim)
+        self.chunk_size = chunk_size
 
         # Positional encodings for days and months
         self.pos_months = TemporalPositionalEncoding(embed_dim, max_len=max_months)
@@ -277,6 +281,18 @@ class TemporalAttentionAggregator(nn.Module):
         # Pre-compute and register as buffer — auto-moves with .to(device/dtype)
         pe = self.pos_months(max_months)  # (max_months, C)
         self.register_buffer("pe_months_cache", pe)  # tracks device/dtype automatically
+
+    def _chunk_attn(self, z):
+        """Chunked attention to reduce memory usage for long sequences.
+
+        Args:
+            z: Input tensor of shape (B*HW, M, C) where M is the number of months
+        """
+        out_chunks = []
+        for z_chunk in z.split(self.chunk_size, dim=0):
+            attn_out, _ = self.month_attn(z_chunk, z_chunk, z_chunk, need_weights=False)
+            out_chunks.append(attn_out)
+        return torch.cat(out_chunks, dim=0)  # (B*HW, M, C)
 
     def forward(self, x, M, time_features, padded_days_mask=None):
         """
@@ -327,7 +343,7 @@ class TemporalAttentionAggregator(nn.Module):
 
         z = self.month_ln(z)
 
-        attn_out, _ = self.month_attn(z, z, z, need_weights=False, is_causal=False)
+        attn_out, _ = self._chunk_attn(z)
         z = z + attn_out + self.month_ffn(z)
 
         z = z.reshape(B, HW, M, C)
