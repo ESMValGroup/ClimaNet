@@ -259,6 +259,7 @@ def save_model(
     """Save model state and config to disk."""
     Path(run_dir).mkdir(parents=True, exist_ok=True)
     model_path = Path(run_dir) / filename
+    model = model.module if hasattr(model, "module") else model
     torch.save(
         {
             "model_state_dict": model.state_dict(),
