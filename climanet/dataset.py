@@ -252,7 +252,7 @@ class STDataset(Dataset):
         monthly_t_patch = self.monthly_t[m : m + pm, i : i + ph, j : j + pw]
 
         # (M, T, H, W) -> (M, T, pH, pW)
-        daily_nan_mask_t_patch = self.daily_nan_mask[m : m + pm, :, i : i + ph, j : j + pw].unsqueeze(0)
+        daily_nan_mask_t_patch = self.daily_nan_mask_t[m : m + pm, :, i : i + ph, j : j + pw].unsqueeze(0)
 
         if self.land_mask_t is not None:
             land_t_patch = self.land_mask_t[i : i + ph, j : j + pw]  # (H, W)

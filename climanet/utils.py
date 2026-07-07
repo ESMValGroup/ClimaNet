@@ -252,6 +252,7 @@ def compute_masked_loss(
 def save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
     """Save model state and config to disk."""
     model_path = Path(run_dir) / "best_model.pth"
+    model = model.module if hasattr(model, "module") else model
     torch.save(
         {"model_state_dict": model.state_dict(), "model_config": model.config},
         model_path,
