@@ -5,8 +5,12 @@ import numpy as np
 import xarray as xr
 import torch
 import time
+import psutil
 
 from torch.utils.tensorboard import SummaryWriter
+
+import matplotlib.pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
 
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
@@ -224,7 +228,7 @@ def setup_logging(log_dir: str) -> SummaryWriter:
     """Set up TensorBoard logging directory and writer."""
     Path(log_dir).mkdir(parents=True, exist_ok=True)
     timestamp_utc = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
-    return SummaryWriter(log_dir, filename_suffix=f'_UTC{timestamp_utc}')
+    return SummaryWriter(log_dir, filename_suffix=f"_UTC{timestamp_utc}")
 
 
 def compute_masked_loss(
@@ -256,3 +260,202 @@ def save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
     )
     if verbose:
         print(f"Model saved to {model_path}")
+
+
+def add_month_hour_dims(
+    hourly_ts: xr.DataArray,  # (time, H, W) hourly
+    monthly_ts: xr.DataArray,  # (time, H, W) monthly
+    time_dim: str = "time",
+    spatial_dims: Tuple[str, str] = ("lat", "lon"),
+):
+    """Reshape hourly and monthly data to have explicit month (M) and hour (T) dimensions.
+
+    Here we assume maximum 31 days in a month with 24 hours per day = 744 hours maximum.
+    Invalid hour entries will be padded with NaN.
+
+    Returns
+    -------
+    hourly_m : xr.DataArray - dims: (M, T=744, H, W)
+    monthly_m : xr.DataArray - dims: (M, H, W)
+    padded_hours_mask : xr.DataArray - dims: (M, T=744), bool, True where hour is padded
+    time_features : xr.DataArray - dims: (M, T=744, 2)
+    """
+    # Month key as integer YYYYMM
+    hkey = hourly_ts[time_dim].dt.year * 100 + hourly_ts[time_dim].dt.month
+    mkey = monthly_ts[time_dim].dt.year * 100 + monthly_ts[time_dim].dt.month
+
+    # Unique month keys preserving order
+    _, idx = np.unique(hkey.values, return_index=True)
+    month_keys = hkey.values[np.sort(idx)]
+
+    # Create hour-of-month coordinate (1-744)
+    # hour_of_month = (day_of_month - 1) * 24 + hour_of_day + 1
+    day_of_month = hourly_ts[time_dim].dt.day.values
+    hour_of_day = hourly_ts[time_dim].dt.hour.values
+    hour_of_month = (day_of_month - 1) * 24 + hour_of_day + 1
+
+    # Add M (month key) and T (hour of month) coordinates to hourly data
+    hourly_indexed = (
+        hourly_ts.assign_coords(M=(time_dim, hkey.values), T=(time_dim, hour_of_month))
+        .set_index({time_dim: ("M", "T")})
+        .unstack(time_dim)
+        .reindex(T=np.arange(1, 745), M=month_keys)  # 744 = 31 days * 24 hours
+    )
+    # Force dim order: (M, T, H, W)
+    other_dims = [d for d in hourly_ts.dims if d != time_dim]
+    hourly_indexed = hourly_indexed.transpose("M", "T", *other_dims)
+
+    # Build padded hours mask from hourly_indexed (NaN locations)
+    padded_hours_mask = ~hourly_indexed.notnull().any(dim=spatial_dims)
+
+    # Align monthly data to same month keys/order
+    monthly_m = (
+        monthly_ts.assign_coords(M=(time_dim, mkey.values))
+        .swap_dims({time_dim: "M"})
+        .drop_vars(time_dim)
+        .sel(M=month_keys)
+    )
+
+    # Build aligned datetime array (M, T)
+    time_da = hourly_ts[time_dim]
+
+    # time_indexed is (M, T) with NaT for padded hours
+    time_indexed = (
+        time_da.assign_coords(M=(time_dim, hkey.values), T=(time_dim, hour_of_month))
+        .set_index({time_dim: ("M", "T")})
+        .unstack(time_dim)
+        .reindex(T=np.arange(1, 745), M=month_keys)
+    )
+
+    # Determine day-of-year (doy) and hour-of-day (hod)
+    doy_period = 365.24
+    hod_period = 24.0
+
+    doy = time_indexed.dt.dayofyear.fillna(0)
+    hod = time_indexed.dt.hour.fillna(0)
+
+    # Create phase from day and hour
+    doy_phase = 2 * np.pi * doy / doy_period
+    hod_phase = 2 * np.pi * hod / hod_period
+
+    # Stack cyclic encodings into time_features (M, T, 2)
+    time_features = xr.concat([doy_phase, hod_phase], dim="feature").transpose(
+        "M", "T", "feature"
+    )
+
+    return hourly_indexed, monthly_m, padded_hours_mask, time_features
+
+
+def configure_compute_resources(
+    model: torch.nn.Module,
+    device: str,
+    compute_threads: int,
+    dataloader_num_workers: int,
+) -> torch.nn.Module:
+    """Configure model for multi-GPU and set CPU thread usage for compute (training or prediction).
+
+    Args:
+        model: the PyTorch model to configure
+        device: device to run on ("cpu" or "cuda")
+        compute_threads: number of threads to use for compute when device is CPU.
+            If None, it will be set automatically.
+        dataloader_num_workers: how many subprocesses to use for data loading.
+            See torch DataLoader docs for details.
+    Returns:
+        The model, potentially wrapped in DataParallel if using multiple GPUs.
+    """
+    if device == "cpu":
+        if compute_threads is None:
+            total_cpus = psutil.cpu_count()
+            # keep 1 for main thread
+            compute_threads = max(1, total_cpus - dataloader_num_workers - 1)
+        torch.set_num_threads(compute_threads)
+    elif device == "cuda":
+        num_gpus = torch.cuda.device_count()
+        if num_gpus > 1:
+            model = torch.nn.DataParallel(model)
+    return model
+
+
+def plot_results(
+    target, predictions, label="SST K", title=("Target", "Prediction"), error=False
+):
+    fig, axs = plt.subplots(
+        nrows=len(target.time), ncols=2, figsize=(10, 8), constrained_layout=True
+    )
+
+    for t in range(len(target.time)):
+        # Select data for this timestep
+        target_t = target.isel(time=t)
+        pred_t = predictions.isel(time=t)
+
+        # Shared color scale for this row
+        target_min, target_max = target_t.min().compute(), target_t.max().compute()
+        pred_min, pred_max = pred_t.min().compute(), pred_t.max().compute()
+
+        abs_max = max(abs(target_min), abs(target_max), abs(pred_min), abs(pred_max))
+
+        norm = None
+        cmap = "RdBu_r"
+        if error:
+            norm = TwoSlopeNorm(vmin=-abs_max, vcenter=0.0, vmax=abs_max)
+            cmap = "RdBu_r"
+
+        # Left: truth
+        _ = target_t.plot(ax=axs[t, 0], cmap=cmap, norm=norm, add_colorbar=False)
+
+        # Right: prediction
+        im1 = pred_t.plot(ax=axs[t, 1], cmap=cmap, norm=norm, add_colorbar=False)
+        title_1, title_2 = title
+        axs[t, 0].set_title(
+            f"{title_1}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
+        )
+        axs[t, 1].set_title(
+            f"{title_2}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
+        )
+
+        # One shared colorbar for the row
+        cbar = fig.colorbar(im1, ax=axs[t, :], orientation="vertical", shrink=0.9)
+
+        cbar.set_label(label)
+
+    plt.show()
+
+
+def plot_histograms(
+    target, predictions, label="SST K", legend_labels=("Target", "Prediction"), bins=30
+):
+    """Plot histograms of target and predictions in the same figure for comparison."""
+    fig, axs = plt.subplots(
+        nrows=len(target.time),
+        ncols=1,
+        figsize=(8, 4 * len(target.time)),
+        constrained_layout=True,
+    )
+
+    # Handle single timestep case
+    if len(target.time) == 1:
+        axs = axs.reshape(1, -1)
+
+    for t in range(len(target.time)):
+        target_t = target.isel(time=t)
+        pred_t = predictions.isel(time=t)
+
+        # Target histogram
+        axs[t].hist(
+            target_t.values.flatten(), bins=bins, alpha=0.7, color="blue", density=True
+        )
+        axs[t].set_xlabel(label)
+        axs[t].set_ylabel("Probability Density")
+        axs[t].grid(True, alpha=0.3)
+
+        # Prediction histogram (overlaid)
+        axs[t].hist(
+            pred_t.values.flatten(), bins=bins, alpha=0.7, color="orange", density=True
+        )
+        axs[t].legend(legend_labels)
+        axs[t].set_title(
+            f"Histogram {legend_labels[0]} vs {legend_labels[1]}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
+        )
+
+    plt.show()

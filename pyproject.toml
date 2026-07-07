@@ -37,3 +37,6 @@ docs = [
 
 [tool.setuptools]
 packages = ["climanet"]
+
+[tool.ruff]
+exclude = ["notebooks"]

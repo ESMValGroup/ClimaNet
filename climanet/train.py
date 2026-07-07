@@ -1,4 +1,3 @@
-import copy
 from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
@@ -6,6 +5,39 @@ import torch
 
 from climanet.predict import predict_monthly_var
 from climanet.utils import setup_logging, compute_masked_loss, save_model
+
+
+def _run_one_batch(model: torch.nn.Module, batch: dict):
+    pred = model(
+        batch["daily_patch"],
+        batch["daily_mask_patch"],
+        batch["daily_timef_patch"],
+        batch["land_mask_patch"],
+        batch["geo_pos_embedding_patch"],
+        batch["scale_feature_patch"],
+        batch["padded_days_mask"],
+    )  # (B, M, H, W)
+
+    # Compute masked loss
+    return compute_masked_loss(pred, batch["monthly_patch"], batch["land_mask_patch"])
+
+
+def _compute_stats(dataset: Dataset):
+    # check if dataset has indices attribute for stats calculation
+    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
+    indices = dataset.indices if hasattr(dataset, "indices") else None
+    mean, std = base_dataset.compute_stats(indices)
+    return mean, std
+
+
+def _initialize_decoder(model: torch.nn.Module, dataset: Dataset):
+    mean, std = _compute_stats(dataset)
+    decoder = model.module.decoder if hasattr(model, "module") else model.decoder
+    with torch.no_grad():
+        decoder.bias.copy_(torch.from_numpy(mean))
+        decoder.scale.copy_(torch.from_numpy(std) + 1e-6)
+
+    return model
 
 
 def train_monthly_model(
@@ -22,6 +54,8 @@ def train_monthly_model(
     store_model: bool = True,
     device: str = "cpu",
     verbose: bool = True,
+    dataloader_num_workers: int = 2,
+    verbose_epoch_interval: int = 20,
 ):
     """Train the model to predict monthly data from daily data.
     Args:
@@ -37,27 +71,23 @@ def train_monthly_model(
         store_model: whether to save the best model to disk
         device: device to run training on ("cpu" or "cuda")
         verbose: whether to print training progress
+        dataloader_num_workers: how many subprocesses to use for data loading.
+            See torch DataLoader docs for details.
+        verbose_epoch_interval: how often to print training progress (in epochs)
     """
-
-    # check if dataset has indices attribute for stats calculation
-    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
-    indices = dataset.indices if hasattr(dataset, "indices") else None
-    mean, std = base_dataset.compute_stats(indices)
-
     # Initialize the model
     model = model.to(device)
-    use_cuda = device == "cuda"
-    decoder = model.decoder
-    with torch.no_grad():
-        decoder.bias.copy_(torch.from_numpy(mean))
-        decoder.scale.copy_(torch.from_numpy(std) + 1e-6)
+    model = _initialize_decoder(model, dataset)
 
     # Create data loader
+    use_cuda = device == "cuda"
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        pin_memory=False,
+        pin_memory=use_cuda,
+        num_workers=dataloader_num_workers,  # for data loading
+        persistent_workers=True,  # keep workers alive between epochs
     )
 
     # Set up logging
@@ -81,56 +111,42 @@ def train_monthly_model(
     )
 
     model.train()
-    for epoch in range(num_epoch + 1):
+    for epoch in range(num_epoch):
         epoch_loss = 0.0
 
         optimizer.zero_grad()
 
         for i, batch in enumerate(dataloader):
-            # Batch prediction
-            pred = model(
-                batch["daily_patch"].to(device, non_blocking=use_cuda),
-                batch["daily_mask_patch"].to(device, non_blocking=use_cuda),
-                batch["daily_timef_patch"].to(device, non_blocking=use_cuda),
-                batch["land_mask_patch"].to(device, non_blocking=use_cuda),
-                batch["geo_pos_embedding_patch"].to(device, non_blocking=use_cuda),
-                batch["scale_feature_patch"].to(device, non_blocking=use_cuda),
-                batch["padded_days_mask"].to(device, non_blocking=use_cuda),
-            )  # (B, M, H, W)
+            # Move batch to the appropriate device
+            batch = {k: v.to(device, non_blocking=use_cuda) for k, v in batch.items()}
 
-            # Compute masked loss
-            loss = compute_masked_loss(
-                pred,
-                batch["monthly_patch"].to(device, non_blocking=use_cuda),
-                batch["land_mask_patch"].to(device, non_blocking=use_cuda),
-            )
+            loss = _run_one_batch(model, batch)
 
             # Scale loss for gradient accumulation
-            scaled_loss = loss / accumulation_steps
+            scaled_loss = loss * (1.0 / accumulation_steps)
             scaled_loss.backward()
 
             # Track unscaled loss for logging
-            epoch_loss += loss.item()
+            epoch_loss += loss.detach()
 
             # Update weights every accumulation_steps batches
             if (i + 1) % accumulation_steps == 0:
                 optimizer.step()
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
 
         # Handle remaining gradients if num_batches is not divisible by accumulation_steps
         if (i + 1) % accumulation_steps != 0:
             optimizer.step()
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
 
         # Calculate average epoch loss
-        avg_epoch_loss = epoch_loss / (i + 1)
+        avg_epoch_loss = epoch_loss.item() / (i + 1)
         writer.add_scalar("Loss/train", avg_epoch_loss, epoch)
 
         # Validation loss (optional)
         if validation_dataset is not None:
             # Store train loss for gap calculation
             avg_train_loss = avg_epoch_loss
-
             _, avg_epoch_loss = predict_monthly_var(
                 model,
                 validation_dataset,
@@ -141,10 +157,11 @@ def train_monthly_model(
                 return_loss=True,
                 verbose=False,
                 run_dir=run_dir,
+                dataloader_num_workers=dataloader_num_workers,
             )
             writer.add_scalar("Loss/validation", avg_epoch_loss, epoch)
 
-            if verbose and epoch % 20 == 0:
+            if verbose and epoch % verbose_epoch_interval == 0:
                 gap = avg_epoch_loss - avg_train_loss
                 print(f"Epoch {epoch}: gap between train and val loss: {gap:.6f}")
 
@@ -159,7 +176,7 @@ def train_monthly_model(
         # Consider improvement only if loss decreases more than a small threshold
         if avg_epoch_loss < best_loss - 1e-4:
             best_loss = avg_epoch_loss
-            best_state_dict = copy.deepcopy(model.state_dict())
+            best_state_dict = {k: v.detach() for k, v in model.state_dict().items()}
             counter = 0
         else:
             counter += 1

@@ -18,6 +18,16 @@ This will create a virtual environment in the `.venv` folder with all the requir
 source .venv/bin/activate
 ```
 
+### For development
+
+For developers who want to make changes to the code, please install the `pre-commit` hooks for code formatting and linting. You can do this by running:
+
+```sh
+pre-commit install
+```
+
+After this, every time you make a commit, the code will be automatically formatted and linted according to the rules defined in the `.pre-commit-config.yaml` file.
+
 <!-- start-spatio-temporal -->
 ## Spatio Temporal Model Architecture
 
@@ -56,6 +66,12 @@ X_mixed (MonthlyConvDecoder)---------> Output
 
 We explain the model architecture in more detail in the [code and math
 description](docs/code_math_description.md) document.
+
+## Using HPC (Levante)
+
+If you have access to the Levante HPC cluster, you can run the workflow using
+`slurm` or `jupyter hub`. Please refer to the [Levante usage
+instructions](docs/levante_usage.md) for more details.
 
 ## References
 
