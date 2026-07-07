@@ -1,3 +1,4 @@
+from ray import tune
 from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
@@ -38,6 +39,7 @@ def train_monthly_model(
     verbose: bool = True,
     dataloader_num_workers: int = 2,
     verbose_epoch_interval: int = 20,
+    tune_checkpoint: bool = False,
 ):
     """Train the model to predict monthly data from daily data.
     Args:
@@ -81,6 +83,13 @@ def train_monthly_model(
     best_loss = float("inf")
     counter = 0
     best_state_dict = None  # Store best model state
+
+    if tune.get_checkpoint():
+        loaded_checkpoint = tune.get_checkpoint()
+        with loaded_checkpoint.as_directory() as loaded_checkpoint_dir:
+            model_state, optimizer_state = torch.load(loaded_checkpoint_dir / "checkpoint.pt")
+            model.load_state_dict(model_state)
+            optimizer.load_state_dict(optimizer_state)
 
     # Add scheduler - reduces LR instead of stopping immediately
     scheduler = ReduceLROnPlateau(
@@ -174,6 +183,12 @@ def train_monthly_model(
     # Restore best model
     if best_state_dict is not None:
         model.load_state_dict(best_state_dict)
+
+    if tune_checkpoint:
+        # Save the model and optimizer state for Ray Tune checkpointing
+        checkpoint_path = run_dir / "checkpoint.pt"
+        torch.save((model.state_dict(), optimizer.state_dict()), checkpoint_path)
+        tune.report({"loss": best_loss}, checkpoint=tune.Checkpoint.from_directory(run_dir))
 
     # Close the writer when done
     writer.close()

@@ -18,6 +18,7 @@ dependencies = [
     "tensorboard",
     "torch>=2.10.0",
     "xarray>=2025.12.0",
+    "ray[tune]",
 ]
 
 [dependency-groups]

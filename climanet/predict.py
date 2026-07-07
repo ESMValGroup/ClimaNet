@@ -47,7 +47,7 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
 
 def _load_model(model_path: str, device: str):
     """Helper function to load a model from a checkpoint."""
-    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    checkpoint, _ = torch.load(model_path, map_location=device, weights_only=False)
     model = SpatioTemporalModel(**checkpoint["model_config"])
     model.load_state_dict(checkpoint["model_state_dict"])
     return model.to(device)

@@ -249,11 +249,22 @@ def compute_masked_loss(
     return (num / denom).mean()
 
 
-def save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
+def save_model(
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        run_dir: str,
+        filename="best_model.pth",
+        verbose: bool = True
+    ) -> None:
     """Save model state and config to disk."""
-    model_path = Path(run_dir) / "best_model.pth"
+    Path(run_dir).mkdir(parents=True, exist_ok=True)
+    model_path = Path(run_dir) / filename
     torch.save(
-        {"model_state_dict": model.state_dict(), "model_config": model.config},
+        {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "model_config": model.config
+        },
         model_path,
     )
     if verbose:
