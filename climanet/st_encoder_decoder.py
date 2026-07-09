@@ -3,7 +3,6 @@ Spatio-Temporal encoder-decoder for Monthly Prediction.
 The main model class is SpatioTemporalModel.
 """
 
-import math
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
