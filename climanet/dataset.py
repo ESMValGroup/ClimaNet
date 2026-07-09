@@ -88,8 +88,8 @@ class STDataset(Dataset):
         self.daily_timef_t = torch.from_numpy(daily_timef.values.astype(np.float32))  # (M, T=31, 4)
 
         # Store coordinate arrays
-        self.lat_coords = input_da[spatial_dims[0]].to_numpy().copy()
-        self.lon_coords = input_da[spatial_dims[1]].to_numpy().copy()
+        self.lat_coords = torch.from_numpy(input_da[spatial_dims[0]].to_numpy().copy())
+        self.lon_coords = torch.from_numpy(input_da[spatial_dims[1]].to_numpy().copy())
 
         if land_mask is not None:
             lm = torch.from_numpy(land_mask.values.copy()).bool()
@@ -124,6 +124,7 @@ class STDataset(Dataset):
         self.patch_geo_embeddings, self.patch_scale_features = (
             self._compute_geoscalepatch_embeddings()
         )
+
         self.scale_f_dim = torch.tensor(self.patch_scale_features.shape[-1])
         self.sh_embed_dim_t = torch.tensor(self.sh_embed_dim)
         self.harmonic_order_t = torch.tensor(self.sh_order_L)
@@ -227,8 +228,8 @@ class STDataset(Dataset):
             patch_geo_embeddings.append(geo_emb)
             patch_scale_features.append(scale_feat)
 
-        patch_geo_embeddings = torch.stack(patch_geo_embeddings)
-        patch_scale_features = torch.stack(patch_scale_features)
+        patch_geo_embeddings = torch.stack(patch_geo_embeddings).contiguous().clone()
+        patch_scale_features = torch.stack(patch_scale_features).contiguous().clone()
 
         return patch_geo_embeddings, patch_scale_features
 
