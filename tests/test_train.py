@@ -14,7 +14,7 @@ def create_dummy_batch():
         "monthly_patch": torch.rand(1, 2, 40, 40),
         "daily_mask_patch": torch.rand(1, 1, 2, 31, 40, 40) > 0.5,  # boolean mask
         "land_mask_patch": torch.rand(1, 40, 40) > 0.5,  # boolean mask
-        "daily_timef_patch": torch.rand(1, 2, 31, 2),
+        "daily_timef_patch": torch.rand(1, 2, 31, 3),
         "padded_days_mask": torch.rand(1, 2, 31) > 0.5,  # boolean mask
         "scale_feature_patch": torch.rand(1, 10),
         "geo_pos_embedding_patch": torch.rand(1, 96),
