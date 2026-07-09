@@ -343,7 +343,7 @@ class TemporalAttentionAggregator(nn.Module):
 
         z = self.month_ln(z)
 
-        attn_out, _ = self._chunk_attn(z)
+        attn_out = self._chunk_attn(z)
         z = z + attn_out + self.month_ffn(z)
 
         z = z.reshape(B, HW, M, C)
