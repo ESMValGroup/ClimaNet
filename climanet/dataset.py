@@ -23,7 +23,7 @@ class STDataset(Dataset):
         land_mask: xr.DataArray = None,
         time_dim: str = "time",
         spatial_dims: Tuple[str, str] = ("lat", "lon"),
-        patch_size: Tuple[int, int, int] = (1, 16, 16),  # (M, lat, lon)
+        patch_size: Tuple[int, int, int] = (1, 16, 16),  # (Month, lat, lon)
         stride: Tuple[int, int] = None,
         sh_pos_table: str = None,  # Optional; str formatted path to precomputed table of sh
         sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
