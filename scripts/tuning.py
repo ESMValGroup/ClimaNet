@@ -8,7 +8,6 @@ from climanet.tune import run_tune, tune_data_preparation
 from climanet.utils import data_split
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--storage-path",
@@ -67,7 +66,7 @@ if __name__ == "__main__":
         "landmask_filename": lsm_folder / "era5_lsm_bool.nc",
         "var_name": "tos",
         "patch_size": (1, 32, 32),
-        "stride": (1, 31, 31),   # data agumentation by overlapping patches
+        "stride": (1, 31, 31),  # data agumentation by overlapping patches
     }
 
     tune_config = {
@@ -96,7 +95,7 @@ if __name__ == "__main__":
     }
 
     # Start Ray Tune for distributed training on several nodes
-    ray.init(address= args.ray_address, ignore_reinit_error=True)
+    ray.init(address=args.ray_address, ignore_reinit_error=True)
 
     results = run_tune(tune_config)
 

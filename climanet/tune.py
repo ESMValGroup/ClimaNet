@@ -43,7 +43,7 @@ def _train(tune_config):
     accumulation_steps = tune_config["accumulation_steps"]
     optimizer_lr=tune_config["optimizer_lr"]
 
-    trained_model = train_monthly_model(
+    _ = train_monthly_model(
         model,
         train_dataset,
         validation_dataset=validation_dataset,
