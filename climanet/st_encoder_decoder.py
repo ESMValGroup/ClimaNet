@@ -75,6 +75,64 @@ class VideoEncoder(nn.Module):
         return x
 
 
+class CyclicMonthEmbedding(nn.Module):
+    """Cyclical encoding of month using month-of-year as phse.
+
+    This module uses a Fourier base corresponding to the C12 cyclical
+    symmetry group (month based phase representaton.)
+    """
+
+    def __init__(self, embed_dim=128, n_harmonics=6):
+        """
+        Initialize monthly encoding
+
+        Args:
+            embed_dim: Dimension of the embedding.The default is 128.
+                Many vision transformers use embedding dimensions that are multiples
+                of 64 (e.g., 64, 128, 256). This can be tuned.
+            n_harmonics: number of harmonics to consider for the fourier basis.
+                Can be modified, but the deafult value of 6 (sin/cos pairs, so
+                12 functions) represents a complete basis set for the C12 group
+                which the months form.
+        """
+
+        super().__init__()
+
+        self.n_harmonics = n_harmonics
+
+        # set fixed frequencies
+        freq = torch.linspace(1.0, n_harmonics, n_harmonics)
+        self.register_buffer("freq", freq)
+
+        # learned projection into embedding space.
+        # The fourier basis is considerably smaller than
+        # the embedding dimension. This make a learned projection
+        # desirable. No additive bias is allowed
+        self.proj = nn.Linear(2 * n_harmonics, embed_dim, bias=False)
+
+    def forward(self, time_features):
+        """
+        Create month embedding for tokens
+        """
+        # extract moy phase
+        moy_phase = time_features[..., 0]  # (B, M, T)
+
+        x = moy_phase.unsqueeze(-1)  # (B, M, T, 1)
+
+        # (1,1,1,F)
+        freq = self.freq.view(1, 1, 1, -1)
+
+        # apply frequencies
+        x = x * freq
+
+        sinx = torch.sin(x)
+        cosx = torch.cos(x)
+
+        fourier_emb = torch.cat([sinx, cosx], dim=-1)  # (B, M, T, 12)
+
+        return self.proj(fourier_emb)  # (B, M, T, embed_dim)
+
+
 class CyclicTimeEmbedding(nn.Module):
     """Cyclical Temporal encoding using day-of-year and hour-of-day values in
     combination sine and cosine functions
@@ -138,8 +196,8 @@ class CyclicTimeEmbedding(nn.Module):
         B, M, T, D = time_features.shape
 
         # extract individual phases from features
-        phase_doy = time_features[..., 0]
-        phase_hod = time_features[..., 1]
+        phase_doy = time_features[..., 1]
+        phase_hod = time_features[..., 2]
         phases = [phase_doy, phase_hod]
 
         # construct cross terms
@@ -167,47 +225,6 @@ class CyclicTimeEmbedding(nn.Module):
         emb_encode = emb_encode.view(B, M, T, -1)  # flatten
 
         return emb_encode
-
-
-class TemporalPositionalEncoding(nn.Module):
-    """Temporal Positional Encoding using sine and cosine functions.
-
-    This module generates fixed (non-learnable) sinusoidal positional encodings
-    for the temporal dimension, following the formulation in
-    "Attention Is All You Need" (Vaswani et al., 2017).
-
-    The returned positional encodings are intended to be added to temporal
-    embeddings by the caller, but this module itself does not perform the addition.
-    """
-
-    def __init__(self, embed_dim=128, max_len=31):
-        """Initialize the temporal positional encoding.
-        Args:
-            embed_dim: Dimension of the embedding.The default is 128.
-                Many vision transformers use embedding dimensions that are multiples
-                of 64 (e.g., 64, 128, 256). This can be tuned.
-            max_len: Maximum length of the temporal dimension to precompute
-            encodings for. Default is 31, which is sufficient for a month of
-            daily data.
-        """
-        super().__init__()
-        pe = torch.zeros(max_len, embed_dim)
-        position = torch.arange(0, max_len).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim)
-        )
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer("pe", pe)  # (max_len, embeddim)
-
-    def forward(self, T):
-        """Return positional encodings for a temporal sequence.
-        Args:
-            T: Temporal length (must be <= max_len)
-        Returns:
-            Tensor of shape (T, embed_dim) containing sinusoidal positional encodings
-        """
-        return self.pe[:T]  # (T, embed_dim)
 
 
 class TemporalAttentionAggregator(nn.Module):
@@ -244,8 +261,8 @@ class TemporalAttentionAggregator(nn.Module):
 
         self.time_embed = CyclicTimeEmbedding(embed_dim=embed_dim)
 
-        # Positional encodings for days and months
-        self.pos_months = TemporalPositionalEncoding(embed_dim, max_len=max_months)
+        # cyclical embedding for months
+        self.month_embed = CyclicMonthEmbedding(embed_dim=embed_dim)
 
         # Day scorer (within each month)
         self.day_scorer = nn.Sequential(
@@ -301,8 +318,8 @@ class TemporalAttentionAggregator(nn.Module):
         seq = x.reshape(B, M, Tp, HW, C).permute(0, 3, 1, 2, 4)
 
         temp_emb = self.time_embed(time_features)
-        pe_months = self.pe_months_cache[:M]
-        token_emb = temp_emb + pe_months[None, :, None, :]
+        month_emb = self.month_embed(time_features)
+        token_emb = temp_emb + month_emb
 
         day_logits = self.day_scorer(token_emb).squeeze(-1)
 
