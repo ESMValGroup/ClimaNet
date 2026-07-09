@@ -38,7 +38,9 @@ class STDataset(Dataset):
             land_mask: Optional xarray DataArray with land mask (H, W) or (1, H, W)
             time_dim: Name of the time dimension in the input data
             spatial_dims: Tuple of (lat_dim, lon_dim) names in the input data
-            patch_size: Tuple of (patch_time, patch_height, patch_width) in time unit and pixels
+            patch_size: Tuple of (patch_time, patch_height, patch_width) in time
+                unit and pixels. For example, (1, 16, 16) means 1 month, 16 pixels
+            height, 16 pixels width.
             stride: Tuple of (stride_height, stride_width) in pixels. If None, defaults to patch_size (non-overlapping patches).
             is_hourly: Whether the daily data is hourly (T=31*24) or daily (T=31).
 
