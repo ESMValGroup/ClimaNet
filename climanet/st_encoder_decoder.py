@@ -290,10 +290,6 @@ class TemporalAttentionAggregator(nn.Module):
             nn.Linear(4 * embed_dim, embed_dim),
         )
 
-        # Pre-compute and register as buffer — auto-moves with .to(device/dtype)
-        pe = self.pos_months(max_months)  # (max_months, C)
-        self.register_buffer("pe_months_cache", pe)  # tracks device/dtype automatically
-
     def forward(self, x, M, time_features, padded_days_mask=None):
         """
         Args:
