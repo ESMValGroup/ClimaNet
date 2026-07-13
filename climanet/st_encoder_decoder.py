@@ -333,7 +333,9 @@ class TemporalAttentionAggregator(nn.Module):
         # avoid broadcast materialization
         month_emb = (token_emb_seq * day_w).sum(dim=3)
 
-        month_tokens = month_tokens + month_emb
+aggregated_month_embed = (token_emb_seq * day_w).sum(dim=3)
+
+month_tokens = month_tokens + aggregated_month_embed
 
         z = month_tokens.reshape(B * HW, M, C)
 
