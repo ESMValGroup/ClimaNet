@@ -244,7 +244,7 @@ class TemporalAttentionAggregator(nn.Module):
     months.
     """
 
-    def __init__(self, embed_dim=128, max_months=12, dropout=0.0):
+    def __init__(self, embed_dim=128, dropout=0.0):
         """Initialize the temporal attention aggregator.
 
         Args:
