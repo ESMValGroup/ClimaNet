@@ -631,7 +631,6 @@ class SpatioTemporalModel(nn.Module):
         in_chans=1,
         embed_dim=128,
         patch_size=(1, 4, 4),
-        max_months=12,
         hidden=256,
         overlap=1,
         spatial_depth=2,
