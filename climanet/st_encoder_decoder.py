@@ -646,7 +646,6 @@ class SpatioTemporalModel(nn.Module):
             in_chans: Number of input channels (e.g., 1 for SST, additional channels possible)
             embed_dim: Dimension of the patch embedding
             patch_size: Tuple of (T, H, W) patch sizes for temporal and spatial patching
-            max_months: Maximum number of months for temporal positional encoding
             hidden: Hidden dimension used in the decoder
             overlap: Overlap for deconvolution in the decoder
             max_H: Maximum spatial height for 2D positional encoding
