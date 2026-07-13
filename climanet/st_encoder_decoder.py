@@ -251,8 +251,6 @@ class TemporalAttentionAggregator(nn.Module):
             embed_dim: Dimension of the embedding. The default is 128.
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
-            max_months: Maximum number of months (temporal patches) to precompute
-            encodings for. Default is 12, which is sufficient for a year of monthly data.
             dropout: Dropout rate for regularization in the day scorer and
             cross-month mixing. Default is 0.0. Increase it if there is overfitting.
         """
@@ -298,7 +296,7 @@ class TemporalAttentionAggregator(nn.Module):
             T: number of temporal tokens per month after temporal patching (Tp)
             H: spatial height after spatial patching
             W: spatial width after spatial patching
-            time_features: (B,M,T,2) containing cyclically phase encoded DOY and HOD
+            time_features: (B,M,T,3) containing cyclically phase encoded MOY, DOY and HOD
             padded_days_mask: Optional boolean tensor of shape (B, M, T), bool,
                 True indicating which day tokens are padded (because some months
                 have fewer days). This is used to mask out padded tokens in attention computation.
@@ -331,11 +329,9 @@ class TemporalAttentionAggregator(nn.Module):
         month_tokens = (seq * day_w).sum(dim=3)
 
         # avoid broadcast materialization
-        month_emb = (token_emb_seq * day_w).sum(dim=3)
+        aggregated_month_embed = (token_emb_seq * day_w).sum(dim=3)
 
-aggregated_month_embed = (token_emb_seq * day_w).sum(dim=3)
-
-month_tokens = month_tokens + aggregated_month_embed
+        month_tokens = month_tokens + aggregated_month_embed
 
         z = month_tokens.reshape(B * HW, M, C)
 
@@ -672,7 +668,6 @@ class SpatioTemporalModel(nn.Module):
         )
         self.temporal = TemporalAttentionAggregator(
             embed_dim=embed_dim,
-            max_months=max_months,
             dropout=dropout,
         )
         self.geo_embedding = GeoPositionScaleEmbedding(
