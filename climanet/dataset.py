@@ -14,7 +14,15 @@ from typing import Tuple
 
 
 class STDataset(Dataset):
-    """Dataset for spatiotemporal patches."""
+    """Dataset for spatiotemporal patches.
+
+    This class provides a PyTorch Dataset interface for spatiotemporal data,
+    allowing for the extraction of patches from daily/hourly and monthly data
+    arrays. The `input_da` is expected to be a daily or hourly data array, while
+    the `monthly_da` is a monthly data array. To extract monthly patches, the
+    `input_da` and `monthly_da` are reshaped internally to have a month
+    dimension, and the patches are extracted accordingly.
+    """
 
     def __init__(
         self,
@@ -23,7 +31,7 @@ class STDataset(Dataset):
         land_mask: xr.DataArray = None,
         time_dim: str = "time",
         spatial_dims: Tuple[str, str] = ("lat", "lon"),
-        patch_size: Tuple[int, int, int] = (1, 16, 16),  # (M, lat, lon)
+        patch_size: Tuple[int, int, int] = (1, 16, 16),  # (Month, lat, lon)
         stride: Tuple[int, int] = None,
         sh_pos_table: str = None,  # Optional; str formatted path to precomputed table of sh
         sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
@@ -38,7 +46,13 @@ class STDataset(Dataset):
             land_mask: Optional xarray DataArray with land mask (H, W) or (1, H, W)
             time_dim: Name of the time dimension in the input data
             spatial_dims: Tuple of (lat_dim, lon_dim) names in the input data
-            patch_size: Tuple of (patch_time, patch_height, patch_width) in time unit and pixels
+            patch_size: Tuple of (patch_time, patch_height, patch_width) in time
+                unit and pixels in monthly data. For example, (1, 16, 16) means
+                1 month, 16 pixels height, 16 pixels width. For this, the
+                spatial resolution of `input_da` and `monthly_da` must match. To
+                extract monthly patches, the `input_da` and `monthly_da` are
+                reshaped internally to have a month dimension, and the patches are
+                extracted accordingly.
             stride: Tuple of (stride_height, stride_width) in pixels. If None, defaults to patch_size (non-overlapping patches).
             is_hourly: Whether the daily data is hourly (T=31*24) or daily (T=31).
 

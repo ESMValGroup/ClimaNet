@@ -7,9 +7,9 @@ from torch._subclasses.fake_tensor import FakeTensorMode
 
 
 @pytest.fixture
-def create_dummy_batch():
+def dummy_batch():
     # a dummy batch for testing
-    batch = {
+    return {
         "daily_patch": torch.rand(1, 1, 2, 31, 40, 40),
         "monthly_patch": torch.rand(1, 2, 40, 40),
         "daily_mask_patch": torch.rand(1, 1, 2, 31, 40, 40) > 0.5,  # boolean mask
@@ -25,17 +25,15 @@ def create_dummy_batch():
         "lat_patch": torch.rand(1, 40),
         "lon_patch": torch.rand(1, 40),
     }
-    return batch
 
 
-def test_model_meta_device(create_dummy_batch):
+def test_model_meta_device(dummy_batch):
     """Test that the model can run on a meta device and compute loss without errors.
 
     Device is set to 'meta' for fast model construction, shape propagation,
     and validating model architecture without executing ops.
 
     """
-    batch = create_dummy_batch
     model = SpatioTemporalModel(
         patch_size=(1, 4, 4),
         overlap=2,
@@ -47,16 +45,16 @@ def test_model_meta_device(create_dummy_batch):
     device = "meta"
 
     model = model.to(device)
-    batch = {k: v.to(device, non_blocking=False) for k, v in batch.items()}
+    dummy_batch = {k: v.to(device, non_blocking=False) for k, v in dummy_batch.items()}
 
     model.train()
-    loss = _run_one_batch(model, batch)
+    loss = _run_one_batch(model, dummy_batch)
     loss.backward()
 
     assert loss.device.type == "meta"
 
 
-def test_model_fake_tensor(create_dummy_batch):
+def test_model_fake_tensor(dummy_batch):
     """Test that the model can run with fake tensors and compute loss without errors.
 
     This test uses fake tensors to test operator dispatch, device placement, and
@@ -65,7 +63,6 @@ def test_model_fake_tensor(create_dummy_batch):
     For this test, checkpointing is disabled to avoid issues with fake tensors and autograd.
 
     """
-    batch = create_dummy_batch
     model = SpatioTemporalModel(
         patch_size=(1, 4, 4),
         overlap=2,
@@ -79,8 +76,8 @@ def test_model_fake_tensor(create_dummy_batch):
     model = model.to(device)
 
     with FakeTensorMode(allow_non_fake_inputs=True) as mode:
-        batch = {k: mode.from_tensor(v) for k, v in batch.items()}
-        loss = _run_one_batch(model, batch)
+        dummy_batch = {k: mode.from_tensor(v) for k, v in dummy_batch.items()}
+        loss = _run_one_batch(model, dummy_batch)
         loss.backward()
 
     assert loss.device.type == "cpu"
