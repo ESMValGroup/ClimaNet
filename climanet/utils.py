@@ -488,11 +488,11 @@ def plot_nobs_vs_err(
         err_by_n_obs_baseline = []
         err_by_n_obs_predictions = []
 
-        for n_obs in n_obs_unique:
+        for id_obs in n_obs_unique:
             # Baseline error
             err_arr = (
                 err_baseline.isel(time=i)
-                .where(nobs.isel(time=i) == n_obs)
+                .where(nobs.isel(time=i) == id_obs)
                 .values.flatten()
             )
             err_arr = err_arr[~np.isnan(err_arr)]
@@ -503,7 +503,7 @@ def plot_nobs_vs_err(
             # Prediction error
             err_arr = (
                 err_predictions.isel(time=i)
-                .where(nobs.isel(time=i) == n_obs)
+                .where(nobs.isel(time=i) == id_obs)
                 .values.flatten()
             )
             err_arr = err_arr[~np.isnan(err_arr)]
