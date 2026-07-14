@@ -403,9 +403,8 @@ def plot_nobs_vs_err(
 
         # Get unique number of observations for this month, ignoring NaNs and zeros
         n_obs_unique = np.unique(nobs.isel(time=i).values.flatten())
-        n_obs_unique = n_obs_unique[~np.isnan(n_obs_unique)]
+        n_obs_unique = n_obs_unique[(~np.isnan(n_obs_unique)) & (n_obs_unique > 0)]
         n_obs_unique = n_obs_unique.astype(int)
-        n_obs_unique = n_obs_unique[n_obs_unique > 0]
 
         err_by_n_obs_baseline = []
         err_by_n_obs_predictions = []
@@ -472,8 +471,8 @@ def plot_nobs_vs_err(
             h["cmaxes"].set_linewidth(0.35)
             h["cmaxes"].set_alpha(0.2)
 
-        ax.set_xlabel("Number of Daily Observations")
-        ax.set_ylabel("Log Absolute Error (K)")
+        ax.set_xlabel("Number of Observations")
+        ax.set_ylabel("Symmetric log-scaled Absolute Error (K)")
 
         # Non-linear y-axis: keeps detail near 0 and compresses larger values.
         ax.set_yscale("symlog", linthresh=0.05, linscale=0.8, base=10)
@@ -493,4 +492,4 @@ def plot_nobs_vs_err(
             loc="upper right",
         )
 
-        plt.tight_layout()
+    plt.tight_layout()
