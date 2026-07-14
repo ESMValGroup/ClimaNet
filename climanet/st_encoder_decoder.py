@@ -3,7 +3,6 @@ Spatio-Temporal encoder-decoder for Monthly Prediction.
 The main model class is SpatioTemporalModel.
 """
 
-import math
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
@@ -75,6 +74,64 @@ class VideoEncoder(nn.Module):
         return x
 
 
+class CyclicMonthEmbedding(nn.Module):
+    """Cyclical encoding of month using month-of-year as phse.
+
+    This module uses a Fourier base corresponding to the C12 cyclical
+    symmetry group (month based phase representaton.)
+    """
+
+    def __init__(self, embed_dim=128, n_harmonics=6):
+        """
+        Initialize monthly encoding
+
+        Args:
+            embed_dim: Dimension of the embedding.The default is 128.
+                Many vision transformers use embedding dimensions that are multiples
+                of 64 (e.g., 64, 128, 256). This can be tuned.
+            n_harmonics: number of harmonics to consider for the fourier basis.
+                Can be modified, but the deafult value of 6 (sin/cos pairs, so
+                12 functions) represents a complete basis set for the C12 group
+                which the months form.
+        """
+
+        super().__init__()
+
+        self.n_harmonics = n_harmonics
+
+        # set fixed frequencies
+        freq = torch.linspace(1.0, n_harmonics, n_harmonics)
+        self.register_buffer("freq", freq)
+
+        # learned projection into embedding space.
+        # The fourier basis is considerably smaller than
+        # the embedding dimension. This make a learned projection
+        # desirable. No additive bias is allowed
+        self.proj = nn.Linear(2 * n_harmonics, embed_dim, bias=False)
+
+    def forward(self, time_features):
+        """
+        Create month embedding for tokens
+        """
+        # extract moy phase
+        moy_phase = time_features[..., 0]  # (B, M, T)
+
+        x = moy_phase.unsqueeze(-1)  # (B, M, T, 1)
+
+        # (1,1,1,F)
+        freq = self.freq.view(1, 1, 1, -1)
+
+        # apply frequencies
+        x = x * freq
+
+        sinx = torch.sin(x)
+        cosx = torch.cos(x)
+
+        fourier_emb = torch.cat([sinx, cosx], dim=-1)  # (B, M, T, 12)
+
+        return self.proj(fourier_emb)  # (B, M, T, embed_dim)
+
+
 class CyclicTimeEmbedding(nn.Module):
     """Cyclical Temporal encoding using day-of-year and hour-of-day values in
     combination sine and cosine functions
@@ -138,8 +195,8 @@ class CyclicTimeEmbedding(nn.Module):
         B, M, T, D = time_features.shape
 
         # extract individual phases from features
-        phase_doy = time_features[..., 0]
-        phase_hod = time_features[..., 1]
+        phase_doy = time_features[..., 1]
+        phase_hod = time_features[..., 2]
         phases = [phase_doy, phase_hod]
 
         # construct cross terms
@@ -169,47 +226,6 @@ class CyclicTimeEmbedding(nn.Module):
         return emb_encode
 
 
-class TemporalPositionalEncoding(nn.Module):
-    """Temporal Positional Encoding using sine and cosine functions.
-
-    This module generates fixed (non-learnable) sinusoidal positional encodings
-    for the temporal dimension, following the formulation in
-    "Attention Is All You Need" (Vaswani et al., 2017).
-
-    The returned positional encodings are intended to be added to temporal
-    embeddings by the caller, but this module itself does not perform the addition.
-    """
-
-    def __init__(self, embed_dim=128, max_len=31):
-        """Initialize the temporal positional encoding.
-        Args:
-            embed_dim: Dimension of the embedding.The default is 128.
-                Many vision transformers use embedding dimensions that are multiples
-                of 64 (e.g., 64, 128, 256). This can be tuned.
-            max_len: Maximum length of the temporal dimension to precompute
-            encodings for. Default is 31, which is sufficient for a month of
-            daily data.
-        """
-        super().__init__()
-        pe = torch.zeros(max_len, embed_dim)
-        position = torch.arange(0, max_len).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim)
-        )
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer("pe", pe)  # (max_len, embeddim)
-
-    def forward(self, T):
-        """Return positional encodings for a temporal sequence.
-        Args:
-            T: Temporal length (must be <= max_len)
-        Returns:
-            Tensor of shape (T, embed_dim) containing sinusoidal positional encodings
-        """
-        return self.pe[:T]  # (T, embed_dim)
-
-
 class TemporalAttentionAggregator(nn.Module):
     """Temporal attention-based aggregator.
 
@@ -228,15 +244,13 @@ class TemporalAttentionAggregator(nn.Module):
     months.
     """
 
-    def __init__(self, embed_dim=128, max_months=12, dropout=0.0):
+    def __init__(self, embed_dim=128, dropout=0.0):
         """Initialize the temporal attention aggregator.
 
         Args:
             embed_dim: Dimension of the embedding. The default is 128.
                 Many vision transformers use embedding dimensions that are multiples
                 of 64 (e.g., 64, 128, 256). This can be tuned.
-            max_months: Maximum number of months (temporal patches) to precompute
-            encodings for. Default is 12, which is sufficient for a year of monthly data.
             dropout: Dropout rate for regularization in the day scorer and
             cross-month mixing. Default is 0.0. Increase it if there is overfitting.
         """
@@ -244,8 +258,8 @@ class TemporalAttentionAggregator(nn.Module):
 
         self.time_embed = CyclicTimeEmbedding(embed_dim=embed_dim)
 
-        # Positional encodings for days and months
-        self.pos_months = TemporalPositionalEncoding(embed_dim, max_len=max_months)
+        # cyclical embedding for months
+        self.month_embed = CyclicMonthEmbedding(embed_dim=embed_dim)
 
         # Day scorer (within each month)
         self.day_scorer = nn.Sequential(
@@ -274,10 +288,6 @@ class TemporalAttentionAggregator(nn.Module):
             nn.Linear(4 * embed_dim, embed_dim),
         )
 
-        # Pre-compute and register as buffer — auto-moves with .to(device/dtype)
-        pe = self.pos_months(max_months)  # (max_months, C)
-        self.register_buffer("pe_months_cache", pe)  # tracks device/dtype automatically
-
     def forward(self, x, M, time_features, padded_days_mask=None):
         """
         Args:
@@ -286,7 +296,7 @@ class TemporalAttentionAggregator(nn.Module):
             T: number of temporal tokens per month after temporal patching (Tp)
             H: spatial height after spatial patching
             W: spatial width after spatial patching
-            time_features: (B,M,T,2) containing cyclically phase encoded DOY and HOD
+            time_features: (B,M,T,3) containing cyclically phase encoded MOY, DOY and HOD
             padded_days_mask: Optional boolean tensor of shape (B, M, T), bool,
                 True indicating which day tokens are padded (because some months
                 have fewer days). This is used to mask out padded tokens in attention computation.
@@ -301,8 +311,8 @@ class TemporalAttentionAggregator(nn.Module):
         seq = x.reshape(B, M, Tp, HW, C).permute(0, 3, 1, 2, 4)
 
         temp_emb = self.time_embed(time_features)
-        pe_months = self.pe_months_cache[:M]
-        token_emb = temp_emb + pe_months[None, :, None, :]
+        month_emb = self.month_embed(time_features)
+        token_emb = temp_emb + month_emb
 
         day_logits = self.day_scorer(token_emb).squeeze(-1)
 
@@ -319,9 +329,9 @@ class TemporalAttentionAggregator(nn.Module):
         month_tokens = (seq * day_w).sum(dim=3)
 
         # avoid broadcast materialization
-        month_emb = (token_emb_seq * day_w).sum(dim=3)
+        aggregated_month_embed = (token_emb_seq * day_w).sum(dim=3)
 
-        month_tokens = month_tokens + month_emb
+        month_tokens = month_tokens + aggregated_month_embed
 
         z = month_tokens.reshape(B * HW, M, C)
 
@@ -617,7 +627,6 @@ class SpatioTemporalModel(nn.Module):
         in_chans=1,
         embed_dim=128,
         patch_size=(1, 4, 4),
-        max_months=12,
         hidden=256,
         overlap=1,
         spatial_depth=2,
@@ -633,7 +642,6 @@ class SpatioTemporalModel(nn.Module):
             in_chans: Number of input channels (e.g., 1 for SST, additional channels possible)
             embed_dim: Dimension of the patch embedding
             patch_size: Tuple of (T, H, W) patch sizes for temporal and spatial patching
-            max_months: Maximum number of months for temporal positional encoding
             hidden: Hidden dimension used in the decoder
             overlap: Overlap for deconvolution in the decoder
             max_H: Maximum spatial height for 2D positional encoding
@@ -660,7 +668,6 @@ class SpatioTemporalModel(nn.Module):
         )
         self.temporal = TemporalAttentionAggregator(
             embed_dim=embed_dim,
-            max_months=max_months,
             dropout=dropout,
         )
         self.geo_embedding = GeoPositionScaleEmbedding(

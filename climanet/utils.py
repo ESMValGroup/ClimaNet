@@ -120,6 +120,7 @@ def add_month_day_dims(
         .unstack(time_dim)
         .reindex(T=np.arange(1, 32), M=month_keys)
     )
+
     # Force dim order: (M, T, H, W) (and keep any other non-time dims after M,T)
     other_dims = [d for d in daily_ts.dims if d != time_dim]  # e.g. ["H", "W"]
     daily_indexed = daily_indexed.transpose("M", "T", *other_dims)
@@ -148,12 +149,14 @@ def add_month_day_dims(
         .reindex(T=np.arange(1, 32), M=month_keys)
     )
 
-    # determine day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
+    # month-of_year (moy), day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
     # here we choose to use the tropical year length (365.2422 day, which we round to 365.24) as the
     # period to return to the position of the sun relative to the Earth
+    moy_period = 12.0
     doy_period = 365.24
     hod_period = 24.0
 
+    moy = time_indexed.dt.month.fillna(0)
     doy = time_indexed.dt.dayofyear.fillna(0)
 
     if "hour" in dir(time_indexed.dt):
@@ -162,13 +165,14 @@ def add_month_day_dims(
         hod = xr.zeros_like(doy)
 
     # create phase from day and hod
+    moy_phase = 2 * np.pi * (moy - 1.0) / moy_period
     doy_phase = 2 * np.pi * doy / doy_period
     hod_phase = 2 * np.pi * hod / hod_period
 
-    # Stack cyclic encodings into time_features (M,T,2)
-    time_features = xr.concat([doy_phase, hod_phase], dim="feature").transpose(
-        "M", "T", "feature"
-    )
+    # Stack cyclic encodings into time_features (M,T,3)
+    time_features = xr.concat(
+        [moy_phase, doy_phase, hod_phase], dim="feature"
+    ).transpose("M", "T", "feature")
 
     return daily_indexed, monthly_m, padded_days_mask, time_features
 
@@ -327,21 +331,24 @@ def add_month_hour_dims(
         .reindex(T=np.arange(1, 745), M=month_keys)
     )
 
-    # Determine day-of-year (doy) and hour-of-day (hod)
+    # Determine month-of-year, day-of-year (doy) and hour-of-day (hod)
+    moy_period = 12.0
     doy_period = 365.24
     hod_period = 24.0
 
+    moy = time_indexed.dt.month.fillna(0)
     doy = time_indexed.dt.dayofyear.fillna(0)
     hod = time_indexed.dt.hour.fillna(0)
 
-    # Create phase from day and hour
+    # Create phase from month, day and hour
+    moy_phase = 2 * np.pi * (moy - 1.0) / moy_period
     doy_phase = 2 * np.pi * doy / doy_period
     hod_phase = 2 * np.pi * hod / hod_period
 
-    # Stack cyclic encodings into time_features (M, T, 2)
-    time_features = xr.concat([doy_phase, hod_phase], dim="feature").transpose(
-        "M", "T", "feature"
-    )
+    # Stack cyclic encodings into time_features (M, T, 3)
+    time_features = xr.concat(
+        [moy_phase, doy_phase, hod_phase], dim="feature"
+    ).transpose("M", "T", "feature")
 
     return hourly_indexed, monthly_m, padded_hours_mask, time_features
 
