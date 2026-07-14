@@ -478,8 +478,8 @@ def plot_nobs_vs_err(
         axes = [axes]
 
     for i, ax in enumerate(axes):
-        ax.set_title(f"Month = {i}")
-
+        ax.set_title(f"Month = {err_baseline.time.dt.strftime('%Y-%m-%d').values[i]}")
+        
         # Get unique number of observations for this month, ignoring NaNs and zeros
         n_obs_unique = np.unique(nobs.isel(time=i).values)
         n_obs_unique = n_obs_unique[(~np.isnan(n_obs_unique)) & (n_obs_unique > 0)]
