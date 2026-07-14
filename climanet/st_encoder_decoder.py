@@ -637,6 +637,7 @@ class SpatioTemporalModel(nn.Module):
         dropout=0.0,
         sh_dim=96,
         scale_dim=10,
+        use_checkpoint=True,
     ):
         """Initialize the Spatio-Temporal Model.
 
@@ -662,6 +663,8 @@ class SpatioTemporalModel(nn.Module):
         self.config = {
             k: v for k, v in locals().items() if k not in ("self", "__class__")
         }
+
+        self.use_checkpoint = use_checkpoint
 
         self.encoder = VideoEncoder(
             in_chans=in_chans,
@@ -742,12 +745,17 @@ class SpatioTemporalModel(nn.Module):
         input_data_reshaped = input_data.reshape(B * M, C, T, H, W)
         daily_mask_reshaped = daily_mask.reshape(B * M, C, T, H, W)
 
-        latent = checkpoint(
-            self.encoder,
-            input_data_reshaped,
-            daily_mask_reshaped,
-            use_reentrant=False,
-        )  # (B*M, N_patches, embed_dim)
+        if self.use_checkpoint:
+            latent = checkpoint(
+                self.encoder,
+                input_data_reshaped,
+                daily_mask_reshaped,
+                use_reentrant=False,
+            )  # (B*M, N_patches, embed_dim)
+        else:
+            latent = self.encoder(
+                input_data_reshaped, daily_mask_reshaped
+            )  # (B*M, N_patches, embed_dim)
 
         # Step 2: Aggregate temporal information for each spatial patch
         # temporal input shape = (B, M*T*H*W, C),  C: embedding dimension
@@ -755,17 +763,32 @@ class SpatioTemporalModel(nn.Module):
         embed_dim = latent.shape[-1]
         latent = latent.view(B, M, Tp, Hp, Wp, embed_dim)
 
-        agg_latent = checkpoint(
-            self.temporal, latent, M, daily_timef, padded_days_mask, use_reentrant=False
-        )  # (B, M, Hp*Wp, embed_dim)
+        if self.use_checkpoint:
+            agg_latent = checkpoint(
+                self.temporal,
+                latent,
+                M,
+                daily_timef,
+                padded_days_mask,
+                use_reentrant=False,
+            )  # (B, M, Hp*Wp, embed_dim)
+        else:
+            agg_latent = self.temporal(
+                latent, M, daily_timef, padded_days_mask
+            )  # (B, M, Hp*Wp, embed_dim)
 
         # Step 3: Add geo position and scale encodings
-        geo_emb = checkpoint(
-            self.geo_embedding,
-            geo_pos_embedding_patch,
-            scale_feature_patch,
-            use_reentrant=False,
-        )[:, None, None, :]  # (B,1,1,E)
+        if self.use_checkpoint:
+            geo_emb = checkpoint(
+                self.geo_embedding,
+                geo_pos_embedding_patch,
+                scale_feature_patch,
+                use_reentrant=False,
+            )[:, None, None, :]  # (B,1,1,E)
+        else:
+            geo_emb = self.geo_embedding(geo_pos_embedding_patch, scale_feature_patch)[
+                :, None, None, :
+            ]  # (B,1,1,E)
 
         # Broadcasting: same geo embedding for all M months at each Hp*Wp location
         # we use weighted mean patch embedding, see `geo_embedding_utils.py`
@@ -783,7 +806,10 @@ class SpatioTemporalModel(nn.Module):
         # Step 5: Decode to full-resolution 2D map
         # decoder input shape is (B, M*Hp*Wp, C), C: embedding dimension
         # decoder output shape is (B, M, H, W)
-        monthly_pred = checkpoint(
-            self.decoder, x, M, H, W, land_mask_patch, use_reentrant=False
-        )  # (B, M, H, W)
+        if self.use_checkpoint:
+            monthly_pred = checkpoint(
+                self.decoder, x, M, H, W, land_mask_patch, use_reentrant=False
+            )  # (B, M, H, W)
+        else:
+            monthly_pred = self.decoder(x, M, H, W, land_mask_patch)  # (B, M, H, W)
         return monthly_pred

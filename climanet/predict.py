@@ -155,7 +155,7 @@ def predict_monthly_var(
     writer.add_scalar("Loss/Average", average_loss)
 
     if return_numpy:
-        all_predictions = all_predictions.numpy()
+        all_predictions = all_predictions.cpu().numpy()
 
     if save_predictions:
         if not return_numpy:
