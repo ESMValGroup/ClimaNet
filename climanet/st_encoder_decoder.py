@@ -354,7 +354,6 @@ class MonthlyConvDecoder(nn.Module):
         patch_w=4,
         hidden=128,
         overlap=1,
-        num_months=12,
         dropout=0.0,
     ):
         """
@@ -368,7 +367,6 @@ class MonthlyConvDecoder(nn.Module):
                 The default is 128, which can be tuned.
             overlap: Overlap size for deconvolution. It creates smooth blending
                 between adjacent upsampled patches. Default is 1, no overlap at edges.
-            num_months: Number of months. Default is 12.
             dropout: Dropout rate for regularization in the refinement block. Default is 0.0.
         """
         super().__init__()
@@ -420,10 +418,6 @@ class MonthlyConvDecoder(nn.Module):
         # Final conv head to map to single-channel output
         self.head = nn.Conv2d(out_channels, 1, kernel_size=1)
 
-        # Learnable scale and bias (mean and std) to improve predictions
-        self.scale = nn.Parameter(torch.ones(num_months))
-        self.bias = nn.Parameter(torch.zeros(num_months))
-
     def forward(self, latent, M, out_H, out_W, land_mask=None):
         """Reconstruct 2D maps from latent patch tokens.
         Args:
@@ -458,11 +452,6 @@ class MonthlyConvDecoder(nn.Module):
 
         # Apply final conv head to get single channel output
         out = self.head(out)  # (B*M, 1, H, W)
-
-        # Apply scale and bias per month to improve predictions; reshape to (B*M, 1, 1, 1) for broadcasting
-        scale = self.scale[:M].unsqueeze(0).expand(B, M).reshape(B * M, 1, 1, 1)
-        bias = self.bias[:M].unsqueeze(0).expand(B, M).reshape(B * M, 1, 1, 1)
-        out = out * scale + bias
         out = out.view(B, M, out_H, out_W)  # (B, M, H, W)
 
         # Mask out land areas if land_mask is provided
@@ -629,7 +618,6 @@ class SpatioTemporalModel(nn.Module):
         embed_dim=128,
         patch_size=(1, 4, 4),
         max_months=12,
-        num_months=12,
         hidden=256,
         overlap=1,
         spatial_depth=2,
@@ -646,7 +634,6 @@ class SpatioTemporalModel(nn.Module):
             embed_dim: Dimension of the patch embedding
             patch_size: Tuple of (T, H, W) patch sizes for temporal and spatial patching
             max_months: Maximum number of months for temporal positional encoding
-            num_months: Number of months to predict (output channels in decoder)
             hidden: Hidden dimension used in the decoder
             overlap: Overlap for deconvolution in the decoder
             max_H: Maximum spatial height for 2D positional encoding
@@ -693,7 +680,6 @@ class SpatioTemporalModel(nn.Module):
             patch_w=patch_size[2],
             hidden=hidden,
             overlap=overlap,
-            num_months=num_months,
             dropout=dropout,
         )
         self.patch_size = patch_size
