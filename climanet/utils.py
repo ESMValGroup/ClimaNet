@@ -468,16 +468,11 @@ def plot_nobs_vs_err(
     The three inputs are expected to be xarray DataArrays with dimensions (time, lat, lon).
     They should share the same spatial and temporal coordinates.
 
-    Parameters
-    ----------
-    nobs : xr.DataArray
-        Number of observations per grid cell per month. Dimensions: (time, lat, lon)
-    err_baseline : xr.DataArray
-        Baseline error per grid cell per month. Dimensions: (time, lat, lon)
-    err_predictions : xr.DataArray
-        Prediction error per grid cell per month. Dimensions: (time, lat, lon)
+    Args:
+        nobs (xr.DataArray): Number of observations per grid cell per month. Dimensions: (time, lat, lon)
+        err_baseline (xr.DataArray): Baseline error per grid cell per month. Dimensions: (time, lat, lon)
+        err_predictions (xr.DataArray): Prediction error per grid cell per month. Dimensions: (time, lat, lon)
     """
-
     fig, axes = plt.subplots(nobs.sizes["time"], 1, figsize=(5 * nobs.sizes["time"], 8))
     if nobs.sizes["time"] == 1:
         axes = [axes]
