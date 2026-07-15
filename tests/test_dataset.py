@@ -54,17 +54,17 @@ def test_len_and_shapes():
         input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
-        patch_size=(2, 2),
+        patch_size=(1, 2, 2),
     )
 
     assert len(dataset) == 4
 
     sample = dataset[0]
-    assert torch.equal(sample["coords"], torch.tensor([0, 0]))
+    assert torch.equal(sample["coords"], torch.tensor([0, 0, 0]))
     assert sample["daily_patch"].shape == (1, 1, 31, 2, 2)
     assert sample["monthly_patch"].shape == (1, 2, 2)
     assert sample["daily_mask_patch"].shape == (1, 1, 31, 2, 2)
-    assert sample["daily_timef_patch"].shape == (1, 31, 2)
+    assert sample["daily_timef_patch"].shape == (1, 31, 3)
     assert sample["daily_patch"].dtype == torch.float32
     assert sample["monthly_patch"].dtype == torch.float32
     assert sample["daily_mask_patch"].dtype == torch.bool
@@ -77,7 +77,7 @@ def test_index_bounds():
         input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
-        patch_size=(2, 2),
+        patch_size=(1, 2, 2),
     )
 
     with pytest.raises(IndexError):
@@ -93,11 +93,11 @@ def test_index_mapping_and_mask_values():
         input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
-        patch_size=(2, 2),
+        patch_size=(1, 2, 2),
     )
 
     sample = dataset[3]
-    assert torch.equal(sample["coords"], torch.tensor([2, 2]))
+    assert torch.equal(sample["coords"], torch.tensor([0, 2, 2]))
 
     expected_mask = land_mask.isel(lat=slice(2, 4), lon=slice(2, 4)).to_numpy()
     assert torch.equal(sample["land_mask_patch"], torch.from_numpy(expected_mask))
@@ -109,9 +109,11 @@ def test_time_feature_generation():
         input_da=daily_da,
         monthly_da=monthly_da,
         land_mask=land_mask,
-        patch_size=(2, 2),
+        patch_size=(1, 2, 2),
     )
 
     sample = dataset[0]
-    expected_time_feature=torch.tensor([np.float32(2*np.pi*6/365.24),np.float32(0.)])
-    assert torch.equal(sample["daily_timef_patch"][0,5,:], expected_time_feature)
+    expected_time_feature = torch.tensor(
+        [np.float32(0.), np.float32(2 * np.pi * 6 / 365.24), np.float32(0.0)]
+    )
+    assert torch.equal(sample["daily_timef_patch"][0, 5, :], expected_time_feature)
