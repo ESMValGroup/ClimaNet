@@ -49,8 +49,8 @@ def compute_sh_on_grid(lat, lon, L, dtype=torch.float32):
     H = len(lat)
     W = len(lon)
 
-    theta = torch.deg2rad(90.0 - torch.tensor(lat, dtype=dtype))  # colatitude
-    phi = torch.deg2rad(torch.tensor(lon, dtype=dtype))  # longitude
+    theta = torch.deg2rad(90.0 - torch.as_tensor(lat, dtype=dtype))  # colatitude
+    phi = torch.deg2rad(torch.as_tensor(lon, dtype=dtype))  # longitude
 
     D = (L + 1) ** 2
 
@@ -90,7 +90,7 @@ def compute_area_weights(lat):
         weights : (H,)
     """
 
-    lat_rad = torch.deg2rad(torch.tensor(lat, dtype=torch.float32))
+    lat_rad = torch.deg2rad(torch.as_tensor(lat, dtype=torch.float32))
 
     weights = torch.cos(lat_rad)
 
