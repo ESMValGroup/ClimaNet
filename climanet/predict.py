@@ -120,7 +120,7 @@ def predict_monthly_var(
 
     with torch.inference_mode():
         idx = 0
-        average_loss = 0.0
+        average_loss = torch.tensor(0.0, device=device)
         for i, batch in enumerate(dataloader):
             # Move batch to the appropriate device
             batch = {k: v.to(device, non_blocking=use_cuda) for k, v in batch.items()}
