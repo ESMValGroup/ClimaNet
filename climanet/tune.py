@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import ray
 import xarray as xr
 
@@ -42,7 +40,7 @@ def _train(tune_config):
 
     batch_size = tune_config["batch_size"]
     accumulation_steps = tune_config["accumulation_steps"]
-    optimizer_lr=tune_config["optimizer_lr"]
+    optimizer_lr = tune_config["optimizer_lr"]
 
     _ = train_monthly_model(
         model,
@@ -81,11 +79,10 @@ def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
         monthly_da=monthly_data_res[var_name],
         land_mask=lsm_mask["lsm"],
         patch_size=data_config["patch_size"],
-        stride= data_config["stride"],
+        stride=data_config["stride"],
         sh_embed_dim=96,
-        sh_order_L = 10,
+        sh_order_L=10,
         is_hourly=is_hourly,
-
     )
     return dataset
 
@@ -109,8 +106,9 @@ def run_tune(tune_config: dict):
         ray.tune.with_resources(
             ray.tune.with_parameters(_train),
             resources={
-                "cpu": tune_config["cpu_per_trial"], "gpu": tune_config["gpu_per_trial"]
-            }
+                "cpu": tune_config["cpu_per_trial"],
+                "gpu": tune_config["gpu_per_trial"],
+            },
         ),
         tune_config=ray.tune.TuneConfig(
             metric="loss",

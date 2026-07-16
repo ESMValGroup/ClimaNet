@@ -189,7 +189,9 @@ def train_monthly_model(
     if tune_checkpoint:
         # Save the model and optimizer state for Ray Tune checkpointing
         save_model(model, optimizer, run_dir, filename="checkpoint.pt", verbose=False)
-        tune.report({"loss": best_loss}, checkpoint=tune.Checkpoint.from_directory(run_dir))
+        tune.report(
+            {"loss": best_loss}, checkpoint=tune.Checkpoint.from_directory(run_dir)
+        )
 
     # Close the writer when done
     writer.close()

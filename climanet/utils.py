@@ -257,12 +257,12 @@ def compute_masked_loss(
 
 
 def save_model(
-        model: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
-        run_dir: str,
-        filename="best_model.pth",
-        verbose: bool = True
-    ) -> None:
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    run_dir: str,
+    filename="best_model.pth",
+    verbose: bool = True,
+) -> None:
     """Save model state and config to disk."""
     Path(run_dir).mkdir(parents=True, exist_ok=True)
     model_path = Path(run_dir) / filename
@@ -271,7 +271,7 @@ def save_model(
         {
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
-            "model_config": model.config
+            "model_config": model.config,
         },
         model_path,
     )
@@ -281,9 +281,7 @@ def save_model(
 
 def load_model(model_path: str, device: str):
     """Helper function to load a model from a checkpoint."""
-    checkpoint = torch.load(
-        model_path, map_location=device, weights_only=False
-    )
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     model = SpatioTemporalModel(**checkpoint["model_config"])
     model.load_state_dict(checkpoint["model_state_dict"])
     return model.to(device)
@@ -492,12 +490,12 @@ def plot_histograms(
 
 
 def data_split(
-        data_folder,
-        filename_pattern="*_hr_ERA5dc_masked_tos.nc",
-        train_range=(2018, 2020),
-        validation_range=(2021, 2021),
-        test_range=(2022, 2022)
-    ):
+    data_folder,
+    filename_pattern="*_hr_ERA5dc_masked_tos.nc",
+    train_range=(2018, 2020),
+    validation_range=(2021, 2021),
+    test_range=(2022, 2022),
+):
     """
     Split the data into training, validation, and test sets based on the provided year ranges.
     """

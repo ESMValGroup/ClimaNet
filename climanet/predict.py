@@ -2,7 +2,6 @@ from pathlib import Path
 
 import numpy as np
 from torch.utils.data import Dataset
-from climanet.st_encoder_decoder import SpatioTemporalModel
 import xarray as xr
 import torch
 from torch.utils.data import DataLoader
