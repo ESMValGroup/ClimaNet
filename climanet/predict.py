@@ -95,6 +95,10 @@ def predict_monthly_var(
     model.to(device)
     model.eval()
 
+    # Length of the dataset should >=1
+    if len(dataset) < 1:
+        raise ValueError("The dataset is empty. Please provide a non-empty dataset.")
+
     use_cuda = device == "cuda"
     dataloader = DataLoader(
         dataset,
