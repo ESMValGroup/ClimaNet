@@ -90,7 +90,7 @@ if __name__ == "__main__":
         "spatial_heads": tune.grid_search([2, 4, 8]),
         "optimizer_lr": tune.loguniform(1e-3, 1e-1),
         "batch_size": tune.grid_search([200, 400, 800]),  # based on GPU memory
-        "accumulation_steps": tune.grid_search([100, 200, 400]),  # based on batch_size
+        "accumulation_steps": tune.grid_search([1, 2, 4]),  # based on batch_size
         "max_concurrent_trials": args.num_nodes * 4,  # GPUs per node (4)
     }
 
