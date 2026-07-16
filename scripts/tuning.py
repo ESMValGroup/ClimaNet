@@ -57,16 +57,16 @@ if __name__ == "__main__":
         "monthly_filenames": monthly_files["train"],
         "landmask_filename": lsm_folder / "era5_lsm_bool.nc",
         "var_name": "tos",
-        "patch_size": (2, 40, 40),  # based on the patch_size in model
-        "stride": (1, 30, 30),  # data agumentation by overlapping patches
+        "patch_size": (1, 40, 40),  # based on the patch_size in model
+        "stride": (20, 20),  # data agumentation by overlapping patches
     }
     data_config_validation = {
         "input_filenames": hourly_files["validation"],
         "monthly_filenames": monthly_files["validation"],
         "landmask_filename": lsm_folder / "era5_lsm_bool.nc",
         "var_name": "tos",
-        "patch_size": (1, 40, 40),
-        "stride": (1, 30, 30),  # data agumentation by overlapping patches
+        "patch_size": (1, 40, 40),  # based on the patch_size in model
+        "stride": (20, 20),  # data agumentation by overlapping patches
     }
 
     tune_config = {
@@ -83,9 +83,9 @@ if __name__ == "__main__":
         # parameters to tune
         "patch_size": tune.grid_search([2, 4, 8]),
         "overlap": tune.grid_search([0, 1, 2]),
-        "embed_dim": tune.grid_search([64, 128, 256]),
+        "embed_dim": tune.grid_search([32, 64, 128]),
         "dropout": tune.grid_search([0.0, 0.1, 0.2]),
-        "hidden": tune.grid_search([128, 256, 512]),
+        "hidden": tune.grid_search([32, 64, 128]),
         "spatial_depth": tune.grid_search([1, 2, 3]),
         "spatial_heads": tune.grid_search([2, 4, 8]),
         "optimizer_lr": tune.loguniform(1e-3, 1e-1),
