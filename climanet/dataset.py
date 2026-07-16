@@ -14,7 +14,15 @@ from typing import Tuple
 
 
 class STDataset(Dataset):
-    """Dataset for spatiotemporal patches."""
+    """Dataset for spatiotemporal patches.
+
+    This class provides a PyTorch Dataset interface for spatiotemporal data,
+    allowing for the extraction of patches from daily/hourly and monthly data
+    arrays. The `input_da` is expected to be a daily or hourly data array, while
+    the `monthly_da` is a monthly data array. To extract monthly patches, the
+    `input_da` and `monthly_da` are reshaped internally to have a month
+    dimension, and the patches are extracted accordingly.
+    """
 
     def __init__(
         self,
@@ -23,7 +31,7 @@ class STDataset(Dataset):
         land_mask: xr.DataArray = None,
         time_dim: str = "time",
         spatial_dims: Tuple[str, str] = ("lat", "lon"),
-        patch_size: Tuple[int, int, int] = (1, 16, 16),  # (M, lat, lon)
+        patch_size: Tuple[int, int, int] = (1, 16, 16),  # (Month, lat, lon)
         stride: Tuple[int, int] = None,
         sh_pos_table: str = None,  # Optional; str formatted path to precomputed table of sh
         sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
@@ -38,7 +46,13 @@ class STDataset(Dataset):
             land_mask: Optional xarray DataArray with land mask (H, W) or (1, H, W)
             time_dim: Name of the time dimension in the input data
             spatial_dims: Tuple of (lat_dim, lon_dim) names in the input data
-            patch_size: Tuple of (patch_time, patch_height, patch_width) in time unit and pixels
+            patch_size: Tuple of (patch_time, patch_height, patch_width) in time
+                unit and pixels in monthly data. For example, (1, 16, 16) means
+                1 month, 16 pixels height, 16 pixels width. For this, the
+                spatial resolution of `input_da` and `monthly_da` must match. To
+                extract monthly patches, the `input_da` and `monthly_da` are
+                reshaped internally to have a month dimension, and the patches are
+                extracted accordingly.
             stride: Tuple of (stride_height, stride_width) in pixels. If None, defaults to patch_size (non-overlapping patches).
             is_hourly: Whether the daily data is hourly (T=31*24) or daily (T=31).
 
@@ -82,10 +96,18 @@ class STDataset(Dataset):
             )
 
         # Convert to tensor once — all __getitem__ calls use these
-        self.daily_t = torch.from_numpy(daily_mt.values.astype(np.float32))  # (M, T=31, H, W)
-        self.monthly_t = torch.from_numpy(monthly_m.values.astype(np.float32))  # (M, H, W)
-        self.padded_days_t = torch.from_numpy(padded_days_mask.values.copy()).bool()  # (M, T=31)
-        self.daily_timef_t = torch.from_numpy(daily_timef.values.astype(np.float32))  # (M, T=31, 4)
+        self.daily_t = torch.from_numpy(
+            daily_mt.values.astype(np.float32)
+        )  # (M, T=31, H, W)
+        self.monthly_t = torch.from_numpy(
+            monthly_m.values.astype(np.float32)
+        )  # (M, H, W)
+        self.padded_days_t = torch.from_numpy(
+            padded_days_mask.values.copy()
+        ).bool()  # (M, T=31)
+        self.daily_timef_t = torch.from_numpy(
+            daily_timef.values.astype(np.float32)
+        )  # (M, T=31, 3)
 
         # Store coordinate arrays
         self.lat_coords = torch.from_numpy(input_da[spatial_dims[0]].to_numpy().copy())
@@ -167,7 +189,9 @@ class STDataset(Dataset):
 
         # Compute patch start indices using stride
         # Ensure we don't go out of bounds
-        m_starts = list(range(0, M - pm + 1, pm))  # Temporal patches are non-overlapping
+        m_starts = list(
+            range(0, M - pm + 1, pm)
+        )  # Temporal patches are non-overlapping
         i_starts = list(range(0, H - ph + 1, sh))
         j_starts = list(range(0, W - pw + 1, sw))
 
@@ -253,7 +277,9 @@ class STDataset(Dataset):
         monthly_t_patch = self.monthly_t[m : m + pm, i : i + ph, j : j + pw]
 
         # (M, T, H, W) -> (M, T, pH, pW)
-        daily_nan_mask_t_patch = self.daily_nan_mask_t[m : m + pm, :, i : i + ph, j : j + pw].unsqueeze(0)
+        daily_nan_mask_t_patch = self.daily_nan_mask_t[
+            m : m + pm, :, i : i + ph, j : j + pw
+        ].unsqueeze(0)
 
         if self.land_mask_t is not None:
             land_t_patch = self.land_mask_t[i : i + ph, j : j + pw]  # (H, W)
@@ -282,8 +308,10 @@ class STDataset(Dataset):
             "monthly_patch": monthly_t_patch,  # (pm, pH, pW)
             "daily_mask_patch": daily_mask_t_patch,  # (C=1, pm, T=31, pH, pW)
             "land_mask_patch": land_t_patch,  # (pH,pW) True=Land
-            "daily_timef_patch": self.daily_timef_t[m : m + pm],  # (pm, T=31, 2)
-            "padded_days_mask": self.padded_days_t[m : m + pm],  # (pm, T=31) True=padded
+            "daily_timef_patch": self.daily_timef_t[m : m + pm],  # (pm, T=31, 3)
+            "padded_days_mask": self.padded_days_t[
+                m : m + pm
+            ],  # (pm, T=31) True=padded
             "scale_feature_patch": scale_feature_t,  # (10,)
             "geo_pos_embedding_patch": geo_pos_embedding_t,  # (sh_embed_dim,)
             "sh_embed_dim": self.sh_embed_dim_t,

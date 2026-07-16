@@ -23,9 +23,11 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
     )
     for i, patch_idx in enumerate(indices):
         month_start, lat_start, lon_start = base_dataset.patch_indices[patch_idx]
-        full_predictions[month_start : month_start + M, lat_start : lat_start + H, lon_start : lon_start + W] = (
-            predictions[i]
-        )
+        full_predictions[
+            month_start : month_start + M,
+            lat_start : lat_start + H,
+            lon_start : lon_start + W,
+        ] = predictions[i]
 
     data_vars = {
         "predictions": (("time", "lat", "lon"), full_predictions),
