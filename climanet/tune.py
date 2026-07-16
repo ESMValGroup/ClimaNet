@@ -123,7 +123,7 @@ def run_tune(tune_config: dict):
     return results
 
 
-def test_best_model(experiment_path: str, test_dataset: STDataset, run_dir):
+def check_best_model(experiment_path: str, test_dataset: STDataset, run_dir):
     """Test the best model from a Ray Tune experiment.
 
     Args:
@@ -134,9 +134,10 @@ def test_best_model(experiment_path: str, test_dataset: STDataset, run_dir):
         test_loss: the loss on the test dataset
 
     """
-    tuner = ray.tune.Tuner.restore(experiment_path, trainable=_train)
-    results = tuner.get_results()
-    best_result = results.get_best_result("loss", "min")
+    if not ray.is_initialized():
+        ray.init()
+    analysis = ray.tune.ExperimentAnalysis(experiment_path)
+    best_result = analysis.get_best_trial("loss", "min")
 
     batch_size = best_result.config["batch_size"]
     device = best_result.config["device"]
