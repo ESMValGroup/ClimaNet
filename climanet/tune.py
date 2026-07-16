@@ -14,8 +14,8 @@ def _train(tune_config):
 
     device = tune_config["device"]
     dataloader_num_workers = tune_config["dataloader_num_workers"]
-    train_dataset = tune_config["train_dataset"]
-    validation_dataset = tune_config["validation_dataset"]
+    train_dataset = ray.get(tune_config["train_dataset"])
+    validation_dataset = ray.get(tune_config["validation_dataset"])
     patch_size = tune_config["patch_size"]
     overlap = tune_config["overlap"]
     embed_dim = tune_config["embed_dim"]
@@ -94,7 +94,6 @@ def run_tune(tune_config: dict):
         tune_config: dictionary containing the hyperparameters to tune and their
             ranges and other config parameters.
     """
-
     scheduler = ASHAScheduler(
         time_attr="training_iteration",
         max_t=tune_config["max_num_epochs"],
