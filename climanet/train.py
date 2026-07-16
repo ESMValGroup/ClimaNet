@@ -3,6 +3,7 @@ from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 import torch
+from pathlib import Path
 
 from climanet.predict import predict_monthly_var
 from climanet.utils import setup_logging, compute_masked_loss, save_model
@@ -87,9 +88,10 @@ def train_monthly_model(
     if tune.get_checkpoint():
         loaded_checkpoint = tune.get_checkpoint()
         with loaded_checkpoint.as_directory() as loaded_checkpoint_dir:
-            model_state, optimizer_state = torch.load(loaded_checkpoint_dir / "checkpoint.pt")
-            model.load_state_dict(model_state)
-            optimizer.load_state_dict(optimizer_state)
+            loaded_checkpoint_dir = Path(loaded_checkpoint_dir).resolve()
+            checkpoint = torch.load(loaded_checkpoint_dir / "checkpoint.pt")
+            model.load_state_dict(checkpoint["model_state_dict"])
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
     # Add scheduler - reduces LR instead of stopping immediately
     scheduler = ReduceLROnPlateau(
@@ -186,8 +188,7 @@ def train_monthly_model(
 
     if tune_checkpoint:
         # Save the model and optimizer state for Ray Tune checkpointing
-        checkpoint_path = run_dir / "checkpoint.pt"
-        torch.save((model.state_dict(), optimizer.state_dict()), checkpoint_path)
+        save_model(model, optimizer, run_dir, filename="checkpoint.pt", verbose=False)
         tune.report({"loss": best_loss}, checkpoint=tune.Checkpoint.from_directory(run_dir))
 
     # Close the writer when done

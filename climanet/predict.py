@@ -1,10 +1,12 @@
+from pathlib import Path
+
 import numpy as np
 from torch.utils.data import Dataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
 import xarray as xr
 import torch
 from torch.utils.data import DataLoader
-from climanet.utils import setup_logging, compute_masked_loss
+from climanet.utils import load_model, setup_logging, compute_masked_loss
 
 
 def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
@@ -47,14 +49,6 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
     return ds_pred
 
 
-def _load_model(model_path: str, device: str):
-    """Helper function to load a model from a checkpoint."""
-    checkpoint, _ = torch.load(model_path, map_location=device, weights_only=False)
-    model = SpatioTemporalModel(**checkpoint["model_config"])
-    model.load_state_dict(checkpoint["model_state_dict"])
-    return model.to(device)
-
-
 def predict_monthly_var(
     model: torch.nn.Module | str,
     dataset: Dataset,
@@ -89,8 +83,8 @@ def predict_monthly_var(
         If return_loss is True, it also returns the average loss over the dataset.
     """
     # Load the model if a path is provided
-    if isinstance(model, str):
-        model = _load_model(model, device)
+    if isinstance(model, str | Path):
+        model = load_model(model, device)
 
     model.to(device)
     model.eval()

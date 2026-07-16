@@ -1,9 +1,9 @@
+from pathlib import Path
+
 import ray
 import xarray as xr
 
 from ray.tune.schedulers import ASHAScheduler
-import torch
-
 from climanet.dataset import STDataset
 from climanet.predict import predict_monthly_var
 from climanet.st_encoder_decoder import SpatioTemporalModel
@@ -12,6 +12,7 @@ from climanet.utils import set_seed
 
 
 def _train(tune_config):
+    """Helper function to train the model with Ray Tune."""
 
     device = tune_config["device"]
     dataloader_num_workers = tune_config["dataloader_num_workers"]
@@ -61,9 +62,7 @@ def _train(tune_config):
 
 
 def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
-    """
-    Prepare the data for training and validation.
-    """
+    """Prepare the data for training and validation."""
     input_data = xr.open_mfdataset(data_config["input_filenames"])
     monthly_data = xr.open_mfdataset(data_config["monthly_filenames"])
     lsm_mask = xr.open_dataset(data_config["landmask_filename"])
@@ -92,6 +91,12 @@ def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
 
 
 def run_tune(tune_config: dict):
+    """Run Ray Tune to find the best hyperparameters for the model.
+
+    Args:
+        tune_config: dictionary containing the hyperparameters to tune and their
+            ranges and other config parameters.
+    """
 
     scheduler = ASHAScheduler(
         time_attr="training_iteration",
@@ -121,21 +126,30 @@ def run_tune(tune_config: dict):
     return results
 
 
-def test_best_model(results, test_dataset, run_dir):
+def test_best_model(experiment_path: str, test_dataset: STDataset, run_dir):
+    """Test the best model from a Ray Tune experiment.
+
+    Args:
+        experiment_path: path to the Ray Tune experiment directory
+        test_dataset: Dataset object containing the test data
+        run_dir: directory to save logs and model
+    Returns:
+        test_loss: the loss on the test dataset
+
+    """
+    tuner = ray.tune.Tuner.restore(experiment_path, trainable=_train)
+    results = tuner.get_results()
     best_result = results.get_best_result("loss", "min")
-    best_checkpoint = best_result.checkpoint
-    with best_checkpoint.as_directory() as best_checkpoint_dir:
-        model_state = torch.load(best_checkpoint_dir / "checkpoint.pt")
-        model_config = best_result.config
-        model = SpatioTemporalModel(**model_config)
-        model.load_state_dict(model_state)
 
     batch_size = best_result.config["batch_size"]
     device = best_result.config["device"]
     dataloader_num_workers = best_result.config["dataloader_num_workers"]
+    best_checkpoint = best_result.checkpoint
+
+    model_path = f"{best_checkpoint.path}/checkpoint.pt"
 
     _, test_loss = predict_monthly_var(
-        model,
+        model_path,
         test_dataset,
         batch_size=batch_size,
         device=device,

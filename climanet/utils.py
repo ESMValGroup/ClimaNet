@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import TwoSlopeNorm
 import matplotlib.ticker as mticker
 
+from climanet.st_encoder_decoder import SpatioTemporalModel
+
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
     """
@@ -275,6 +277,16 @@ def save_model(
     )
     if verbose:
         print(f"Model saved to {model_path}")
+
+
+def load_model(model_path: str, device: str):
+    """Helper function to load a model from a checkpoint."""
+    checkpoint = torch.load(
+        model_path, map_location=device, weights_only=False
+    )
+    model = SpatioTemporalModel(**checkpoint["model_config"])
+    model.load_state_dict(checkpoint["model_state_dict"])
+    return model.to(device)
 
 
 def add_month_hour_dims(
