@@ -63,9 +63,9 @@ def _train(tune_config):
 
 def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
     """Prepare the data for training and validation."""
-    input_data = xr.open_mfdataset(data_config["input_filenames"])
-    monthly_data = xr.open_mfdataset(data_config["monthly_filenames"])
-    lsm_mask = xr.open_dataset(data_config["landmask_filename"])
+    input_data = xr.open_mfdataset(data_config["input_filenames"], chunks=data_config.get("input_chunks"))
+    monthly_data = xr.open_mfdataset(data_config["monthly_filenames"], chunks=data_config.get("monthly_chunks"))
+    lsm_mask = xr.open_dataset(data_config["landmask_filename"], chunks=data_config.get("landmask_chunks"))
 
     # calculate residuals as target
     input_data_averaged = input_data.resample(time="MS").mean(skipna=True)
