@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import ray
 import xarray as xr
 
@@ -123,7 +125,7 @@ def run_tune(tune_config: dict):
     return results
 
 
-def check_best_model(experiment_path: str, test_dataset: STDataset, run_dir):
+def check_best_model(experiment_path: str | Path, test_dataset: STDataset, run_dir: str | Path):
     """Test the best model from a Ray Tune experiment.
 
     Args:
@@ -144,7 +146,7 @@ def check_best_model(experiment_path: str, test_dataset: STDataset, run_dir):
     dataloader_num_workers = best_result.config["dataloader_num_workers"]
     best_checkpoint = best_result.checkpoint
 
-    model_path = f"{best_checkpoint.path}/checkpoint.pt"
+    model_path = Path(best_checkpoint.path) / "checkpoint.pt"
 
     _, test_loss = predict_monthly_var(
         model_path,
