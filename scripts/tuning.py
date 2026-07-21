@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     tune_config = {
         "max_num_epochs": 100,
-        "num_trials": 10,
+        "num_trials": 200,  # this is num_samples in ray.tune.TuneConfig
         "cpu_per_trial": 20,
         "gpu_per_trial": 1,
         "run_dir": args.storage_path,
@@ -86,16 +86,20 @@ if __name__ == "__main__":
         "validation_dataset": ray.put(validation_dataset),
         "num_epoch": 100,
         # parameters to tune
-        "patch_size": tune.grid_search([2, 4, 8]),
-        "overlap": tune.grid_search([0, 1, 2]),
-        "embed_dim": tune.grid_search([32, 64, 128]),
-        "dropout": tune.grid_search([0.0, 0.1, 0.2]),
-        "hidden": tune.grid_search([32, 64, 128]),
-        "spatial_depth": tune.grid_search([1, 2, 3]),
-        "spatial_heads": tune.grid_search([2, 4, 8]),
+        "patch_size": tune.choice([2, 4, 8]),
+        "overlap": tune.choice([0, 1, 2]),
+        "embed_dim": tune.choice([32, 64, 128]),
+        "dropout": tune.choice([0.0, 0.1, 0.2]),
+        "hidden": tune.choice([32, 64, 128]),
+        "spatial_depth": tune.choice([1, 2, 3]),
+        "spatial_heads": tune.choice([2, 4, 8]),
         "optimizer_lr": tune.loguniform(1e-3, 1e-1),
-        "batch_size": tune.grid_search([200, 400, 800]),  # based on GPU memory
-        "accumulation_steps": tune.grid_search([1, 2, 4]),  # based on batch_size
+        "batch_config": tune.grid_search([
+            {"batch_size": 200, "accumulation_steps": 1},
+            {"batch_size": 400, "accumulation_steps": 2},
+            {"batch_size": 800, "accumulation_steps": 4},
+        ]),  # based on GPU memory
+        "accumulation_steps": tune.choice([1, 2, 4]),  # based on batch_size
         "max_concurrent_trials": args.num_nodes * 4,  # GPUs per node (4)
     }
 

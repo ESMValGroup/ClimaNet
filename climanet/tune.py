@@ -40,8 +40,8 @@ def _train(tune_config):
         spatial_heads=spatial_heads,
     )
 
-    batch_size = tune_config["batch_size"]
-    accumulation_steps = tune_config["accumulation_steps"]
+    batch_size = tune_config["batch_config"]["batch_size"]
+    accumulation_steps = tune_config["batch_config"]["accumulation_steps"]
     optimizer_lr = tune_config["optimizer_lr"]
 
     _ = train_monthly_model(
