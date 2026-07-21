@@ -38,16 +38,18 @@ if __name__ == "__main__":
 
     data_folder = Path(args.data_dir).resolve()
     lsm_folder = Path(args.lsm_dir).resolve()
+    var_name = "tos"
+
     hourly_files = data_split(
         data_folder,
-        filename_pattern="*_hr_ERA5dc_masked_tos.nc",
+        filename_pattern=f"*_hr_ERA5dc_masked_{var_name}.nc",
         train_range=(2018, 2020),
         validation_range=(2021, 2021),
         test_range=(2022, 2022),
     )
     monthly_files = data_split(
         data_folder,
-        filename_pattern="*_mon_ERA5dc_masked_tos.nc",
+        filename_pattern=f"*_mon_ERA5dc_full_{var_name}.nc",
         train_range=(2018, 2020),
         validation_range=(2021, 2021),
         test_range=(2022, 2022),
@@ -56,7 +58,7 @@ if __name__ == "__main__":
         "input_filenames": hourly_files["train"],
         "monthly_filenames": monthly_files["train"],
         "landmask_filename": lsm_folder / "era5_lsm_bool.nc",
-        "var_name": "tos",
+        "var_name": var_name,
         "patch_size": (1, 40, 40),  # based on the patch_size in model
         "stride": (20, 20),  # data agumentation by overlapping patches
     }
@@ -64,21 +66,24 @@ if __name__ == "__main__":
         "input_filenames": hourly_files["validation"],
         "monthly_filenames": monthly_files["validation"],
         "landmask_filename": lsm_folder / "era5_lsm_bool.nc",
-        "var_name": "tos",
+        "var_name": var_name,
         "patch_size": (1, 40, 40),  # based on the patch_size in model
         "stride": (20, 20),  # data agumentation by overlapping patches
     }
 
+    train_dataset = tune_data_preparation(data_config_train)
+    validation_dataset = tune_data_preparation(data_config_validation)
+
     tune_config = {
         "max_num_epochs": 100,
         "num_trials": 10,
-        "cpu_per_trial": 4,
+        "cpu_per_trial": 20,
         "gpu_per_trial": 1,
         "run_dir": args.storage_path,
         "device": "cuda",
-        "dataloader_num_workers": 4,
-        "train_dataset": tune_data_preparation(data_config_train),
-        "validation_dataset": tune_data_preparation(data_config_validation),
+        "dataloader_num_workers": 20,
+        "train_dataset": ray.put(train_dataset),
+        "validation_dataset": ray.put(validation_dataset),
         "num_epoch": 100,
         # parameters to tune
         "patch_size": tune.grid_search([2, 4, 8]),
