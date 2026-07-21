@@ -4,7 +4,7 @@
 #SBATCH --nodes=10
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-task=4
-#SBATCH --time=04:00:00
+#SBATCH --time=05:00:00
 #SBATCH --account=bd0854
 #SBATCH --output=tuning_%j.out
 
