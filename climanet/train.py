@@ -151,7 +151,6 @@ def train_monthly_model(
         scheduler.step(avg_epoch_loss)
 
         # Log to TensorBoard
-        writer.add_scalar("Loss/best", best_loss, epoch)
 
         # Early stopping check
         # Consider improvement only if loss decreases more than a small threshold
@@ -161,6 +160,9 @@ def train_monthly_model(
             counter = 0
         else:
             counter += 1
+
+        # Log to TensorBoard
+        writer.add_scalar("Loss/best", best_loss, epoch)
 
         if verbose and epoch % 20 == 0:
             print(f"Epoch {epoch}: best_loss = {best_loss:.6f}")
