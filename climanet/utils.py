@@ -512,9 +512,9 @@ def data_split(
 
         if train_range[0] <= year <= train_range[1]:
             splits["train"].append(file)
-        elif validation_range[0] <= year <= validation_range[1]:
+        if validation_range[0] <= year <= validation_range[1]:
             splits["validation"].append(file)
-        elif test_range[0] <= year <= test_range[1]:
+        if test_range[0] <= year <= test_range[1]:
             splits["test"].append(file)
 
     for lst in splits.values():
