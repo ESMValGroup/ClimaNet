@@ -13,6 +13,16 @@ from torch.utils.data import Dataset
 from typing import Tuple
 
 
+def _as_numpy(array_like, dtype=None, copy=False):
+    """Convert numpy/dask/xarray-backed arrays to numpy, computing lazily when needed."""
+    data = np.asarray(array_like)
+    if dtype is not None:
+        data = data.astype(dtype, copy=False)
+    if copy:
+        data = data.copy()
+    return data
+
+
 class STDataset(Dataset):
     """Dataset for spatiotemporal patches.
 
@@ -95,19 +105,11 @@ class STDataset(Dataset):
                 input_da, monthly_da, time_dim=time_dim
             )
 
-        # Convert to tensor once — all __getitem__ calls use these
-        self.daily_t = torch.from_numpy(
-            daily_mt.values.astype(np.float32)
-        )  # (M, T=31, H, W)
-        self.monthly_t = torch.from_numpy(
-            monthly_m.values.astype(np.float32)
-        )  # (M, H, W)
-        self.padded_days_t = torch.from_numpy(
-            padded_days_mask.values.copy()
-        ).bool()  # (M, T=31)
-        self.daily_timef_t = torch.from_numpy(
-            daily_timef.values.astype(np.float32)
-        )  # (M, T=31, 3)
+        # Keep xarray objects (potentially dask-backed) lazy; materialize per patch in __getitem__
+        self.daily_mt = daily_mt  # (M, T=31, H, W) or (M, T=31*24, H, W)
+        self.monthly_m = monthly_m  # (M, H, W)
+        self.padded_days_mask = padded_days_mask  # (M, T)
+        self.daily_timef = daily_timef  # (M, T, 3)
 
         # Store coordinate arrays
         self.lat_coords = input_da[spatial_dims[0]].to_numpy().copy()
@@ -121,13 +123,6 @@ class STDataset(Dataset):
         else:
             self.land_mask_t = None
 
-        # Precompute the NaN mask before filling NaNs
-        # daily_mask: True where NaN (i.e. missing ocean data, not land)
-        self.daily_nan_mask_t = torch.isnan(self.daily_t)  # (M, T=31, H, W)
-
-        # NaNs will be filled with 0 in-place
-        self.daily_t.nan_to_num_(nan=0.0)
-
         # Stats will be set later via set_stats() for train/test datasets
         self.daily_mean = None
         self.daily_std = None
@@ -136,8 +131,10 @@ class STDataset(Dataset):
         _, ph, pw = self.patch_size
         self._zero_land = torch.zeros(ph, pw, dtype=torch.bool)
 
-        # Precompute lazy index mapping for patches
-        M, H, W = self.daily_t.shape[0], self.daily_t.shape[2], self.daily_t.shape[3]
+        # Precompute lazy index mapping for patches from data shape metadata
+        M = int(self.daily_mt.sizes[self.daily_mt.dims[0]])
+        H = int(self.daily_mt.sizes[spatial_dims[0]])
+        W = int(self.daily_mt.sizes[spatial_dims[1]])
         self.patch_indices = self._compute_patch_indices(M, H, W)
 
         # Precompute geoposition and scale embeddings for patches
@@ -268,17 +265,38 @@ class STDataset(Dataset):
         m, i, j = self.patch_indices[idx]
         pm, ph, pw = self.patch_size
 
-        # Extract spatial patch via slicing — faster than xarray indexing
-        # (M, T, H, W) -> (M,T,pH, pW)
-        daily_t_patch = self.daily_t[m : m + pm, :, i : i + ph, j : j + pw].unsqueeze(0)
+        # Compute only the requested patch from potentially dask-backed arrays.
+        daily_np_patch = _as_numpy(
+            self.daily_mt.isel(
+                {
+                    self.daily_mt.dims[0]: slice(m, m + pm),
+                    self.daily_mt.dims[2]: slice(i, i + ph),
+                    self.daily_mt.dims[3]: slice(j, j + pw),
+                }
+            ).data,
+            dtype=np.float32,
+            copy=False,
+        )
 
-        # (M, H, W) -> (M, pH, pW)
-        monthly_t_patch = self.monthly_t[m : m + pm, i : i + ph, j : j + pw]
+        # Build missing-data mask before NaN fill; True where NaN.
+        daily_nan_mask_t_patch = torch.from_numpy(np.isnan(daily_np_patch)).unsqueeze(0)
 
-        # (M, T, H, W) -> (M, T, pH, pW)
-        daily_nan_mask_t_patch = self.daily_nan_mask_t[
-            m : m + pm, :, i : i + ph, j : j + pw
-        ].unsqueeze(0)
+        # Fill NaNs for model input.
+        np.nan_to_num(daily_np_patch, copy=False, nan=0.0)
+        daily_t_patch = torch.from_numpy(daily_np_patch).unsqueeze(0)
+
+        monthly_np_patch = _as_numpy(
+            self.monthly_m.isel(
+                {
+                    self.monthly_m.dims[0]: slice(m, m + pm),
+                    self.monthly_m.dims[1]: slice(i, i + ph),
+                    self.monthly_m.dims[2]: slice(j, j + pw),
+                }
+            ).data,
+            dtype=np.float32,
+            copy=False,
+        )
+        monthly_t_patch = torch.from_numpy(monthly_np_patch)
 
         if self.land_mask_t is not None:
             land_t_patch = self.land_mask_t[i : i + ph, j : j + pw]  # (H, W)
@@ -307,10 +325,23 @@ class STDataset(Dataset):
             "monthly_patch": monthly_t_patch,  # (pm, pH, pW)
             "daily_mask_patch": daily_mask_t_patch,  # (C=1, pm, T=31, pH, pW)
             "land_mask_patch": land_t_patch,  # (pH,pW) True=Land
-            "daily_timef_patch": self.daily_timef_t[m : m + pm],  # (pm, T=31, 3)
-            "padded_days_mask": self.padded_days_t[
-                m : m + pm
-            ],  # (pm, T=31) True=padded
+            "daily_timef_patch": torch.from_numpy(
+                _as_numpy(
+                    self.daily_timef.isel(
+                        {self.daily_timef.dims[0]: slice(m, m + pm)}
+                    ).data,
+                    dtype=np.float32,
+                    copy=False,
+                )
+            ),  # (pm, T=31, 3)
+            "padded_days_mask": torch.from_numpy(
+                _as_numpy(
+                    self.padded_days_mask.isel(
+                        {self.padded_days_mask.dims[0]: slice(m, m + pm)}
+                    ).data,
+                    copy=True,
+                )
+            ).bool(),  # (pm, T=31) True=padded
             "scale_feature_patch": scale_feature_t,  # (10,)
             "geo_pos_embedding_patch": geo_pos_embedding_t,  # (sh_embed_dim,)
             "sh_embed_dim": self.sh_embed_dim_t,
@@ -331,14 +362,26 @@ class STDataset(Dataset):
             Tuple of (mean, std) arrays
         """
         if indices is None:
-            data = self.monthly_t.numpy()  # (M, H, W)
+            data = _as_numpy(
+                self.monthly_m.data, dtype=np.float32, copy=False
+            )  # (M, H, W)
         else:
             # Stack selected spatial patches
             pm, ph, pw = self.patch_size
             patches = []
             for idx in indices:
                 m, i, j = self.patch_indices[idx]
-                patch = self.monthly_t[m : m + pm, i : i + ph, j : j + pw].numpy()
+                patch = _as_numpy(
+                    self.monthly_m.isel(
+                        {
+                            self.monthly_m.dims[0]: slice(m, m + pm),
+                            self.monthly_m.dims[1]: slice(i, i + ph),
+                            self.monthly_m.dims[2]: slice(j, j + pw),
+                        }
+                    ).data,
+                    dtype=np.float32,
+                    copy=False,
+                )
                 patches.append(patch)
             data = np.concatenate(patches, axis=-1)
 
