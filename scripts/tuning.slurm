@@ -3,6 +3,7 @@
 #SBATCH --partition=gpu
 #SBATCH --nodes=10
 #SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=128
 #SBATCH --gpus-per-task=4
 #SBATCH --time=05:00:00
 #SBATCH --account=bd0854
@@ -40,7 +41,7 @@ srun --nodes=1 --ntasks=1 -w "$head_node" \
         ray start --head \
         --node-ip-address=$head_node_ip \
         --port=6379 \
-         --num-cpus=$SLURM_CPUS_PER_TASK \
+         --num-cpus=\$SLURM_CPUS_PER_TASK \
          --num-gpus=4 \
          --block
     " &
@@ -54,7 +55,7 @@ for node in "${nodes[@]:1}"; do
             source '$UV_ENV/bin/activate' &&
             export OMP_NUM_THREADS=1 &&
             ray start --address=$head_node_ip:6379 \
-            --num-cpus=$SLURM_CPUS_PER_TASK \
+            --num-cpus=\$SLURM_CPUS_PER_TASK \
             --num-gpus=4 \
             --block
         " &
