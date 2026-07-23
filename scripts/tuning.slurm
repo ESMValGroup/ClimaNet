@@ -27,7 +27,7 @@ nodes=$(scontrol show hostnames "$SLURM_JOB_NODELIST")
 
 # First node is the Ray head
 head_node="${nodes[0]}"
-head_node_ip=$(srun --nodes=1 --ntasks=1 -w "$head_node" hostname -I | awk '{print $1}')
+head_node_ip=$(srun --nodes=1 --ntasks=1 -w "$head_node" bash -c "hostname -I | awk '{print \$1}'")
 
 echo "Ray head: $head_node_ip"
 
