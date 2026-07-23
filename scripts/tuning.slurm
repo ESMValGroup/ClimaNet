@@ -11,8 +11,8 @@
 set -euo pipefail
 ulimit -s 204800
 
-# Activate uv env
-UV_ENV="$HOME/.venv"
+# Activate uv env with python 3.11
+UV_ENV="$HOME/climanet_py311"
 source "$UV_ENV/bin/activate"
 
 # Set the scratch directory because they are avialable to all nodes
@@ -23,18 +23,18 @@ DATA_DIR="$HOME/scratch/b/$USER/data"
 LSM_DIR="$HOME/scratch/b/$USER/data"
 
 # Get node list
-nodes=$(scontrol show hostnames "$SLURM_JOB_NODELIST")
+nodes=($(scontrol show hostnames "$SLURM_JOB_NODELIST"))
 
 # First node is the Ray head
 head_node="${nodes[0]}"
-head_node_ip=$(srun --nodes=1 --ntasks=1 -w "$head_node" bash -c "hostname -I | awk '{print \$1}'")
+head_node_ip=$(srun --nodes=1 --ntasks=1 -w "$head_node" /usr/bin/bash -c "hostname -I | awk '{print \$1}'")
 
 echo "Ray head: $head_node_ip"
 
 # Start Ray head on the first node
 # 6379 default port for Ray’s Redis/GCS service
 srun --nodes=1 --ntasks=1 -w "$head_node" \
-    bash -lc "
+    /usr/bin/bash -c "
         source '$UV_ENV/bin/activate' &&
         export OMP_NUM_THREADS=1 &&
         ray start --head \
@@ -50,7 +50,7 @@ sleep 15
 # Start Ray workers on the remaining nodes
 for node in "${nodes[@]:1}"; do
     srun --nodes=1 --ntasks=1 -w "$node" \
-        bash -lc "
+        /usr/bin/bash -c "
             source '$UV_ENV/bin/activate' &&
             export OMP_NUM_THREADS=1 &&
             ray start --address=$head_node_ip:6379 \
@@ -64,7 +64,7 @@ sleep 15
 
 echo "=== Ray sanity check ==="
 srun --nodes=1 --ntasks=1 -w "$head_node" \
-    bash -lc "source '$UV_ENV/bin/activate' && python - <<'PY'
+    /usr/bin/bash -c "source '$UV_ENV/bin/activate' && python - <<'PY'
 import os
 import ray
 
@@ -83,7 +83,7 @@ PY"
 sleep 15
 
 # Run the tuning script on the head node
-python -u ~/scripts/tuning.py \
+python -u $HOME/ClimaNet/scripts/tuning.py \
     --storage-path "$SCRATCH" \
     --num-nodes "$SLURM_NNODES" \
     --ray-address "$head_node_ip:6379" \
