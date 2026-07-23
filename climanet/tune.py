@@ -1,11 +1,8 @@
-from pathlib import Path
-
 import ray
 import xarray as xr
 
 from ray.tune.schedulers import ASHAScheduler
 from climanet.dataset import STDataset
-from climanet.predict import predict_monthly_var
 from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import train_monthly_model
 from climanet.utils import set_seed
@@ -64,9 +61,15 @@ def _train(tune_config, static_args):
 
 def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
     """Prepare the data for training and validation."""
-    input_data = xr.open_mfdataset(data_config["input_filenames"], chunks=data_config.get("input_chunks"))
-    monthly_data = xr.open_mfdataset(data_config["monthly_filenames"], chunks=data_config.get("monthly_chunks"))
-    lsm_mask = xr.open_dataset(data_config["landmask_filename"], chunks=data_config.get("landmask_chunks"))
+    input_data = xr.open_mfdataset(
+        data_config["input_filenames"], chunks=data_config.get("input_chunks")
+    )
+    monthly_data = xr.open_mfdataset(
+        data_config["monthly_filenames"], chunks=data_config.get("monthly_chunks")
+    )
+    lsm_mask = xr.open_dataset(
+        data_config["landmask_filename"], chunks=data_config.get("landmask_chunks")
+    )
 
     # calculate residuals as target
     input_data_averaged = input_data.resample(time="MS").mean(skipna=True)
