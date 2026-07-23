@@ -70,7 +70,7 @@ class STDataset(Dataset):
         self.spatial_dims = spatial_dims
         self.patch_size = patch_size
         self.input_da = input_da
-        self.monthly_da = monthly_da
+        self.monthly_da = monthly_da.compute()  # Directly load monthly data
         self.stride = stride if stride is not None else (patch_size[1], patch_size[2])
 
         self.sh_embed_dim = sh_embed_dim
@@ -107,9 +107,15 @@ class STDataset(Dataset):
 
         # Keep xarray objects (potentially dask-backed) lazy; materialize per patch in __getitem__
         self.daily_mt = daily_mt  # (M, T=31, H, W) or (M, T=31*24, H, W)
-        self.monthly_m = monthly_m  # (M, H, W)
-        self.padded_days_mask = padded_days_mask  # (M, T)
-        self.daily_timef = daily_timef  # (M, T, 3)
+        self.monthly_t = torch.from_numpy(
+            monthly_m.values.astype(np.float32)
+        )  # (M, H, W)
+        self.padded_days_t = torch.from_numpy(
+            padded_days_mask.values.copy()
+        ).bool()  # (M, T=31)
+        self.daily_timef_t = torch.from_numpy(
+            daily_timef.values.astype(np.float32)
+        )  # (M, T=31, 3)
 
         # Store coordinate arrays
         self.lat_coords = input_da[spatial_dims[0]].to_numpy().copy()
@@ -266,17 +272,13 @@ class STDataset(Dataset):
         pm, ph, pw = self.patch_size
 
         # Compute only the requested patch from potentially dask-backed arrays.
-        daily_np_patch = _as_numpy(
-            self.daily_mt.isel(
-                {
-                    self.daily_mt.dims[0]: slice(m, m + pm),
-                    self.daily_mt.dims[2]: slice(i, i + ph),
-                    self.daily_mt.dims[3]: slice(j, j + pw),
-                }
-            ).data,
-            dtype=np.float32,
-            copy=False,
-        )
+        daily_np_patch = self.daily_mt.isel(
+            {
+                self.daily_mt.dims[0]: slice(m, m + pm),
+                self.daily_mt.dims[2]: slice(i, i + ph),
+                self.daily_mt.dims[3]: slice(j, j + pw),
+            }
+        ).values
 
         # Build missing-data mask before NaN fill; True where NaN.
         daily_nan_mask_t_patch = torch.from_numpy(np.isnan(daily_np_patch)).unsqueeze(0)
@@ -285,18 +287,8 @@ class STDataset(Dataset):
         np.nan_to_num(daily_np_patch, copy=False, nan=0.0)
         daily_t_patch = torch.from_numpy(daily_np_patch).unsqueeze(0)
 
-        monthly_np_patch = _as_numpy(
-            self.monthly_m.isel(
-                {
-                    self.monthly_m.dims[0]: slice(m, m + pm),
-                    self.monthly_m.dims[1]: slice(i, i + ph),
-                    self.monthly_m.dims[2]: slice(j, j + pw),
-                }
-            ).data,
-            dtype=np.float32,
-            copy=False,
-        )
-        monthly_t_patch = torch.from_numpy(monthly_np_patch)
+        # (M, H, W) -> (M, pH, pW)
+        monthly_t_patch = self.monthly_t[m : m + pm, i : i + ph, j : j + pw]
 
         if self.land_mask_t is not None:
             land_t_patch = self.land_mask_t[i : i + ph, j : j + pw]  # (H, W)
@@ -325,23 +317,10 @@ class STDataset(Dataset):
             "monthly_patch": monthly_t_patch,  # (pm, pH, pW)
             "daily_mask_patch": daily_mask_t_patch,  # (C=1, pm, T=31, pH, pW)
             "land_mask_patch": land_t_patch,  # (pH,pW) True=Land
-            "daily_timef_patch": torch.from_numpy(
-                _as_numpy(
-                    self.daily_timef.isel(
-                        {self.daily_timef.dims[0]: slice(m, m + pm)}
-                    ).data,
-                    dtype=np.float32,
-                    copy=False,
-                )
-            ),  # (pm, T=31, 3)
-            "padded_days_mask": torch.from_numpy(
-                _as_numpy(
-                    self.padded_days_mask.isel(
-                        {self.padded_days_mask.dims[0]: slice(m, m + pm)}
-                    ).data,
-                    copy=True,
-                )
-            ).bool(),  # (pm, T=31) True=padded
+            "daily_timef_patch": self.daily_timef_t[m : m + pm],  # (pm, T=31, 3)
+            "padded_days_mask": self.padded_days_t[
+                m : m + pm
+            ],  # (pm, T=31) True=padded
             "scale_feature_patch": scale_feature_t,  # (10,)
             "geo_pos_embedding_patch": geo_pos_embedding_t,  # (sh_embed_dim,)
             "sh_embed_dim": self.sh_embed_dim_t,
