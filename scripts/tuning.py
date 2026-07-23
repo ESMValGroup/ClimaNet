@@ -74,7 +74,7 @@ if __name__ == "__main__":
     train_dataset = tune_data_preparation(data_config_train)
     validation_dataset = tune_data_preparation(data_config_validation)
 
-    tune_config = {
+    static_args = {
         "max_num_epochs": 100,
         "num_trials": 200,  # this is num_samples in ray.tune.TuneConfig
         "cpu_per_trial": 20,
@@ -85,7 +85,11 @@ if __name__ == "__main__":
         "train_dataset": ray.put(train_dataset),
         "validation_dataset": ray.put(validation_dataset),
         "num_epoch": 100,
-        # parameters to tune
+        "max_concurrent_trials": args.num_nodes * 4,  # GPUs per node (4)
+    }
+
+    # parameters to tune
+    tune_config = {
         "patch_size": tune.choice([2, 4, 8]),
         "overlap": tune.choice([0, 1, 2]),
         "embed_dim": tune.choice([32, 64, 128]),
@@ -100,12 +104,11 @@ if __name__ == "__main__":
             {"batch_size": 800, "accumulation_steps": 4},
         ]),  # based on GPU memory
         "accumulation_steps": tune.choice([1, 2, 4]),  # based on batch_size
-        "max_concurrent_trials": args.num_nodes * 4,  # GPUs per node (4)
     }
 
     # Start Ray Tune for distributed training on several nodes
     ray.init(address=args.ray_address, ignore_reinit_error=True)
 
-    results = run_tune(tune_config)
+    results = run_tune(tune_config, static_args)
 
     ray.shutdown()

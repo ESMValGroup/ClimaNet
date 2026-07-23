@@ -11,13 +11,16 @@ from climanet.train import train_monthly_model
 from climanet.utils import set_seed
 
 
-def _train(tune_config):
+def _train(tune_config, static_args):
     """Helper function to train the model with Ray Tune."""
 
-    device = tune_config["device"]
-    dataloader_num_workers = tune_config["dataloader_num_workers"]
-    train_dataset = ray.get(tune_config["train_dataset"])
-    validation_dataset = ray.get(tune_config["validation_dataset"])
+    device = static_args["device"]
+    dataloader_num_workers = static_args["dataloader_num_workers"]
+    train_dataset = ray.get(static_args["train_dataset"])
+    validation_dataset = ray.get(static_args["validation_dataset"])
+    run_dir = static_args["run_dir"]
+    num_epoch = static_args["num_epoch"]
+
     patch_size = tune_config["patch_size"]
     overlap = tune_config["overlap"]
     embed_dim = tune_config["embed_dim"]
@@ -25,8 +28,6 @@ def _train(tune_config):
     hidden = tune_config["hidden"]
     spatial_depth = tune_config["spatial_depth"]
     spatial_heads = tune_config["spatial_heads"]
-    run_dir = tune_config["run_dir"]
-    num_epoch = tune_config["num_epoch"]
 
     set_seed()
 
@@ -89,7 +90,7 @@ def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
     return dataset
 
 
-def run_tune(tune_config: dict):
+def run_tune(tune_config: dict, static_args: dict):
     """Run Ray Tune to find the best hyperparameters for the model.
 
     Args:
@@ -98,66 +99,28 @@ def run_tune(tune_config: dict):
     """
     scheduler = ASHAScheduler(
         time_attr="training_iteration",
-        max_t=tune_config["max_num_epochs"],
+        max_t=static_args["max_num_epochs"],
         grace_period=1,
         reduction_factor=2,
     )
 
     tuner = ray.tune.Tuner(
         ray.tune.with_resources(
-            ray.tune.with_parameters(_train),
+            ray.tune.with_parameters(_train, static_args=static_args),
             resources={
-                "cpu": tune_config["cpu_per_trial"],
-                "gpu": tune_config["gpu_per_trial"],
+                "cpu": static_args["cpu_per_trial"],
+                "gpu": static_args["gpu_per_trial"],
             },
         ),
         tune_config=ray.tune.TuneConfig(
             metric="loss",
             mode="min",
             scheduler=scheduler,
-            num_samples=tune_config["num_trials"],
-            max_concurrent_trials=tune_config["max_concurrent_trials"],
+            num_samples=static_args["num_trials"],
+            max_concurrent_trials=static_args["max_concurrent_trials"],
         ),
         param_space=tune_config,
-        run_config=ray.tune.RunConfig(storage_path=tune_config["run_dir"]),
+        run_config=ray.tune.RunConfig(storage_path=static_args["run_dir"]),
     )
     results = tuner.fit()
     return results
-
-
-def check_best_model(experiment_path: str | Path, test_dataset: STDataset, run_dir: str | Path):
-    """Test the best model from a Ray Tune experiment.
-
-    Args:
-        experiment_path: path to the Ray Tune experiment directory
-        test_dataset: Dataset object containing the test data
-        run_dir: directory to save logs and model
-    Returns:
-        test_loss: the loss on the test dataset
-
-    """
-    if not ray.is_initialized():
-        ray.init()
-    analysis = ray.tune.ExperimentAnalysis(experiment_path)
-    best_result = analysis.get_best_trial("loss", "min")
-
-    batch_size = best_result.config["batch_size"]
-    device = best_result.config["device"]
-    dataloader_num_workers = best_result.config["dataloader_num_workers"]
-    best_checkpoint = best_result.checkpoint
-
-    model_path = Path(best_checkpoint.path) / "checkpoint.pt"
-
-    _, test_loss = predict_monthly_var(
-        model_path,
-        test_dataset,
-        batch_size=batch_size,
-        device=device,
-        return_numpy=False,
-        save_predictions=False,
-        return_loss=True,
-        verbose=False,
-        run_dir=run_dir,
-        dataloader_num_workers=dataloader_num_workers,
-    )
-    return test_loss
