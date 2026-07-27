@@ -113,7 +113,7 @@ def run_tune(tune_config: dict, static_args: dict):
     )
 
     experiment_name = static_args["experiment_name"]
-    experiment_path = static_args["run_dir"] / experiment_name
+    experiment_path = f"{static_args['run_dir']}/{experiment_name}"
     if Path(experiment_path).exists():
         tuner = ray.tune.Tuner.restore(
             experiment_path,
