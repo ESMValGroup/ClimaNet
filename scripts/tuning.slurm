@@ -1,11 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=tuning
 #SBATCH --partition=gpu
+#SBATCH --constraint=a100_80
 #SBATCH --nodes=10
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=128
 #SBATCH --gpus-per-task=4
-#SBATCH --time=05:00:00
+#SBATCH --exclusive
+#SBATCH --time=12:00:00
 #SBATCH --account=bd0854
 #SBATCH --output=tuning_%j.out
 
@@ -23,70 +25,35 @@ SCRATCH="/scratch/b/$USER/tune_results"
 DATA_DIR="$HOME/scratch/b/$USER/data"
 LSM_DIR="$HOME/scratch/b/$USER/data"
 
-# Get node list
-nodes=($(scontrol show hostnames "$SLURM_JOB_NODELIST"))
+# Get node list and ip
+nodes=$(scontrol show hostnames "$SLURM_JOB_NODELIST")
+nodes_array=($nodes)
+head_node=${nodes_array[0]}
 
-# First node is the Ray head
-head_node="${nodes[0]}"
-head_node_ip=$(srun --nodes=1 --ntasks=1 -w "$head_node" /usr/bin/bash -c "hostname -I | awk '{print \$1}'")
+port=6379
+head_node_ip="${head_node}:${port}"
+export head_node_ip
 
-echo "Ray head: $head_node_ip"
+echo "Ray head: $head_node $head_node_ip"
 
-# Start Ray head on the first node
-# 6379 default port for Ray’s Redis/GCS service
-srun --nodes=1 --ntasks=1 -w "$head_node" \
-    /usr/bin/bash -c "
-        source '$UV_ENV/bin/activate' &&
-        export OMP_NUM_THREADS=1 &&
-        ray start --head \
-        --node-ip-address=$head_node_ip \
-        --port=6379 \
-         --num-cpus=\$SLURM_CPUS_PER_TASK \
-         --num-gpus=4 \
-         --block
-    " &
+# Wait for all nodes to be ready
+echo "Waiting for nodes to boot..."
+sleep 180
+echo "Checking nodes..."
+srun -N "$SLURM_JOB_NUM_NODES" -n "$SLURM_JOB_NUM_NODES" hostname
 
-sleep 15
-
-# Start Ray workers on the remaining nodes
-for node in "${nodes[@]:1}"; do
-    srun --nodes=1 --ntasks=1 -w "$node" \
-        /usr/bin/bash -c "
-            source '$UV_ENV/bin/activate' &&
-            export OMP_NUM_THREADS=1 &&
-            ray start --address=$head_node_ip:6379 \
-            --num-cpus=\$SLURM_CPUS_PER_TASK \
-            --num-gpus=4 \
-            --block
-        " &
-done
-
-sleep 15
-
-echo "=== Ray sanity check ==="
-srun --nodes=1 --ntasks=1 -w "$head_node" \
-    /usr/bin/bash -c "source '$UV_ENV/bin/activate' && python - <<'PY'
-import os
-import ray
-
-address = os.environ.get('RAY_ADDRESS', '${head_node_ip}:6379')
-ray.init(address=address, ignore_reinit_error=True)
-
-resources = ray.available_resources()
-print('Address:', address)
-print('CPU:', resources.get('CPU'))
-print('GPU:', resources.get('GPU'))
-print('Resources:', resources)
-
-ray.shutdown()
-PY"
-
-sleep 15
-
-# Run the tuning script on the head node
-python -u $HOME/ClimaNet/scripts/tuning.py \
-    --storage-path "$SCRATCH" \
-    --num-nodes "$SLURM_NNODES" \
-    --ray-address "$head_node_ip:6379" \
-    --data-dir "$DATA_DIR" \
-    --lsm-dir "$LSM_DIR"
+# based on https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm.html#ray-slurm-deploy
+srun --nodes="$SLURM_JOB_NUM_NODES" --ntasks="$SLURM_JOB_NUM_NODES" \
+    ray symmetric-run \
+    --address "${head_node_ip}" \
+    --num-cpus=128 \
+    --num-gpus=4 \
+    --object-store-memory 5000000000 \
+    --temp-dir "$SCRATCH/ray_logs" \
+    -- \
+    python -u $HOME/ClimaNet/scripts/tuning.py \
+        --storage-path "$SCRATCH" \
+        --num-nodes "$SLURM_NNODES" \
+        --ray-address "auto" \
+        --data-dir "$DATA_DIR" \
+        --lsm-dir "$LSM_DIR"
