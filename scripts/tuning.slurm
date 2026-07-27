@@ -2,7 +2,7 @@
 #SBATCH --job-name=tuning
 #SBATCH --partition=gpu
 #SBATCH --constraint=a100_80
-#SBATCH --nodes=10
+#SBATCH --nodes=20
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=128
 #SBATCH --gpus-per-task=4
