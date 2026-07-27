@@ -7,6 +7,8 @@ from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import train_monthly_model
 from climanet.utils import set_seed
 
+from pathlib import Path
+
 
 def _train(tune_config, static_args):
     """Helper function to train the model with Ray Tune."""
@@ -110,23 +112,32 @@ def run_tune(tune_config: dict, static_args: dict):
         reduction_factor=2,
     )
 
-    tuner = ray.tune.Tuner(
-        ray.tune.with_resources(
-            ray.tune.with_parameters(_train, static_args=static_args),
-            resources={
-                "cpu": static_args["cpu_per_trial"],
-                "gpu": static_args["gpu_per_trial"],
-            },
-        ),
-        tune_config=ray.tune.TuneConfig(
-            metric="loss",
-            mode="min",
-            scheduler=scheduler,
-            num_samples=static_args["num_trials"],
-            max_concurrent_trials=static_args["max_concurrent_trials"],
-        ),
-        param_space=tune_config,
-        run_config=ray.tune.RunConfig(storage_path=static_args["run_dir"]),
-    )
+    experiment_name = static_args["experiment_name"]
+    experiment_path = static_args["run_dir"] / experiment_name
+    if Path(experiment_path).exists():
+        tuner = ray.tune.Tuner.restore(
+            experiment_path,
+            resume_errored=True,
+        )
+    else:
+        tuner = ray.tune.Tuner(
+            ray.tune.with_resources(
+                ray.tune.with_parameters(_train, static_args=static_args),
+                resources={
+                    "cpu": static_args["cpu_per_trial"],
+                    "gpu": static_args["gpu_per_trial"],
+                },
+            ),
+            tune_config=ray.tune.TuneConfig(
+                metric="loss",
+                mode="min",
+                scheduler=scheduler,
+                num_samples=static_args["num_trials"],
+                max_concurrent_trials=static_args["max_concurrent_trials"],
+            ),
+            param_space=tune_config,
+            run_config=ray.tune.RunConfig(storage_path=static_args["run_dir"], name=experiment_name),
+        )
+
     results = tuner.fit()
     return results
