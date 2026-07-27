@@ -4,7 +4,7 @@ from pathlib import Path
 from ray import tune
 import ray
 
-from climanet.tune import run_tune, tune_data_preparation
+from climanet.tune import run_tune
 from climanet.utils import data_split
 
 if __name__ == "__main__":
@@ -43,14 +43,14 @@ if __name__ == "__main__":
     hourly_files = data_split(
         data_folder,
         filename_pattern=f"*_hr_ERA5dc_masked_{var_name}.nc",
-        train_range=(2018, 2020),
+        train_range=(2020, 2020),
         validation_range=(2021, 2021),
         test_range=(2022, 2022),
     )
     monthly_files = data_split(
         data_folder,
         filename_pattern=f"*_mon_ERA5dc_full_{var_name}.nc",
-        train_range=(2018, 2020),
+        train_range=(2020, 2020),
         validation_range=(2021, 2021),
         test_range=(2022, 2022),
     )
@@ -71,21 +71,19 @@ if __name__ == "__main__":
         "stride": (20, 20),  # data agumentation by overlapping patches
     }
 
-    train_dataset = tune_data_preparation(data_config_train)
-    validation_dataset = tune_data_preparation(data_config_validation)
-
+    # dont use ray.put() (i.e. object store) when data is large
     static_args = {
         "max_num_epochs": 100,
         "num_trials": 200,  # this is num_samples in ray.tune.TuneConfig
-        "cpu_per_trial": 20,
+        "cpu_per_trial": 30,
         "gpu_per_trial": 1,
         "run_dir": args.storage_path,
         "device": "cuda",
-        "dataloader_num_workers": 20,
-        "train_dataset": ray.put(train_dataset),
-        "validation_dataset": ray.put(validation_dataset),
+        "dataloader_num_workers": 8,
+        "data_config_train": data_config_train,
+        "data_config_validation": data_config_validation,
         "num_epoch": 100,
-        "max_concurrent_trials": args.num_nodes * 4,  # GPUs per node (4)
+        "max_concurrent_trials": args.num_nodes * 2,  # less than GPUs per node (4) avoid OOM
     }
 
     # parameters to tune
@@ -99,14 +97,14 @@ if __name__ == "__main__":
         "spatial_heads": tune.choice([2, 4, 8]),
         "optimizer_lr": tune.loguniform(1e-3, 1e-1),
         "batch_config": tune.grid_search([
-            {"batch_size": 200, "accumulation_steps": 1},
+            {"batch_size": 100, "accumulation_steps": 1},
+            {"batch_size": 200, "accumulation_steps": 2},
             {"batch_size": 400, "accumulation_steps": 2},
-            {"batch_size": 800, "accumulation_steps": 4},
-        ]),  # based on GPU memory
-        "accumulation_steps": tune.choice([1, 2, 4]),  # based on batch_size
+        ]),
     }
 
     # Start Ray Tune for distributed training on several nodes
+    print("Start ray ....")
     ray.init(address=args.ray_address, ignore_reinit_error=True)
 
     results = run_tune(tune_config, static_args)
