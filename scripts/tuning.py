@@ -74,7 +74,7 @@ if __name__ == "__main__":
     # dont use ray.put() (i.e. object store) when data is large
     static_args = {
         "max_num_epochs": 100,
-        "num_trials": 200,  # this is num_samples in ray.tune.TuneConfig
+        "num_trials": 50,  # this is num_samples in ray.tune.TuneConfig
         "cpu_per_trial": 30,
         "gpu_per_trial": 1,
         "run_dir": args.storage_path,
@@ -84,6 +84,7 @@ if __name__ == "__main__":
         "data_config_validation": data_config_validation,
         "num_epoch": 100,
         "max_concurrent_trials": args.num_nodes * 2,  # less than GPUs per node (4) avoid OOM
+        "experiment_name": "climanet_tune",
     }
 
     # parameters to tune
