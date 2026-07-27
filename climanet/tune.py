@@ -13,10 +13,13 @@ def _train(tune_config, static_args):
 
     device = static_args["device"]
     dataloader_num_workers = static_args["dataloader_num_workers"]
-    train_dataset = ray.get(static_args["train_dataset"])
-    validation_dataset = ray.get(static_args["validation_dataset"])
+
     run_dir = static_args["run_dir"]
     num_epoch = static_args["num_epoch"]
+
+    # dont use ray.put() and ray.get() (i.e. object store) when data is large
+    train_dataset = tune_data_preparation(static_args["data_config_train"])
+    validation_dataset = tune_data_preparation(static_args["data_config_validation"])
 
     patch_size = tune_config["patch_size"]
     overlap = tune_config["overlap"]
