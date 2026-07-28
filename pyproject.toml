@@ -41,3 +41,6 @@ packages = ["climanet"]
 
 [tool.ruff]
 exclude = ["notebooks"]
+
+[tool.ruff.lint]
+ignore = ["RUF013"]

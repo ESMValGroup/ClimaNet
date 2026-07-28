@@ -1,13 +1,13 @@
+from pathlib import Path
+
 import ray
 import xarray as xr
-
 from ray.tune.schedulers import ASHAScheduler
+
 from climanet.dataset import STDataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import train_monthly_model
 from climanet.utils import set_seed
-
-from pathlib import Path
 
 
 def _train(tune_config, static_args):

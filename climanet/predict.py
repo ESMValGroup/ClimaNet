@@ -1,16 +1,16 @@
 from pathlib import Path
 
 import numpy as np
-from torch.utils.data import Dataset
-import xarray as xr
 import torch
-from torch.utils.data import DataLoader
-from climanet.utils import load_model, setup_logging, compute_masked_loss
+import xarray as xr
+from torch.utils.data import DataLoader, Dataset
+
+from climanet.utils import compute_masked_loss, load_model, setup_logging
 
 
 def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
     """Helper function to convert predictions to xarray and save as netCDF."""
-    B, M, H, W = predictions.shape
+    _, M, H, W = predictions.shape
 
     base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
     indices = dataset.indices if hasattr(dataset, "indices") else range(len(dataset))

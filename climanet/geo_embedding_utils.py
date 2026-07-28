@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-
 from scipy.special import sph_harm_y
 
 
@@ -137,7 +136,7 @@ def fit_weighted_sh_pca(sh_grid, lat, embed_dim):
     sh_grid_centered_weighted = sh_grid_centered * torch.sqrt(weights[:, None])
 
     # perform singular value decomposition SVD
-    U, S, Vh = torch.linalg.svd(sh_grid_centered_weighted, full_matrices=False)
+    _, S, Vh = torch.linalg.svd(sh_grid_centered_weighted, full_matrices=False)
 
     components = Vh[:embed_dim].T.contiguous()
 

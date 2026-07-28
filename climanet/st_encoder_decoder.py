@@ -4,7 +4,7 @@ The main model class is SpatioTemporalModel.
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.utils.checkpoint import checkpoint
 
 
@@ -192,7 +192,7 @@ class CyclicTimeEmbedding(nn.Module):
         Returns:
         emb_encode : (B,M,T, embed_dim)
         """
-        B, M, T, D = time_features.shape
+        B, M, T, _ = time_features.shape
 
         # extract individual phases from features
         phase_doy = time_features[..., 1]

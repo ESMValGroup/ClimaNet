@@ -1,16 +1,16 @@
 import warnings
 
 import numpy as np
-from .utils import add_month_day_dims, calc_stats, add_month_hour_dims
+import torch
+import xarray as xr
+from torch.utils.data import Dataset
+
 from .geo_embedding_utils import (
     calculate_sh_geo_pos_embeddings,
     compute_patch_geo_pos_embedding,
+    compute_patch_scale_features,
 )
-from .geo_embedding_utils import compute_patch_scale_features
-import xarray as xr
-import torch
-from torch.utils.data import Dataset
-from typing import Tuple
+from .utils import add_month_day_dims, add_month_hour_dims, calc_stats
 
 
 class STDataset(Dataset):
@@ -30,9 +30,9 @@ class STDataset(Dataset):
         monthly_da: xr.DataArray,
         land_mask: xr.DataArray = None,
         time_dim: str = "time",
-        spatial_dims: Tuple[str, str] = ("lat", "lon"),
-        patch_size: Tuple[int, int, int] = (1, 16, 16),  # (Month, lat, lon)
-        stride: Tuple[int, int] = None,
+        spatial_dims: tuple[str, str] = ("lat", "lon"),
+        patch_size: tuple[int, int, int] = (1, 16, 16),  # (Month, lat, lon)
+        stride: tuple[int, int] = None,
         sh_pos_table: str = None,  # Optional; str formatted path to precomputed table of sh
         sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
         sh_order_L: int = 10,
@@ -322,7 +322,7 @@ class STDataset(Dataset):
             "lon_patch": lon_patch,  # (pW,)
         }
 
-    def compute_stats(self, indices: list = None) -> Tuple[np.ndarray, np.ndarray]:
+    def compute_stats(self, indices: list = None) -> tuple[np.ndarray, np.ndarray]:
         """Compute mean and std from specified indices (or all data if None).
 
         Args:

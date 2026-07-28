@@ -1,9 +1,9 @@
 import pytest
 import torch
-
-from climanet.train import _run_one_batch
-from climanet.st_encoder_decoder import SpatioTemporalModel
 from torch._subclasses.fake_tensor import FakeTensorMode
+
+from climanet.st_encoder_decoder import SpatioTemporalModel
+from climanet.train import _run_one_batch
 
 
 @pytest.fixture

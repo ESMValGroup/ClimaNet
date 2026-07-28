@@ -1,12 +1,12 @@
-from ray import tune
-from torch.utils.data import Dataset
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils.data import DataLoader
-import torch
 from pathlib import Path
 
+import torch
+from ray import tune
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data import DataLoader, Dataset
+
 from climanet.predict import predict_monthly_var
-from climanet.utils import setup_logging, compute_masked_loss, save_model
+from climanet.utils import compute_masked_loss, save_model, setup_logging
 
 
 def _run_one_batch(model: torch.nn.Module, batch: dict):
