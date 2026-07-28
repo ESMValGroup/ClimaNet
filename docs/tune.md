@@ -30,15 +30,16 @@ script in the `scripts` directory:
 static_args = {
         "max_num_epochs": 100,
         "num_trials": 50,  # this is num_samples in ray.tune.TuneConfig
-        "cpu_per_trial": 30,
+        "cpu_per_trial": 10,
         "gpu_per_trial": 1,
         "run_dir": args.storage_path,
         "device": "cuda",
-        "dataloader_num_workers": 8,
+        "dataloader_num_workers": 4,
         "data_config_train": data_config_train,
         "data_config_validation": data_config_validation,
         "num_epoch": 100,
         "max_concurrent_trials": args.num_nodes * 2,  # less than GPUs per node (4) avoid OOM
+        "experiment_name": "climanet_tune",
     }
 ```
 
@@ -54,18 +55,18 @@ static_args = {
   hyperparameter tuning. You can adjust this number based on your data and
   model. But for deep learning models, this is usually enough to explore the
   hyperparameter space.
-- The `cpu_per_trial` is set to be 30 and `gpu_per_trial` is set to be 1. When
+- The `cpu_per_trial` is set to be 10 and `gpu_per_trial` is set to be 1. When
   using Ray Tune with multiple nodes, it is recommended to use 1 GPU for model
   training.
 - The `run_dir` should be set to `SCRATCH` directory where nodes have access to,
   and it is used to store the results of each trial. Remember after tuning, to
   copy the results to project because the SCRATCH directory has usually an
   expiration date.
-- The `dataloader_num_workers` is set to be 8. This should not be too large to
+- The `dataloader_num_workers` is set to be 4. This should not be too large to
   avoid resource overload.
 - The `max_concurrent_trials` is set to be less than the number of GPUs per node
   to avoid OOM. In this example, we have 4 GPUs per node, but we set
-  `max_concurrent_trials` to be 2.
+  `max_concurrent_trials` to 2 per node.
 
 ### Search space configuration of Ray Tune
 
@@ -76,20 +77,20 @@ script in the `scripts` directory:
 ```python
 
 tune_config = {
-    "patch_size": tune.choice([2, 4, 8]),
-    "overlap": tune.choice([0, 1, 2]),
-    "embed_dim": tune.choice([32, 64, 128]),
-    "dropout": tune.choice([0.0, 0.1, 0.2]),
-    "hidden": tune.choice([32, 64, 128]),
-    "spatial_depth": tune.choice([1, 2, 3]),
-    "spatial_heads": tune.choice([2, 4, 8]),
-    "optimizer_lr": tune.loguniform(1e-3, 1e-1),
-    "batch_config": tune.grid_search([
-        {"batch_size": 100, "accumulation_steps": 1},
-        {"batch_size": 200, "accumulation_steps": 2},
-        {"batch_size": 400, "accumulation_steps": 2},
-    ]),
-}
+        "patch_size": tune.choice([2, 4, 8]),
+        "overlap": tune.choice([0, 1, 2]),
+        "embed_dim": tune.choice([32, 64, 128]),
+        "dropout": tune.choice([0.0, 0.1, 0.2]),
+        "hidden": tune.choice([32, 64, 128]),
+        "spatial_depth": tune.choice([1, 2, 3]),
+        "spatial_heads": tune.choice([2, 4, 8]),
+        "optimizer_lr": tune.loguniform(1e-3, 1e-1),
+        "batch_config": tune.grid_search([
+            {"batch_size": 100, "accumulation_steps": 1},
+            {"batch_size": 200, "accumulation_steps": 2},
+            {"batch_size": 400, "accumulation_steps": 2},
+        ]),
+    }
 ```
 
 We set the largest value in each parameter based on our experiments and
@@ -101,13 +102,14 @@ data and model.
 
 We use UV to create a virtual environment where `ClimaNet` and its dependencies
 are installed. Due to known multiprocessing cleanup race in the newest versions
-of python, pytorch multiprocessing/DataLoader workers and ray, we get some
-warnings when multiprocessing is done in background. To avoid this, we use a
-virtual environment with python 3.11. So in slurm script in the `scripts`
-directory, you see something like:
+of python, pytorch multiprocessing/DataLoader workers and ray, you may get some
+warnings when multiprocessing is done in background. To avoid this, you can use
+a virtual environment with python 3.11. So in slurm script in the `scripts`
+directory, you see something like because we want to specify which python
+version to use:
 
 ```bash
-UV_ENV="$HOME/climanet_py311"
+UV_ENV="$HOME/climanet_py314"
 ```
 
 ### Slurm script
@@ -131,4 +133,9 @@ You can adjust these parameters based on your cluster.
 ### Ray Tune distributed
 
 For setting Ray Tune distributed, checkout this [Ray slurm
-documentation](https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm.html#ray-slurm-deploy).
+example](https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm-template.html#slurm-template).
+We dont use `ray symmetric-run` because it has issues with getting node ip
+addresses. Instead, we use `ray start --head` on the first node and `ray start
+--address` on the other nodes. We also set a few environment variables related
+to timeout for different components of Ray. The environment variables are set in
+the slurm script in the `scripts` directory.
