@@ -1,5 +1,6 @@
-from climanet.utils import setup_logging
 from tbparse import SummaryReader
+
+from climanet.utils import setup_logging
 
 
 def test_setup_logging(tmp_path):

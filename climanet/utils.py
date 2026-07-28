@@ -1,19 +1,18 @@
-from pathlib import Path
 import random
-from typing import Tuple
-import numpy as np
-import xarray as xr
-import torch
 import time
-import psutil
-
-from torch.utils.tensorboard import SummaryWriter
+from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import TwoSlopeNorm
 import matplotlib.ticker as mticker
-
+import numpy as np
+import psutil
+import torch
+import xarray as xr
+from matplotlib.colors import TwoSlopeNorm
 from tbparse import SummaryReader
+from torch.utils.tensorboard import SummaryWriter
+
+from climanet.st_encoder_decoder import SpatioTemporalModel
 
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
@@ -92,7 +91,7 @@ def add_month_day_dims(
     daily_ts: xr.DataArray,  # (time, H, W) daily
     monthly_ts: xr.DataArray,  # (time, H, W) monthly
     time_dim: str = "time",
-    spatial_dims: Tuple[str, str] = ("lat", "lon"),
+    spatial_dims: tuple[str, str] = ("lat", "lon"),
 ):
     """Reshape daily and monthly data to have explicit month (M) and day (T) dimensions.
 
@@ -203,7 +202,7 @@ def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
     return pred.detach().cpu().numpy()
 
 
-def calc_stats(arr: np.ndarray, mean_axis: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+def calc_stats(arr: np.ndarray, mean_axis: int = 0) -> tuple[np.ndarray, np.ndarray]:
     """Calculate mean and std along the specified axis, ignoring NaNs.
 
     Args:
@@ -258,23 +257,42 @@ def compute_masked_loss(
     return (num / denom).mean()
 
 
-def save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
+def save_model(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    run_dir: str,
+    filename="best_model.pth",
+    verbose: bool = True,
+) -> None:
     """Save model state and config to disk."""
-    model_path = Path(run_dir) / "best_model.pth"
+    Path(run_dir).mkdir(parents=True, exist_ok=True)
+    model_path = Path(run_dir) / filename
     model = model.module if hasattr(model, "module") else model
     torch.save(
-        {"model_state_dict": model.state_dict(), "model_config": model.config},
+        {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "model_config": model.config,
+        },
         model_path,
     )
     if verbose:
         print(f"Model saved to {model_path}")
 
 
+def load_model(model_path: str, device: str):
+    """Helper function to load a model from a checkpoint."""
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    model = SpatioTemporalModel(**checkpoint["model_config"])
+    model.load_state_dict(checkpoint["model_state_dict"])
+    return model.to(device)
+
+
 def add_month_hour_dims(
     hourly_ts: xr.DataArray,  # (time, H, W) hourly
     monthly_ts: xr.DataArray,  # (time, H, W) monthly
     time_dim: str = "time",
-    spatial_dims: Tuple[str, str] = ("lat", "lon"),
+    spatial_dims: tuple[str, str] = ("lat", "lon"),
 ):
     """Reshape hourly and monthly data to have explicit month (M) and hour (T) dimensions.
 
@@ -437,7 +455,7 @@ def plot_histograms(
     target, predictions, label="SST K", legend_labels=("Target", "Prediction"), bins=30
 ):
     """Plot histograms of target and predictions in the same figure for comparison."""
-    fig, axs = plt.subplots(
+    _, axs = plt.subplots(
         nrows=len(target.time),
         ncols=1,
         figsize=(8, 4 * len(target.time)),
@@ -472,6 +490,40 @@ def plot_histograms(
     plt.show()
 
 
+def data_split(
+    data_folder,
+    filename_pattern="*_hr_ERA5dc_masked_tos.nc",
+    train_range=(2018, 2020),
+    validation_range=(2021, 2021),
+    test_range=(2022, 2022),
+):
+    """
+    Split the data into training, validation, and test sets based on the provided year ranges.
+    """
+    data_folder = Path(data_folder)
+
+    splits = {
+        "train": [],
+        "validation": [],
+        "test": [],
+    }
+
+    for file in data_folder.rglob(filename_pattern):
+        year = int(file.stem[:4])
+
+        if train_range[0] <= year <= train_range[1]:
+            splits["train"].append(file)
+        if validation_range[0] <= year <= validation_range[1]:
+            splits["validation"].append(file)
+        if test_range[0] <= year <= test_range[1]:
+            splits["test"].append(file)
+
+    for lst in splits.values():
+        lst.sort()
+
+    return splits
+
+
 def plot_nobs_vs_err(
     nobs: xr.DataArray, err_baseline: xr.DataArray, err_predictions: xr.DataArray
 ):
@@ -485,7 +537,7 @@ def plot_nobs_vs_err(
         err_baseline (xr.DataArray): Baseline error per grid cell per month. Dimensions: (time, lat, lon)
         err_predictions (xr.DataArray): Prediction error per grid cell per month. Dimensions: (time, lat, lon)
     """
-    fig, axes = plt.subplots(nobs.sizes["time"], 1, figsize=(5 * nobs.sizes["time"], 8))
+    _, axes = plt.subplots(nobs.sizes["time"], 1, figsize=(5 * nobs.sizes["time"], 8))
     if nobs.sizes["time"] == 1:
         axes = [axes]
 
