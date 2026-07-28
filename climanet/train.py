@@ -132,14 +132,14 @@ def train_monthly_model(
             optimizer.zero_grad(set_to_none=True)
 
         # Calculate average epoch loss
-        avg_epoch_loss = epoch_loss.item() / (i + 1)
-        writer.add_scalar("Loss/train", avg_epoch_loss, epoch)
+        avg_train_loss = epoch_loss.item() / (i + 1)
+        writer.add_scalar("Loss/train", avg_train_loss, epoch)
+        avg_epoch_loss = avg_train_loss  # Initially use training loss
 
         # Validation loss (optional)
         if validation_dataset is not None:
             # Store train loss for gap calculation
-            avg_train_loss = avg_epoch_loss
-            _, avg_epoch_loss = predict_monthly_var(
+            _, avg_val_loss = predict_monthly_var(
                 model,
                 validation_dataset,
                 batch_size=batch_size,
@@ -151,18 +151,17 @@ def train_monthly_model(
                 run_dir=run_dir,
                 dataloader_num_workers=dataloader_num_workers,
             )
-            writer.add_scalar("Loss/validation", avg_epoch_loss, epoch)
+            writer.add_scalar("Loss/validation", avg_val_loss, epoch)
+            avg_epoch_loss = avg_val_loss  # Use validation loss if exists
 
             if verbose and epoch % verbose_epoch_interval == 0:
-                gap = avg_epoch_loss - avg_train_loss
+                gap = avg_val_loss - avg_train_loss
                 print(f"Epoch {epoch}: gap between train and val loss: {gap:.6f}")
 
         # Step scheduler
         scheduler.step(avg_epoch_loss)
 
         # Log to TensorBoard
-        writer.add_scalar("Loss/train", avg_epoch_loss, epoch)
-        writer.add_scalar("Loss/best", best_loss, epoch)
 
         # Early stopping check
         # Consider improvement only if loss decreases more than a small threshold
@@ -172,6 +171,9 @@ def train_monthly_model(
             counter = 0
         else:
             counter += 1
+
+        # Log to TensorBoard
+        writer.add_scalar("Loss/best", best_loss, epoch)
 
         if verbose and epoch % 20 == 0:
             print(f"Epoch {epoch}: best_loss = {best_loss:.6f}")

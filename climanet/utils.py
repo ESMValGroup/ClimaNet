@@ -4,6 +4,7 @@ from typing import Tuple
 import numpy as np
 import xarray as xr
 import torch
+import time
 import psutil
 
 from torch.utils.tensorboard import SummaryWriter
@@ -13,6 +14,7 @@ from matplotlib.colors import TwoSlopeNorm
 import matplotlib.ticker as mticker
 
 from climanet.st_encoder_decoder import SpatioTemporalModel
+from tbparse import SummaryReader
 
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
@@ -233,7 +235,8 @@ def set_seed(seed: int = 42):
 def setup_logging(log_dir: str) -> SummaryWriter:
     """Set up TensorBoard logging directory and writer."""
     Path(log_dir).mkdir(parents=True, exist_ok=True)
-    return SummaryWriter(log_dir)
+    timestamp_utc = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
+    return SummaryWriter(log_dir, filename_suffix=f"_UTC{timestamp_utc}")
 
 
 def compute_masked_loss(
@@ -635,3 +638,30 @@ def plot_nobs_vs_err(
         )
 
     plt.tight_layout()
+
+
+def plot_loss(
+    run_dir: str | Path,
+    list_loss_var: list[str],
+    unit: str = "K",
+    figsize: tuple[int, int] = (10, 5),
+):
+    """Plot training and validation loss from TensorBoard logs.
+
+    Args:
+        run_dir (str | Path): Directory containing TensorBoard logs.
+        list_loss_var (list[str]): List of loss variable names to plot.
+        unit (str, optional): Unit of the loss values. Defaults to "K".
+        figsize (Tuple[int, int], optional): Size of the figure. Defaults to (10, 5).
+    """
+    # Load saved training status with tbparse.SummaryReader
+    reader = SummaryReader(run_dir)
+
+    # plot training and validation loss
+    plt.figure(figsize=figsize)
+    for loss_var in list_loss_var:
+        loss = reader.scalars[reader.scalars["tag"] == loss_var]
+        plt.plot(loss["step"], loss["value"], label=loss_var)
+    plt.xlabel("Step")
+    plt.ylabel(f"Average loss per epoch ({unit})")
+    plt.legend()
