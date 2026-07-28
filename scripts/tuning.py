@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-
+import time
 from ray import tune
 import ray
 
@@ -75,11 +75,11 @@ if __name__ == "__main__":
     static_args = {
         "max_num_epochs": 100,
         "num_trials": 50,  # this is num_samples in ray.tune.TuneConfig
-        "cpu_per_trial": 30,
+        "cpu_per_trial": 10,
         "gpu_per_trial": 1,
         "run_dir": args.storage_path,
         "device": "cuda",
-        "dataloader_num_workers": 8,
+        "dataloader_num_workers": 4,
         "data_config_train": data_config_train,
         "data_config_validation": data_config_validation,
         "num_epoch": 100,
@@ -105,9 +105,10 @@ if __name__ == "__main__":
     }
 
     # Start Ray Tune for distributed training on several nodes
-    print("Start ray ....")
+    print("Start ray init in python script....")
     ray.init(address=args.ray_address, ignore_reinit_error=True)
 
+    time.sleep(30)  # wait for nodes
     results = run_tune(tune_config, static_args)
 
     ray.shutdown()
