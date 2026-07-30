@@ -1,4 +1,5 @@
 import warnings
+from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -10,7 +11,7 @@ from .geo_embedding_utils import (
     compute_patch_geo_pos_embedding,
     compute_patch_scale_features,
 )
-from .utils import add_month_day_dims, add_month_hour_dims, calc_stats
+from .utils import add_month_day_dims, add_month_hour_dims
 
 
 class STDataset(Dataset):
@@ -37,6 +38,7 @@ class STDataset(Dataset):
         sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
         sh_order_L: int = 10,
         is_hourly: bool = False,
+        lazy_load: bool = False,
     ):
         """Initialize the dataset with daily and monthly data, and optional land mask.
 
@@ -61,10 +63,15 @@ class STDataset(Dataset):
         self.patch_size = patch_size
         self.input_da = input_da
         self.monthly_da = monthly_da
+        self.land_mask = land_mask
         self.stride = stride if stride is not None else (patch_size[1], patch_size[2])
 
         self.sh_embed_dim = sh_embed_dim
         self.sh_order_L = sh_order_L
+        self.lazy_load = lazy_load
+
+        self._cache = OrderedDict()
+        self._cache_size = 6
 
         # Check that the input data has the expected dimensions
         if time_dim not in input_da.dims or time_dim not in monthly_da.dims:
@@ -85,59 +92,43 @@ class STDataset(Dataset):
             # hours_per_day == 24
             # Reshape daily → (M, T=31*24, H, W), monthly → (M, H, W),
             # and get padded_days_mask → (M, T=31*24)
-            daily_mt, monthly_m, padded_days_mask, daily_timef = add_month_hour_dims(
+            self.daily_data, self.monthly_data, self.padded_days_mask, self.daily_timef = add_month_hour_dims(
                 input_da, monthly_da, time_dim=time_dim
             )
         else:
             # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
             # and get padded_days_mask → (M, T=31)
-            daily_mt, monthly_m, padded_days_mask, daily_timef = add_month_day_dims(
+            self.daily_data, self.monthly_data, self.padded_days_mask, self.daily_timef = add_month_day_dims(
                 input_da, monthly_da, time_dim=time_dim
             )
 
-        # Convert to tensor once — all __getitem__ calls use these
-        self.daily_t = torch.from_numpy(
-            daily_mt.values.astype(np.float32)
-        )  # (M, T=31, H, W)
-        self.monthly_t = torch.from_numpy(
-            monthly_m.values.astype(np.float32)
-        )  # (M, H, W)
-        self.padded_days_t = torch.from_numpy(
-            padded_days_mask.values.copy()
-        ).bool()  # (M, T=31)
+        # keep data as xarray for lazy loading, but convert to tensor if not lazy
+        if self.lazy_load:
+            self.daily_data_t = None
+            self.daily_nan_mask_t = None
+            self.monthly_data_t = None
+            self.land_mask_t = None
+        else:
+            self.daily_data_t, self.daily_nan_mask_t = self._prepare_daily_data(self.daily_data)
+            self.monthly_data_t = self._prepare_monthly_data(self.monthly_data)
+            self.land_mask_t = self._prepare_land_mask(self.land_mask)
+
+        # other tensors that are always needed, even in lazy mode; not expensive to keep in memory
+        self.padded_days_t = torch.from_numpy(self.padded_days_mask.to_numpy()).bool()
         self.daily_timef_t = torch.from_numpy(
-            daily_timef.values.astype(np.float32)
-        )  # (M, T=31, 3)
+            self.daily_timef.to_numpy().astype(np.float32, copy=False)
+        ).contiguous()
 
         # Store coordinate arrays
         self.lat_coords = torch.from_numpy(input_da[spatial_dims[0]].to_numpy().copy())
         self.lon_coords = torch.from_numpy(input_da[spatial_dims[1]].to_numpy().copy())
-
-        if land_mask is not None:
-            lm = torch.from_numpy(land_mask.values.copy()).bool()
-            if lm.ndim == 3:
-                lm = lm.squeeze(0)  # (1, H, W) → (H, W)
-            self.land_mask_t = lm
-        else:
-            self.land_mask_t = None
-
-        # Precompute the NaN mask before filling NaNs
-        # daily_mask: True where NaN (i.e. missing ocean data, not land)
-        self.daily_nan_mask_t = torch.isnan(self.daily_t)  # (M, T=31, H, W)
-
-        # NaNs will be filled with 0 in-place
-        self.daily_t.nan_to_num_(nan=0.0)
-
-        # Stats will be set later via set_stats() for train/test datasets
-        self.daily_mean = None
-        self.daily_std = None
 
         # Pre-build zero land tensor for the no-mask case
         _, ph, pw = self.patch_size
         self._zero_land = torch.zeros(ph, pw, dtype=torch.bool)
 
         # Precompute lazy index mapping for patches
-        M, H, W = self.daily_t.shape[0], self.daily_t.shape[2], self.daily_t.shape[3]
+        M, H, W = self.daily_data.shape[0], self.daily_data.shape[2], self.daily_data.shape[3]
         self.patch_indices = self._compute_patch_indices(M, H, W)
 
         # Precompute geoposition and scale embeddings for patches
@@ -257,6 +248,111 @@ class STDataset(Dataset):
 
         return patch_geo_embeddings, patch_scale_features
 
+    def _prepare_daily_data(self, daily_data):
+        """Convert daily data to tensor and precompute NaN mask."""
+        daily_data_t = torch.from_numpy(
+            daily_data.to_numpy().astype(np.float32, copy=False)
+        ).contiguous()  # (M, T=31, H, W)
+
+        # Precompute the NaN mask before filling NaNs
+        # daily_mask: True where NaN (i.e. missing ocean data, not land)
+        daily_nan_mask_t = torch.isnan(daily_data_t)  # (M, T=31, H, W)
+
+        # NaNs will be filled with 0 in-place
+        daily_data_t.nan_to_num_(nan=0.0)
+
+        return daily_data_t, daily_nan_mask_t
+
+    def _prepare_monthly_data(self, monthly_data):
+        """Convert monthly data to tensor."""
+        return torch.from_numpy(
+            monthly_data.to_numpy().astype(np.float32, copy=False)
+        ).contiguous()  # (M, H, W)
+
+    def _prepare_land_mask(self, land_mask):
+        """Convert land mask to tensor."""
+        if land_mask is not None:
+            lm = torch.as_tensor(land_mask.to_numpy(), dtype=torch.bool)
+            if lm.ndim == 3:
+                lm = lm.squeeze(0)  # (1, H, W) → (H, W)
+            return lm
+        else:
+            return None
+
+    def _load_partial(self, m: int):
+        """Materialize one month and keep it in an LRU cache."""
+        if m in self._cache:
+            self._cache.move_to_end(m)
+            return self._cache[m]
+
+        daily_t, daily_nan_mask_t = self._prepare_daily_data(self.daily_data.isel(M=m))
+
+        monthly_t = self._prepare_monthly_data(self.monthly_data.isel(M=m))
+
+        if self.land_mask is not None:
+            land_t = self._prepare_land_mask(self.land_mask)
+        else:
+            land_t = self._zero_land
+
+        data_partial = {
+            "daily": daily_t,
+            "daily_nan_mask": daily_nan_mask_t,
+            "monthly": monthly_t,
+            "land": land_t,
+        }
+
+        # LRU update
+        self._cache[m] = data_partial
+        self._cache.move_to_end(m)
+
+        if len(self._cache) > self._cache_size:
+            self._cache.popitem(last=False)
+
+        return data_partial
+
+    def _get_patch(self, m: int, i: int, j: int):
+        """Extract a spatiotemporal patch.
+
+        Returns:
+            daily_t: (pm, T, pH, pW)
+            daily_nan_mask_t: (pm, T, pH, pW)
+            monthly_t: (pm, pH, pW)
+            land_t: (pH, pW)
+        """
+        pm, ph, pw = self.patch_size
+
+        if self.lazy_load:
+            if pm != 1:
+                raise NotImplementedError(
+                    "Month cache currently supports patch_size[0] == 1."
+                )
+
+            # get the month data from cache or load it if not present
+            data_partial = self._load_partial(m)
+
+            daily_t = data_partial["daily"][:, i : i + ph, j : j + pw]
+            daily_nan_mask_t = data_partial["daily_nan_mask"][:, i : i + ph, j : j + pw]
+            monthly_t = data_partial["monthly"][i : i + ph, j : j + pw]
+
+            if self.land_mask is not None:
+                land_t = data_partial["land"][i : i + ph, j : j + pw]
+            else:
+                land_t = self._zero_land
+
+        else:
+            # Slice pre-materialized tensors
+            daily_t = self.daily_data_t[m : m + pm, :, i : i + ph, j : j + pw]
+            daily_nan_mask_t = self.daily_nan_mask_t[m : m + pm, :, i : i + ph, j : j + pw]
+
+            monthly_t = self.monthly_data_t[m : m + pm, i : i + ph, j : j + pw]
+
+            if self.land_mask_t is not None:
+                land_t = self.land_mask_t[i : i + ph, j : j + pw]
+            else:
+                land_t = self._zero_land
+
+        return daily_t, daily_nan_mask_t, monthly_t, land_t
+
     def __len__(self):
         return len(self.patch_indices)
 
@@ -269,28 +365,19 @@ class STDataset(Dataset):
         m, i, j = self.patch_indices[idx]
         pm, ph, pw = self.patch_size
 
-        # Extract spatial patch via slicing — faster than xarray indexing
-        # (M, T, H, W) -> (M,T,pH, pW)
-        daily_t_patch = self.daily_t[m : m + pm, :, i : i + ph, j : j + pw].unsqueeze(0)
-
-        # (M, H, W) -> (M, pH, pW)
-        monthly_t_patch = self.monthly_t[m : m + pm, i : i + ph, j : j + pw]
-
-        # (M, T, H, W) -> (M, T, pH, pW)
-        daily_nan_mask_t_patch = self.daily_nan_mask_t[
-            m : m + pm, :, i : i + ph, j : j + pw
-        ].unsqueeze(0)
-
-        if self.land_mask_t is not None:
-            land_t_patch = self.land_mask_t[i : i + ph, j : j + pw]  # (H, W)
-        else:
-            land_t_patch = self._zero_land
+        # Extract the patch data
+        daily_t_patch, daily_nan_mask_t_patch, monthly_t_patch, land_t_patch = self._get_patch(m, i, j)
+        daily_t_patch = daily_t_patch.unsqueeze(0)  # (1, pm, T, pH, pW)
+        daily_nan_mask_t_patch = daily_nan_mask_t_patch.unsqueeze(0)  # (1, pm, T, pH, pW)
 
         # daily_mask: NaN locations that are NOT land
         # Reshape land_tensor for broadcasting: (pH, pW) → (1, 1, 1, pH, pW)
         daily_mask_t_patch = daily_nan_mask_t_patch & (
             ~land_t_patch.unsqueeze(0).unsqueeze(0).unsqueeze(0)
         )
+
+        daily_timef_patch = self.daily_timef_t[m : m + pm]
+        padded_days_mask_patch = self.padded_days_t[m : m + pm]
 
         # Extract lat/lon coordinates for this patch
         lat_patch = self.lat_coords[i : i + ph]  # (H,) -> (pH,)
@@ -302,16 +389,14 @@ class STDataset(Dataset):
         # get scale feature for patch
         scale_feature_t = self.patch_scale_features[idx]  # (10,)
 
-        # Convert to tensors
+        # Convert to dictionary
         return {
             "daily_patch": daily_t_patch,  # (C=1, pm, T=31, pH, pW)
             "monthly_patch": monthly_t_patch,  # (pm, pH, pW)
             "daily_mask_patch": daily_mask_t_patch,  # (C=1, pm, T=31, pH, pW)
             "land_mask_patch": land_t_patch,  # (pH,pW) True=Land
-            "daily_timef_patch": self.daily_timef_t[m : m + pm],  # (pm, T=31, 3)
-            "padded_days_mask": self.padded_days_t[
-                m : m + pm
-            ],  # (pm, T=31) True=padded
+            "daily_timef_patch": daily_timef_patch,  # (pm, T=31, 3)
+            "padded_days_mask": padded_days_mask_patch,  # (pm, T=31) True=padded
             "scale_feature_patch": scale_feature_t,  # (10,)
             "geo_pos_embedding_patch": geo_pos_embedding_t,  # (sh_embed_dim,)
             "sh_embed_dim": self.sh_embed_dim_t,
@@ -321,31 +406,3 @@ class STDataset(Dataset):
             "lat_patch": lat_patch,  # (pH,)
             "lon_patch": lon_patch,  # (pW,)
         }
-
-    def compute_stats(self, indices: list = None) -> tuple[np.ndarray, np.ndarray]:
-        """Compute mean and std from specified indices (or all data if None).
-
-        Args:
-            indices: List of patch indices to compute stats from. If None, use all.
-
-        Returns:
-            Tuple of (mean, std) arrays
-        """
-        if indices is None:
-            data = self.monthly_t.numpy()  # (M, H, W)
-        else:
-            # Stack selected spatial patches
-            pm, ph, pw = self.patch_size
-            patches = []
-            for idx in indices:
-                m, i, j = self.patch_indices[idx]
-                patch = self.monthly_t[m : m + pm, i : i + ph, j : j + pw].numpy()
-                patches.append(patch)
-            data = np.concatenate(patches, axis=-1)
-
-        mean, std = calc_stats(data)  # (pm,)
-
-        self.daily_mean = mean
-        self.daily_std = std
-
-        return mean, std
