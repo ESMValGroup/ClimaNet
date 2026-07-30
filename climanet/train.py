@@ -202,6 +202,6 @@ def train_monthly_model(
         print(f"Training complete. Best loss: {best_loss:.6f}")
 
     if store_model:
-        save_model(model, run_dir, verbose)
+        save_model(model, optimizer, run_dir, verbose=verbose)
 
     return model
