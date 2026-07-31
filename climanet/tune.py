@@ -80,16 +80,16 @@ def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
 
     # prepare data
     input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = data_preparation(
-        input_data, monthly_data, var_name=var_name, calculate_residuals=True, is_hourly=is_hourly
+        input_data[var_name], monthly_data[var_name], calculate_residuals=True, is_hourly=is_hourly
     )
 
     # no lazy loading, tune using 1 year of data fits in memory
     dataset = STDataset(
-        input_da=input_da[var_name],
-        input_da_nan_mask=input_da_nan_mask[var_name],
-        monthly_da=monthly_da[var_name],
-        padded_days_mask=padded_days_mask[var_name],
-        time_features=time_features["month"],
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        monthly_da=monthly_da,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
         land_mask=lsm_mask["lsm"],
         patch_size=data_config["patch_size"],
         stride=data_config["stride"],
