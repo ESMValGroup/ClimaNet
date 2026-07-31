@@ -96,8 +96,12 @@ class STDataset(Dataset):
             self.monthly_data_t = None
         else:
             self.daily_data_t = torch.from_numpy(self.input_da.to_numpy()).contiguous()
-            self.daily_nan_mask_t = torch.from_numpy(self.input_da_nan_mask.to_numpy()).contiguous()
-            self.monthly_data_t = torch.from_numpy(self.monthly_da.to_numpy()).contiguous()
+            self.daily_nan_mask_t = torch.from_numpy(
+                self.input_da_nan_mask.to_numpy()
+            ).contiguous()
+            self.monthly_data_t = torch.from_numpy(
+                self.monthly_da.to_numpy()
+            ).contiguous()
 
         # other tensors that are always needed, even in lazy mode; not expensive to keep in memory
         self.land_mask_t = self._prepare_land_mask(self.land_mask)
@@ -244,6 +248,7 @@ class STDataset(Dataset):
             return lm
         else:
             return None
+
     def _load_partial(self, m: int):
         """Materialize one month and keep it in an LRU cache."""
         if m in self._cache:
@@ -254,7 +259,9 @@ class STDataset(Dataset):
         daily_t = torch.from_numpy(input_da_m.to_numpy()).contiguous()
 
         input_da_nan_mask_m = self.input_da_nan_mask.isel(M=m)
-        input_da_nan_mask_t = torch.from_numpy(input_da_nan_mask_m.to_numpy()).contiguous()
+        input_da_nan_mask_t = torch.from_numpy(
+            input_da_nan_mask_m.to_numpy()
+        ).contiguous()
 
         monthly_da_m = self.monthly_da.isel(M=m)
         monthly_t = torch.from_numpy(monthly_da_m.to_numpy()).contiguous()
@@ -292,13 +299,17 @@ class STDataset(Dataset):
             # get the month data from cache or load it if not present
             data_partial = self._load_partial(m)
             daily_t = data_partial["input_da"][:, i : i + ph, j : j + pw]
-            daily_nan_mask_t = data_partial["input_da_nan_mask"][:, i : i + ph, j : j + pw]
+            daily_nan_mask_t = data_partial["input_da_nan_mask"][
+                :, i : i + ph, j : j + pw
+            ]
             monthly_t = data_partial["monthly"][i : i + ph, j : j + pw]
 
         else:
             # Slice pre-materialized tensors
             daily_t = self.daily_data_t[m : m + pm, :, i : i + ph, j : j + pw]
-            daily_nan_mask_t = self.daily_nan_mask_t[m : m + pm, :, i : i + ph, j : j + pw]
+            daily_nan_mask_t = self.daily_nan_mask_t[
+                m : m + pm, :, i : i + ph, j : j + pw
+            ]
 
             monthly_t = self.monthly_data_t[m : m + pm, i : i + ph, j : j + pw]
 
