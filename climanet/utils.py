@@ -677,14 +677,12 @@ def data_preparation(
     save_to_zarr=False
 ):
     """Prepare the data for training."""
-    # calculate residuals as target
     if time_dim not in input_data.dims or time_dim not in monthly_data.dims:
         raise ValueError(f"Time dimension '{time_dim}' not found in input data")
 
     if calculate_residuals:
         input_data_averaged = input_data.resample({time_dim: "MS"}).mean(skipna=True)
         input_data_averaged[time_dim] = monthly_data[time_dim]
-        # Residuals
         monthly_data_res = monthly_data - input_data_averaged
     else:
         monthly_data_res = monthly_data
