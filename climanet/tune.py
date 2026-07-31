@@ -95,7 +95,6 @@ def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
         stride=data_config["stride"],
         sh_embed_dim=96,
         sh_order_L=10,
-        is_hourly=is_hourly,
     )
     return dataset
 
