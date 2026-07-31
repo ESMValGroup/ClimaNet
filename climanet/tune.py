@@ -7,7 +7,7 @@ from ray.tune.schedulers import ASHAScheduler
 from climanet.dataset import STDataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import train_monthly_model
-from climanet.utils import set_seed
+from climanet.utils import data_preparation, set_seed
 
 
 def _train(tune_config, static_args):
@@ -76,18 +76,20 @@ def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
         data_config["landmask_filename"], chunks=data_config.get("landmask_chunks")
     )
 
-    # calculate residuals as target
-    input_data_averaged = input_data.resample(time="MS").mean(skipna=True)
-    input_data_averaged["time"] = monthly_data["time"]
-
-    # Residuals
-    monthly_data_res = monthly_data - input_data_averaged
-
     var_name = data_config["var_name"]
 
+    # prepare data
+    input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = data_preparation(
+        input_data, monthly_data, var_name=var_name, calculate_residuals=True, is_hourly=is_hourly
+    )
+
+    # no lazy loading, tune using 1 year of data fits in memory
     dataset = STDataset(
-        input_da=input_data[var_name],
-        monthly_da=monthly_data_res[var_name],
+        input_da=input_da[var_name],
+        input_da_nan_mask=input_da_nan_mask[var_name],
+        monthly_da=monthly_da[var_name],
+        padded_days_mask=padded_days_mask[var_name],
+        time_features=time_features["month"],
         land_mask=lsm_mask["lsm"],
         patch_size=data_config["patch_size"],
         stride=data_config["stride"],
