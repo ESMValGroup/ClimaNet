@@ -4,6 +4,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import numcodecs
 import numpy as np
 import psutil
 import torch
@@ -663,3 +664,93 @@ def plot_loss(
     plt.xlabel("Step")
     plt.ylabel(f"Average loss per epoch ({unit})")
     plt.legend()
+
+
+def data_preparation(
+    input_data: xr.Dataset,
+    monthly_data: xr.Dataset,
+    var_name="tos",
+    time_dim="time",
+    run_dir=".",
+    calculate_residuals=True,
+    is_hourly=False,
+    save_to_zarr=False
+):
+    """Prepare the data for training."""
+    # calculate residuals as target
+    if time_dim not in input_data.dims or time_dim not in monthly_data.dims:
+        raise ValueError(f"Time dimension '{time_dim}' not found in input data")
+
+    if calculate_residuals:
+        input_data_averaged = input_data.resample({time_dim: "MS"}).mean(skipna=True)
+        input_data_averaged[time_dim] = monthly_data[time_dim]
+        # Residuals
+        monthly_data_res = monthly_data - input_data_averaged
+    else:
+        monthly_data_res = monthly_data
+
+    if is_hourly:
+        # hours_per_day == 24
+        # Reshape daily → (M, T=31*24, H, W), monthly → (M, H, W),
+        # and get padded_days_mask → (M, T=31*24)
+        input_da, monthly_da, padded_days_mask, time_features = add_month_hour_dims(
+            input_data[var_name], monthly_data_res[var_name], time_dim=time_dim
+        )
+    else:
+        # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
+        # and get padded_days_mask → (M, T=31)
+        input_da, monthly_da, padded_days_mask, time_features = add_month_day_dims(
+            input_data[var_name], monthly_data_res[var_name], time_dim=time_dim
+        )
+
+    # Precompute the NaN mask before filling NaNs
+    # input_da_nan_mask: True where NaN (i.e. missing ocean data, not land)
+    input_da_nan_mask = input_da.isnull()
+
+    # NaNs will be filled with 0 in-place
+    input_da = input_da.fillna(0).astype("float32")
+
+    monthly_da = monthly_da.astype("float32")
+
+    # rechunk data
+    input_da = input_da.chunk({"M": 1, "lat": 100, "lon": 100})
+    input_da_nan_mask = input_da_nan_mask.chunk({"M": 1, "lat": 100, "lon": 100}) # bool
+    monthly_da = monthly_da.chunk({"M": 1, "lat": 100, "lon": 100})
+    padded_days_mask = padded_days_mask.chunk({"M": 1}) # bool
+    time_features = time_features.chunk({"M": 1})
+
+    # compression for boolean masks
+    encoding_input_da_nan_mask = {
+        input_da_nan_mask.name: {
+            "dtype": "bool",
+            "compressor": numcodecs.Blosc(
+                cname="zstd",
+                clevel=3,
+                shuffle=numcodecs.Blosc.BITSHUFFLE,
+            ),
+        }
+    }
+
+    encoding_padded_days_mask = {
+        padded_days_mask.name: {
+            "dtype": "bool",
+            "compressor": numcodecs.Blosc(
+                cname="zstd",
+                clevel=3,
+                shuffle=numcodecs.Blosc.BITSHUFFLE,
+            ),
+        }
+    }
+
+    if save_to_zarr:
+        input_da.to_zarr(f"{run_dir}/input_da.zarr", mode="w", zarr_format=2, consolidated=True)
+        input_da_nan_mask.to_zarr(
+            f"{run_dir}/input_da_nan_mask.zarr", mode="w", encoding=encoding_input_da_nan_mask, zarr_format=2, consolidated=True
+        )
+        monthly_da.to_zarr(f"{run_dir}/monthly_da.zarr", mode="w", zarr_format=2, consolidated=True)
+        padded_days_mask.to_zarr(
+            f"{run_dir}/padded_days_mask.zarr", mode="w", encoding=encoding_padded_days_mask, zarr_format=2, consolidated=True
+        )
+        time_features.to_zarr(f"{run_dir}/time_features.zarr", mode="w", zarr_format=2, consolidated=True)
+
+    return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
