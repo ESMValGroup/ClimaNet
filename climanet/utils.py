@@ -667,9 +667,8 @@ def plot_loss(
 
 
 def data_preparation(
-    input_data: xr.Dataset,
-    monthly_data: xr.Dataset,
-    var_name="tos",
+    input_data: xr.DataArray,
+    monthly_data: xr.DataArray,
     time_dim="time",
     run_dir=".",
     calculate_residuals=True,
@@ -679,6 +678,10 @@ def data_preparation(
     """Prepare the data for training."""
     if time_dim not in input_data.dims or time_dim not in monthly_data.dims:
         raise ValueError(f"Time dimension '{time_dim}' not found in input data")
+
+    var_name = input_data.name
+    if not var_name:
+        raise ValueError("Input data must have a name (variable name)")
 
     if calculate_residuals:
         input_data_averaged = input_data.resample({time_dim: "MS"}).mean(skipna=True)
@@ -692,13 +695,13 @@ def data_preparation(
         # Reshape daily → (M, T=31*24, H, W), monthly → (M, H, W),
         # and get padded_days_mask → (M, T=31*24)
         input_da, monthly_da, padded_days_mask, time_features = add_month_hour_dims(
-            input_data[var_name], monthly_data_res[var_name], time_dim=time_dim
+            input_data, monthly_data_res, time_dim=time_dim
         )
     else:
         # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
         # and get padded_days_mask → (M, T=31)
         input_da, monthly_da, padded_days_mask, time_features = add_month_day_dims(
-            input_data[var_name], monthly_data_res[var_name], time_dim=time_dim
+            input_data, monthly_data_res, time_dim=time_dim
         )
 
     # Precompute the NaN mask before filling NaNs
@@ -706,7 +709,7 @@ def data_preparation(
     input_da_nan_mask = input_da.isnull()
 
     # NaNs will be filled with 0 in-place
-    input_da = input_da.fillna(0).astype("float32")
+    input_da = input_da.fillna(0.0).astype("float32")
 
     monthly_da = monthly_da.astype("float32")
 
@@ -716,6 +719,12 @@ def data_preparation(
     monthly_da = monthly_da.chunk({"M": 1, "lat": 100, "lon": 100})
     padded_days_mask = padded_days_mask.chunk({"M": 1}) # bool
     time_features = time_features.chunk({"M": 1})
+
+    # set names
+    input_da_nan_mask.name = var_name
+    monthly_da.name = var_name
+    time_features.name = var_name
+    padded_days_mask.name = var_name
 
     # compression for boolean masks
     encoding_input_da_nan_mask = {
@@ -741,6 +750,7 @@ def data_preparation(
     }
 
     if save_to_zarr:
+        # these will be saved as xr.Dataset
         input_da.to_zarr(f"{run_dir}/input_da.zarr", mode="w", zarr_format=2, consolidated=True)
         input_da_nan_mask.to_zarr(
             f"{run_dir}/input_da_nan_mask.zarr", mode="w", encoding=encoding_input_da_nan_mask, zarr_format=2, consolidated=True
