@@ -2,6 +2,7 @@ from pathlib import Path
 
 import ray
 import xarray as xr
+from ray.air.config import CheckpointConfig
 from ray.tune.schedulers import ASHAScheduler
 
 from climanet.dataset import STDataset
@@ -20,8 +21,15 @@ def _train(tune_config, static_args):
     num_epoch = static_args["num_epoch"]
 
     # dont use ray.put() and ray.get() (i.e. object store) when data is large
-    train_dataset = tune_data_preparation(static_args["data_config_train"])
-    validation_dataset = tune_data_preparation(static_args["data_config_validation"])
+    if static_args.get("train_dataset") is not None:
+        train_dataset = ray.get(static_args["train_dataset"])
+    else:
+        train_dataset = tune_data_preparation(static_args["data_config_train"])
+
+    if static_args.get("validation_dataset") is not None:
+        validation_dataset = ray.get(static_args["validation_dataset"])
+    else:
+        validation_dataset = tune_data_preparation(static_args["data_config_validation"])
 
     patch_size = tune_config["patch_size"]
     overlap = tune_config["overlap"]
@@ -117,6 +125,13 @@ def run_tune(tune_config: dict, static_args: dict):
     if Path(experiment_path).exists():
         tuner = ray.tune.Tuner.restore(
             experiment_path,
+            ray.tune.with_resources(
+                ray.tune.with_parameters(_train, static_args=static_args),
+                resources={
+                    "cpu": static_args["cpu_per_trial"],
+                    "gpu": static_args["gpu_per_trial"],
+                },
+            ),
             resume_errored=True,
         )
     else:
@@ -136,7 +151,15 @@ def run_tune(tune_config: dict, static_args: dict):
                 max_concurrent_trials=static_args["max_concurrent_trials"],
             ),
             param_space=tune_config,
-            run_config=ray.tune.RunConfig(storage_path=static_args["run_dir"], name=experiment_name),
+            run_config=ray.tune.RunConfig(
+                storage_path=static_args["run_dir"],
+                name=experiment_name,
+                checkpoint_config=CheckpointConfig(
+                    num_to_keep=1,
+                    checkpoint_score_attribute="loss",
+                    checkpoint_score_order="min",
+                ),
+            ),
         )
 
     results = tuner.fit()

@@ -1,3 +1,4 @@
+import tempfile
 from pathlib import Path
 
 import torch
@@ -75,7 +76,8 @@ def train_monthly_model(
     )
 
     # Set up logging
-    writer = setup_logging(run_dir)
+    if verbose:
+        writer = setup_logging(run_dir)
 
     # Set the optimizer
     optimizer = torch.optim.AdamW(
@@ -133,7 +135,10 @@ def train_monthly_model(
 
         # Calculate average epoch loss
         avg_train_loss = epoch_loss.item() / (i + 1)
-        writer.add_scalar("Loss/train", avg_train_loss, epoch)
+
+        if verbose:
+            writer.add_scalar("Loss/train", avg_train_loss, epoch)
+
         avg_epoch_loss = avg_train_loss  # Initially use training loss
 
         # Validation loss (optional)
@@ -151,8 +156,10 @@ def train_monthly_model(
                 run_dir=run_dir,
                 dataloader_num_workers=dataloader_num_workers,
             )
-            writer.add_scalar("Loss/validation", avg_val_loss, epoch)
             avg_epoch_loss = avg_val_loss  # Use validation loss if exists
+
+            if verbose:
+                writer.add_scalar("Loss/validation", avg_val_loss, epoch)
 
             if verbose and epoch % verbose_epoch_interval == 0:
                 gap = avg_val_loss - avg_train_loss
@@ -173,7 +180,8 @@ def train_monthly_model(
             counter += 1
 
         # Log to TensorBoard
-        writer.add_scalar("Loss/best", best_loss, epoch)
+        if verbose:
+            writer.add_scalar("Loss/best", best_loss, epoch)
 
         if verbose and epoch % 20 == 0:
             print(f"Epoch {epoch}: best_loss = {best_loss:.6f}")
@@ -181,7 +189,8 @@ def train_monthly_model(
         # Only stop if LR is at minimum AND no improvement
         current_lr = optimizer.param_groups[0]["lr"]
         if counter >= patience and current_lr <= scheduler.min_lrs[0]:
-            writer.add_text("Training", f"Early stop at epoch {epoch}", epoch)
+            if verbose:
+                writer.add_text("Training", f"Early stop at epoch {epoch}", epoch)
             break
 
     # Restore best model
@@ -189,14 +198,18 @@ def train_monthly_model(
         model.load_state_dict(best_state_dict)
 
     if tune_checkpoint:
-        # Save the model and optimizer state for Ray Tune checkpointing
-        save_model(model, optimizer, run_dir, filename="checkpoint.pt", verbose=False)
-        tune.report(
-            {"loss": best_loss}, checkpoint=tune.Checkpoint.from_directory(run_dir)
-        )
+        with tempfile.TemporaryDirectory() as checkpoint_dir:
+            checkpoint_path = Path(checkpoint_dir)
+
+            # Save the model and optimizer state for Ray Tune checkpointing
+            save_model(model, optimizer, checkpoint_path, filename="checkpoint.pt", verbose=False)
+            tune.report(
+                {"loss": best_loss}, checkpoint=tune.Checkpoint.from_directory(checkpoint_path)
+            )
 
     # Close the writer when done
-    writer.close()
+    if verbose:
+        writer.close()
 
     if verbose:
         print(f"Training complete. Best loss: {best_loss:.6f}")
