@@ -280,6 +280,8 @@ def predict_monthly_var(
     writer.close()
 
     if prediction_config.return_numpy:
+        if prediction_config.return_loss:
+            return np.stack(all_predictions, axis=0), average_loss
         return np.stack(all_predictions, axis=0)
 
     if prediction_config.return_loss:

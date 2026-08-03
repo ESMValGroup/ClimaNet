@@ -4,24 +4,84 @@ import ray
 import xarray as xr
 from ray.tune.schedulers import ASHAScheduler
 
-from climanet.dataset import STDataset
+from climanet.dataset import DataLoaderConfig, DatasetConfig, STDataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
-from climanet.train import train_monthly_model
+from climanet.train import TrainConfig, train_monthly_model
 from climanet.utils import data_preparation, set_seed
+
+
+def _tune_data_preparation(data_config):
+
+    if isinstance(data_config["input_data"], list):
+        input_data = xr.open_mfdataset(
+            data_config["input_data"], chunks=data_config.get("input_chunks")
+        )
+    else:
+        input_data = ray.get(data_config.get("input_data"))
+
+    if isinstance(data_config["monthly_data"], list):
+        monthly_data = xr.open_mfdataset(
+            data_config["monthly_data"], chunks=data_config.get("monthly_chunks")
+        )
+    else:
+        monthly_data = ray.get(data_config.get("monthly_data"))
+
+    if isinstance(data_config["land_mask_data"], Path):
+        land_mask = xr.open_dataset(
+            data_config["land_mask_data"], chunks=data_config.get("land_mask_chunks")
+        )
+    else:
+        land_mask = ray.get(data_config.get("land_mask_data"))
+
+    return input_data, monthly_data, land_mask
 
 
 def _train(tune_config, static_args):
     """Helper function to train the model with Ray Tune."""
-
-    device = static_args["device"]
-    dataloader_num_workers = static_args["dataloader_num_workers"]
-
     run_dir = static_args["run_dir"]
-    num_epoch = static_args["num_epoch"]
 
-    # dont use ray.put() and ray.get() (i.e. object store) when data is large
-    train_dataset = tune_data_preparation(static_args["data_config_train"])
-    validation_dataset = tune_data_preparation(static_args["data_config_validation"])
+    data_config_train = static_args.get("data_config_train")
+    input_data_train, monthly_data_train, land_mask = _tune_data_preparation(data_config_train)
+
+    data_config_validation = static_args.get("data_config_validation")
+    input_data_validation, monthly_data_validation, _ = _tune_data_preparation(data_config_validation)
+
+    dataset_config = DatasetConfig(
+        is_hourly=static_args["is_hourly"],
+        var_name=static_args["var_name"],
+        spatial_dims=("lat", "lon"),
+        patch_size=static_args["dataset_patch_size"],
+        stride=static_args["dataset_stride"],
+        sh_pos_table=None,
+        sh_embed_dim=96,
+        sh_order_L=10,
+        verbose=False,
+    )
+
+    use_cuda = static_args["device"] == "cuda"
+    dataloader_config = DataLoaderConfig(
+        batch_size=tune_config["batch_config"]["batch_size"],
+        shuffle=True,
+        num_workers=static_args["dataloader_num_workers"],
+        pin_memory=use_cuda,
+        persistent_workers=False,
+        device=static_args["device"],
+    )
+
+    training_config = TrainConfig(
+        calculate_residuals=True,
+        num_epoch=static_args["num_epoch"],
+        patience=10,
+        accumulation_steps=tune_config["batch_config"]["accumulation_steps"],
+        optimizer_lr=tune_config["optimizer_lr"],
+        device=static_args["device"],
+        verbose=False,
+        verbose_epoch_interval=20,
+        tune_checkpoint=True,
+        store_model=False,
+    )
+
+    set_seed()
 
     patch_size = tune_config["patch_size"]
     overlap = tune_config["overlap"]
@@ -30,9 +90,6 @@ def _train(tune_config, static_args):
     hidden = tune_config["hidden"]
     spatial_depth = tune_config["spatial_depth"]
     spatial_heads = tune_config["spatial_heads"]
-
-    set_seed()
-
     model = SpatioTemporalModel(
         patch_size=(1, patch_size, patch_size),
         overlap=overlap,
@@ -43,60 +100,18 @@ def _train(tune_config, static_args):
         spatial_heads=spatial_heads,
     )
 
-    batch_size = tune_config["batch_config"]["batch_size"]
-    accumulation_steps = tune_config["batch_config"]["accumulation_steps"]
-    optimizer_lr = tune_config["optimizer_lr"]
-
     _ = train_monthly_model(
-        model,
-        train_dataset,
-        validation_dataset=validation_dataset,
-        batch_size=batch_size,
-        num_epoch=num_epoch,
-        accumulation_steps=accumulation_steps,
-        optimizer_lr=optimizer_lr,
-        device=device,
+        model=model,
+        input_data_train=input_data_train,
+        monthly_data_train=monthly_data_train,
+        dataloader_config=dataloader_config,
+        dataset_config=dataset_config,
+        training_config=training_config,
+        input_data_validation=input_data_validation,
+        monthly_data_validation=monthly_data_validation,
+        land_mask=land_mask,
         run_dir=run_dir,
-        dataloader_num_workers=dataloader_num_workers,
-        store_model=False,
-        verbose=False,
-        tune_checkpoint=True,
-    )
-
-
-def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
-    """Prepare the data for training and validation."""
-    input_data = xr.open_mfdataset(
-        data_config["input_filenames"], chunks=data_config.get("input_chunks")
-    )
-    monthly_data = xr.open_mfdataset(
-        data_config["monthly_filenames"], chunks=data_config.get("monthly_chunks")
-    )
-    lsm_mask = xr.open_dataset(
-        data_config["landmask_filename"], chunks=data_config.get("landmask_chunks")
-    )
-
-    var_name = data_config["var_name"]
-
-    # prepare data
-    input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = data_preparation(
-        input_data[var_name], monthly_data[var_name], calculate_residuals=True, is_hourly=is_hourly
-    )
-
-    # no lazy loading, tune using 1 year of data fits in memory
-    dataset = STDataset(
-        input_da=input_da,
-        input_da_nan_mask=input_da_nan_mask,
-        monthly_da=monthly_da,
-        padded_days_mask=padded_days_mask,
-        time_features=time_features,
-        land_mask=lsm_mask["lsm"],
-        patch_size=data_config["patch_size"],
-        stride=data_config["stride"],
-        sh_embed_dim=96,
-        sh_order_L=10,
-    )
-    return dataset
+        )
 
 
 def run_tune(tune_config: dict, static_args: dict):
