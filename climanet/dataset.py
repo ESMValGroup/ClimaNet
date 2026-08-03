@@ -25,6 +25,7 @@ class DatasetConfig:
     sh_pos_table: str = None
     sh_embed_dim: int = 96
     sh_order_L: int = 10
+    verbose: bool = False
 
 
 @dataclass
@@ -64,6 +65,7 @@ class STDataset(Dataset):
         sh_pos_table: str = None,  # Optional; str formatted path to precomputed table of sh
         sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
         sh_order_L: int = 10,
+        verbose: bool= False,
     ):
         """Initialize the dataset with daily and monthly data, and optional land mask.
 
@@ -96,6 +98,7 @@ class STDataset(Dataset):
 
         self.sh_embed_dim = sh_embed_dim
         self.sh_order_L = sh_order_L
+        self.verbose = verbose
 
         # Check that the input data has the expected dimensions
         for dim in spatial_dims:
@@ -216,10 +219,12 @@ class STDataset(Dataset):
         len_m = len(m_starts)
         len_i = len(i_starts)
         len_j = len(j_starts)
-        print(
-            f"Patch grid (m x i x j): {len_m} x {len_i} x {len_j} = {len_m * len_i * len_j} patches"
-        )
-        print(f"Overlap: {overlap_h} pixels (height), {overlap_w} pixels (width)")
+        if self.verbose:
+            print("Creating dataset:")
+            print(
+                f"Patch grid (m x i x j): {len_m} x {len_i} x {len_j} = {len_m * len_i * len_j} patches"
+            )
+            print(f"Overlap: {overlap_h} pixels (height), {overlap_w} pixels (width)")
 
         return [(m, i, j) for m in m_starts for i in i_starts for j in j_starts]
 
