@@ -4,10 +4,10 @@ import ray
 import xarray as xr
 from ray.tune.schedulers import ASHAScheduler
 
-from climanet.dataset import DataLoaderConfig, DatasetConfig, STDataset
+from climanet.dataset import DataLoaderConfig, DatasetConfig
 from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import TrainConfig, train_monthly_model
-from climanet.utils import data_preparation, set_seed
+from climanet.utils import set_seed
 
 
 def _tune_data_preparation(data_config):
