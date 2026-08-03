@@ -131,12 +131,20 @@ def add_month_day_dims(
     # Build padded days mask from daily_indexed (NaN locations)
     padded_days_mask = ~daily_indexed.notnull().any(dim=spatial_dims)
 
+    # Preserve the original time coordinates for monthly data (M,)
+    month_time = xr.DataArray(
+        monthly_ts[time_dim].values,
+        dims="M",
+        coords={"M": mkey.values},
+    )
+
     # Align monthly data to same month keys/order
     monthly_m = (
         monthly_ts.assign_coords(M=(time_dim, mkey.values))
         .swap_dims({time_dim: "M"})
         .drop_vars(time_dim)
         .sel(M=month_keys)
+        .assign_coords(M=month_time.sel(M=month_keys).values)
     )
 
     # Build aligned datetime array (M,T)
@@ -335,12 +343,21 @@ def add_month_hour_dims(
     # Build padded hours mask from hourly_indexed (NaN locations)
     padded_hours_mask = ~hourly_indexed.notnull().any(dim=spatial_dims)
 
+
+    # Preserve the original time coordinates for monthly data (M,)
+    month_time = xr.DataArray(
+        monthly_ts[time_dim].values,
+        dims="M",
+        coords={"M": mkey.values},
+    )
+
     # Align monthly data to same month keys/order
     monthly_m = (
         monthly_ts.assign_coords(M=(time_dim, mkey.values))
         .swap_dims({time_dim: "M"})
         .drop_vars(time_dim)
         .sel(M=month_keys)
+        .assign_coords(M=month_time.sel(M=month_keys).values)
     )
 
     # Build aligned datetime array (M, T)
