@@ -5,8 +5,17 @@ import torch
 import xarray as xr
 from torch.utils.data import DataLoader, Dataset
 
+from climanet.dataset import DataLoaderConfig, DatasetConfig
 from climanet.utils import compute_masked_loss, load_model, setup_logging
+from dataclasses import dataclass
 
+@dataclass
+class PredictionConfig:
+    return_numpy: bool = True
+    save_predictions: bool = True
+    return_loss: bool = False
+    device: str = "cpu"
+    verbose: bool = True
 
 def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
     """Helper function to convert predictions to xarray and save as netCDF."""
@@ -50,15 +59,10 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
 
 def predict_monthly_var(
     model: torch.nn.Module | str,
-    dataset: Dataset,
-    batch_size: int = 2,
-    return_numpy: bool = True,
-    save_predictions: bool = True,
-    return_loss: bool = False,
-    device: str = "cpu",
+    dataset_config: DatasetConfig,
+    dataloader_config: DataLoaderConfig,
+    prediction_config: PredictionConfig,
     run_dir: str = ".",
-    verbose: bool = True,
-    dataloader_num_workers: int = 2,
 ):
     """
     Predicts monthly variable values using a trained model and a provided dataset.
@@ -83,12 +87,12 @@ def predict_monthly_var(
     """
     # Load the model if a path is provided
     if isinstance(model, str | Path):
-        model = load_model(model, device)
+        model = load_model(model, prediction_config.device)
 
-    model.to(device)
+    model.to(prediction_config.device)
     model.eval()
 
-    use_cuda = device == "cuda"
+    use_cuda = prediction_config.device == "cuda"
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
