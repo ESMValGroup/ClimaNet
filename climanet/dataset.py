@@ -1,10 +1,10 @@
 import warnings
+from dataclasses import dataclass
 
 import numpy as np
 import torch
 import xarray as xr
 from torch.utils.data import Dataset
-from dataclasses import dataclass
 
 from .geo_embedding_utils import (
     calculate_sh_geo_pos_embeddings,
@@ -12,26 +12,13 @@ from .geo_embedding_utils import (
     compute_patch_scale_features,
 )
 
+
 @dataclass
 class DatasetConfig:
-    """Configuration for the spatiotemporal dataset.
+    """Configuration for the spatiotemporal dataset."""
 
-    Attributes:
-        spatial_dims: Tuple of (lat_dim, lon_dim) names in the input data.
-        patch_size: Tuple of (patch_time, patch_height, patch_width) in time
-            unit and pixels in monthly data. For example, (1, 16, 16) means
-            1 month, 16 pixels height, 16 pixels width. For this, the
-            spatial resolution of `input_da` and `monthly_da` must match. To
-            extract monthly patches, the `input_da` and `monthly_da` are
-            reshaped internally to have a month dimension, and the patches are
-            extracted accordingly.
-        stride: Tuple of (stride_height, stride_width) in pixels. If None,
-            defaults to patch_size (non-overlapping patches).
-        sh_pos_table: Optional; str formatted path to precomputed table of sh.
-        sh_embed_dim: int; should be <= (sh_order_L + 1)**2.
-        sh_order_L: int; order of spherical harmonics.
-    """
-
+    is_hourly: bool = False
+    var_name: str = "tos"
     spatial_dims: tuple[str, str] = ("lat", "lon")
     patch_size: tuple[int, int, int] = (1, 16, 16)
     stride: tuple[int, int] = None
@@ -42,16 +29,7 @@ class DatasetConfig:
 
 @dataclass
 class DataLoaderConfig:
-    """Configuration for the data loader.
-
-    Attributes:
-        batch_size: int; number of samples per batch.
-        shuffle: bool; whether to shuffle the dataset at every epoch.
-        num_workers: int; number of subprocesses to use for data loading.
-        pin_memory: bool; whether to copy tensors into CUDA pinned memory before returning them.
-        persistent_workers: bool; whether to keep data loader workers alive between epochs.
-        device: str; device to load the data onto ("cpu" or "cuda").
-    """
+    """Configuration for the data loader."""
 
     batch_size: int = 32
     shuffle: bool = True
@@ -139,9 +117,7 @@ class STDataset(Dataset):
         self.daily_nan_mask_t = torch.from_numpy(
             self.input_da_nan_mask.to_numpy()
         ).contiguous()
-        self.monthly_data_t = torch.from_numpy(
-            self.monthly_da.to_numpy()
-        ).contiguous()
+        self.monthly_data_t = torch.from_numpy(self.monthly_da.to_numpy()).contiguous()
         self.land_mask_t = self._prepare_land_mask(self.land_mask)
         self.padded_days_t = torch.from_numpy(self.padded_days_mask.to_numpy()).bool()
         self.daily_timef_t = torch.from_numpy(
@@ -302,7 +278,7 @@ class STDataset(Dataset):
         # Extract the patch data
         daily_t_patch = self.daily_data_t[
             m : m + pm, :, i : i + ph, j : j + pw
-        ].unsqueeze(0) # (1, pm, T, pH, pW)
+        ].unsqueeze(0)  # (1, pm, T, pH, pW)
 
         daily_nan_mask_t_patch = self.daily_nan_mask_t[
             m : m + pm, :, i : i + ph, j : j + pw
