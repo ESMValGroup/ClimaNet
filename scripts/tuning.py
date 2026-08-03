@@ -56,24 +56,29 @@ if __name__ == "__main__":
         test_range=(2022, 2022),
     )
     data_config_train = {
-        "input_filenames": hourly_files["train"],
-        "monthly_filenames": monthly_files["train"],
-        "landmask_filename": lsm_folder / "era5_lsm_bool.nc",
-        "var_name": var_name,
-        "patch_size": (1, 40, 40),  # based on the patch_size in model
-        "stride": (20, 20),  # data agumentation by overlapping patches
+        "input_data": hourly_files["train"],
+        "input_chunks": None,
+        "monthly_data": monthly_files["train"],
+        "monthly_chunks": None,
+        "land_mask_data": lsm_folder / "era5_lsm_bool.nc",
+        "land_mask_chunks": None,
     }
+
     data_config_validation = {
-        "input_filenames": hourly_files["validation"],
-        "monthly_filenames": monthly_files["validation"],
-        "landmask_filename": lsm_folder / "era5_lsm_bool.nc",
-        "var_name": var_name,
-        "patch_size": (1, 40, 40),  # based on the patch_size in model
-        "stride": (20, 20),  # data agumentation by overlapping patches
+        "input_data": hourly_files["validation"],
+        "input_chunks": None,
+        "monthly_data": monthly_files["validation"],
+        "monthly_chunks": None,
+        "land_mask_data": lsm_folder / "era5_lsm_bool.nc",
+        "land_mask_chunks": None,
     }
 
     # dont use ray.put() (i.e. object store) when data is large
     static_args = {
+        "data_config_train": data_config_train,
+        "data_config_validation": data_config_validation,
+        "is_hourly": True,
+        "var_name": var_name,
         "max_num_epochs": 100,
         "num_trials": 50,  # this is num_samples in ray.tune.TuneConfig
         "cpu_per_trial": 10,
@@ -81,8 +86,8 @@ if __name__ == "__main__":
         "run_dir": args.storage_path,
         "device": "cuda",
         "dataloader_num_workers": 4,
-        "data_config_train": data_config_train,
-        "data_config_validation": data_config_validation,
+        "dataset_patch_size": (1, 40, 40),
+        "dataset_stride": (20, 20),
         "num_epoch": 100,
         "max_concurrent_trials": args.num_nodes * 2,  # less than GPUs per node (4) avoid OOM
         "experiment_name": "climanet_tune",
