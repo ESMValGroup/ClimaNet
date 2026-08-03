@@ -428,7 +428,11 @@ def plot_results(
     target, predictions, label="SST K", title=("Target", "Prediction"), error=False
 ):
     fig, axs = plt.subplots(
-        nrows=len(target.time), ncols=2, figsize=(10, 8), constrained_layout=True
+        nrows=len(target.time),
+        ncols=2,
+        figsize=(10, 5),
+        constrained_layout=True,
+        squeeze=False,
     )
 
     for t in range(len(target.time)):
@@ -478,30 +482,27 @@ def plot_histograms(
         ncols=1,
         figsize=(8, 4 * len(target.time)),
         constrained_layout=True,
+        squeeze=False,
     )
-
-    # Handle single timestep case
-    if len(target.time) == 1:
-        axs = axs.reshape(1, -1)
 
     for t in range(len(target.time)):
         target_t = target.isel(time=t)
         pred_t = predictions.isel(time=t)
 
         # Target histogram
-        axs[t].hist(
+        axs[t, 0].hist(
             target_t.values.flatten(), bins=bins, alpha=0.7, color="blue", density=True
         )
-        axs[t].set_xlabel(label)
-        axs[t].set_ylabel("Probability Density")
-        axs[t].grid(True, alpha=0.3)
+        axs[t, 0].set_xlabel(label)
+        axs[t, 0].set_ylabel("Probability Density")
+        axs[t, 0].grid(True, alpha=0.3)
 
         # Prediction histogram (overlaid)
-        axs[t].hist(
+        axs[t, 0].hist(
             pred_t.values.flatten(), bins=bins, alpha=0.7, color="orange", density=True
         )
-        axs[t].legend(legend_labels)
-        axs[t].set_title(
+        axs[t, 0].legend(legend_labels)
+        axs[t, 0].set_title(
             f"Histogram {legend_labels[0]} vs {legend_labels[1]}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
         )
 
