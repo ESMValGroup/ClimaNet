@@ -27,7 +27,7 @@ class TrainConfig:
     accumulation_steps: int = 1
     optimizer_lr: float = 1e-3
     device: str = "cpu"
-    verbose: bool = True
+    verbose: bool = False
     verbose_epoch_interval: int = 20
     tune_checkpoint: bool = False
     store_model: bool = True
@@ -58,6 +58,37 @@ def _run_one_batch(model: torch.nn.Module, batch: dict, accumulation_steps, devi
     return loss
 
 
+def _train_data_preparation(
+        input_data,
+        monthly_data,
+        land_mask,
+        calculate_residuals=True,
+        is_hourly=False,
+        dataset_patch_size=(1, 16, 16),
+        dataset_stride=None,
+):
+    # prepare data
+    (input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features) = (
+        data_preparation(
+            input_data,
+            monthly_data,
+            calculate_residuals=calculate_residuals,
+            is_hourly=is_hourly,
+        )
+    )
+
+    return STDataset(
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        monthly_da=monthly_da,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
+        land_mask=land_mask,
+        patch_size=dataset_patch_size,
+        stride=dataset_stride,
+    )
+
+
 def _train_one_year(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
@@ -75,29 +106,17 @@ def _train_one_year(
     dataloader_shuffle=True,
     dataloader_num_workers=0,
 ):
-    # prepare data
-    (input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features) = (
-        data_preparation(
-            input_data_year,
-            monthly_data_year,
-            calculate_residuals=calculate_residuals,
-            is_hourly=is_hourly,
-        )
+    dataset = _train_data_preparation(
+        input_data_year,
+        monthly_data_year,
+        land_mask,
+        calculate_residuals=calculate_residuals,
+        is_hourly=is_hourly,
+        dataset_patch_size=dataset_patch_size,
+        dataset_stride=dataset_stride,
     )
 
     use_cuda = device == "cuda"
-
-    dataset = STDataset(
-        input_da=input_da,
-        input_da_nan_mask=input_da_nan_mask,
-        monthly_da=monthly_da,
-        padded_days_mask=padded_days_mask,
-        time_features=time_features,
-        land_mask=land_mask["lsm"],
-        patch_size=dataset_patch_size,
-        stride=dataset_stride,
-    )
-
     dataloader = DataLoader(
         dataset,
         batch_size=dataloader_batch_size,
@@ -139,20 +158,18 @@ def _run_validation(
 ):
     prediction_config = PredictionConfig(
         calculate_residuals=training_config.calculate_residuals,
-        is_hourly=dataset_config.is_hourly,
-        var_name=dataset_config.var_name,
         device=training_config.device,
         save_predictions=False,
         return_loss=True,
         return_numpy=False,
-        verbose=training_config.verbose,
+        verbose=False,
     )
     # Store train loss for gap calculation
     avg_val_loss = predict_monthly_var(
-        model,
-        input_data_validation,
-        monthly_data_validation,
-        land_mask,
+        model=model,
+        input_data=input_data_validation,
+        monthly_data=monthly_data_validation,
+        land_mask=land_mask,
         dataset_config=dataset_config,
         dataloader_config=dataloader_config,
         prediction_config=prediction_config,
@@ -193,7 +210,7 @@ def train_monthly_model(
         training_config: configuration for the training process
         input_data_validation: xarray Dataset containing daily/hourly validation data (optional)
         monthly_data_validation: xarray Dataset containing monthly validation data (optional)
-        land_mask: xarray Dataset containing land mask (optional)
+        land_mask: xarray Dataarray containing land mask (optional)
         run_dir: directory to save logs and model checkpoints
     Returns:
         The trained model.
@@ -253,8 +270,8 @@ def train_monthly_model(
                 calculate_residuals=training_config.calculate_residuals,
                 is_hourly=dataset_config.is_hourly,
                 device=training_config.device,
-                dataset_patch_size=dataset_config.spatial_patch_size,
-                dataset_stride=dataset_config.spatial_stride,
+                dataset_patch_size=dataset_config.patch_size,
+                dataset_stride=dataset_config.stride,
                 accumulation_steps=training_config.accumulation_steps,
                 dataloader_batch_size=dataloader_config.batch_size,
                 dataloader_shuffle=dataloader_config.shuffle,

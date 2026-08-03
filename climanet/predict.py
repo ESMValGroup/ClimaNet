@@ -24,7 +24,7 @@ class PredictionConfig:
     save_predictions: bool = True
     return_loss: bool = False
     device: str = "cpu"
-    verbose: bool = True
+    verbose: bool = False
 
 
 def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
@@ -36,7 +36,8 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
 
     lats = base_dataset.monthly_da.coords["lat"].values
     lons = base_dataset.monthly_da.coords["lon"].values
-    times = base_dataset.monthly_da.coords["time"].values
+    times = base_dataset.monthly_da.coords["M"].values
+    var_name = base_dataset.monthly_da.name
 
     full_predictions = np.full(
         (len(times), len(lats), len(lons)), np.nan, dtype=predictions.dtype
@@ -50,7 +51,7 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
         ] = predictions[i]
 
     data_vars = {
-        "predictions": (("time", "lat", "lon"), full_predictions),
+        var_name: (("time", "lat", "lon"), full_predictions),
     }
 
     coords = {
@@ -62,9 +63,8 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
     ds_pred = xr.Dataset(data_vars=data_vars, coords=coords)
 
     for t in times:
-        time_str = np.datetime_as_string(t, unit="D").replace("-", "")
+        time_str = np.datetime_as_string(t, unit="M").replace("-", "")
         ds_pred.sel(time=[t]).to_netcdf(f"{save_dir}/{time_str}_predictions.nc")
-    return ds_pred
 
 
 def _move_batch_to_device(batch: dict, device: str):
@@ -89,6 +89,37 @@ def _run_one_batch(model: torch.nn.Module, batch: dict, device: str):
     return loss, pred
 
 
+def _predict_data_preparation(
+    input_data,
+    monthly_data,
+    land_mask,
+    calculate_residuals=True,
+    is_hourly=False,
+    dataset_patch_size=(1, 16, 16),
+    dataset_stride=None,
+):
+    # prepare data
+    (input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features) = (
+        data_preparation(
+            input_data,
+            monthly_data,
+            calculate_residuals=calculate_residuals,
+            is_hourly=is_hourly,
+        )
+    )
+
+    return STDataset(
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        monthly_da=monthly_da,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
+        land_mask=land_mask,
+        patch_size=dataset_patch_size,
+        stride=dataset_stride,
+    )
+
+
 def _predict_one_year(
     model: torch.nn.Module,
     input_data_year,
@@ -103,28 +134,17 @@ def _predict_one_year(
     dataloader_num_workers=0,
     device: str = "cpu",
     run_dir: str = ".",
-    verbose: bool = True,
+    verbose: bool = False,
     save_predictions: bool = True,
 ):
-    # prepare data
-    (input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features) = (
-        data_preparation(
-            input_data_year,
-            monthly_data_year,
-            calculate_residuals=calculate_residuals,
-            is_hourly=is_hourly,
-        )
-    )
-
-    dataset = STDataset(
-        input_da=input_da,
-        input_da_nan_mask=input_da_nan_mask,
-        monthly_da=monthly_da,
-        padded_days_mask=padded_days_mask,
-        time_features=time_features,
-        land_mask=land_mask["lsm"],
-        patch_size=dataset_patch_size,
-        stride=dataset_stride,
+    dataset = _predict_data_preparation(
+        input_data_year,
+        monthly_data_year,
+        land_mask,
+        calculate_residuals=calculate_residuals,
+        is_hourly=is_hourly,
+        dataset_patch_size=dataset_patch_size,
+        dataset_stride=dataset_stride,
     )
 
     use_cuda = device == "cuda"
@@ -146,21 +166,22 @@ def _predict_one_year(
     idx = 0
     total_loss = 0.0
     total_num_batches = len(dataloader)
-    for i, batch in enumerate(dataloader):
+    for batch in dataloader:
         loss, predictions = _run_one_batch(model, batch, device)
         total_loss += loss.detach()
 
         all_predictions[idx : idx + predictions.size(0)] = predictions.detach()
         idx += predictions.size(0)
 
-        if verbose:
-            print(
-                f"Processed batch {i + 1}/{len(dataloader)}, with loss: {loss.item():.4f}"
-            )
+    if verbose:
+        average_loss = total_loss.item() / total_num_batches
+        print(
+            f"Processed batch {total_num_batches}, with average loss: {average_loss:.4f}"
+        )
 
     all_predictions = all_predictions.cpu().numpy()
     if save_predictions:
-        all_predictions = _save_netcdf(all_predictions, dataset, run_dir)
+        _save_netcdf(all_predictions, dataset, run_dir)
 
         if verbose:
             print(f"Predictions saved to '{run_dir}'")
@@ -234,8 +255,8 @@ def predict_monthly_var(
                 land_mask=land_mask,
                 calculate_residuals=prediction_config.calculate_residuals,
                 is_hourly=dataset_config.is_hourly,
-                dataset_patch_size=dataset_config.spatial_patch_size,
-                dataset_stride=dataset_config.spatial_stride,
+                dataset_patch_size=dataset_config.patch_size,
+                dataset_stride=dataset_config.stride,
                 dataloader_batch_size=dataloader_config.batch_size,
                 dataloader_shuffle=dataloader_config.shuffle,
                 dataloader_num_workers=dataloader_config.num_workers,
