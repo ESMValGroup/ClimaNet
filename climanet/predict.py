@@ -59,6 +59,7 @@ def predict_monthly_var(
     run_dir: str = ".",
     verbose: bool = True,
     dataloader_num_workers: int = 2,
+    store_logs: bool = True,
 ):
     """
     Predicts monthly variable values using a trained model and a provided dataset.
@@ -105,7 +106,7 @@ def predict_monthly_var(
     all_predictions = torch.empty(len(dataset), M, H, W, device=device)
 
     # Set up logging
-    if verbose:
+    if store_logs:
         writer = setup_logging(run_dir)
 
     with torch.inference_mode():
@@ -141,13 +142,15 @@ def predict_monthly_var(
                     f"Processed batch {i + 1}/{len(dataloader)}, with loss: {loss.item():.4f}"
                 )
 
-            if verbose:
+            if store_logs:
                 writer.add_scalar("Progress/Batch", i + 1, idx)
 
     average_loss = average_loss.item() / len(dataloader)
 
     if verbose:
         print(f"Average loss over all batches: {average_loss:.4f}")
+
+    if store_logs:
         writer.add_scalar("Loss/Average", average_loss)
 
     if return_numpy:
@@ -160,10 +163,12 @@ def predict_monthly_var(
 
         if verbose:
             print(f"Predictions saved to '{run_dir}'")
+
+        if store_logs:
             writer.add_text("Info", f"Predictions saved to '{run_dir}'")
 
     # Close the writer when done
-    if verbose:
+    if store_logs:
         writer.close()
 
     if return_loss:

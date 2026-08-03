@@ -42,6 +42,7 @@ def train_monthly_model(
     dataloader_num_workers: int = 2,
     verbose_epoch_interval: int = 20,
     tune_checkpoint: bool = False,
+    store_logs: bool = True,
 ):
     """Train the model to predict monthly data from daily data.
     Args:
@@ -76,7 +77,7 @@ def train_monthly_model(
     )
 
     # Set up logging
-    if verbose:
+    if store_logs:
         writer = setup_logging(run_dir)
 
     # Set the optimizer
@@ -136,7 +137,7 @@ def train_monthly_model(
         # Calculate average epoch loss
         avg_train_loss = epoch_loss.item() / (i + 1)
 
-        if verbose:
+        if store_logs:
             writer.add_scalar("Loss/train", avg_train_loss, epoch)
 
         avg_epoch_loss = avg_train_loss  # Initially use training loss
@@ -155,10 +156,11 @@ def train_monthly_model(
                 verbose=False,
                 run_dir=run_dir,
                 dataloader_num_workers=dataloader_num_workers,
+                store_logs=False,
             )
             avg_epoch_loss = avg_val_loss  # Use validation loss if exists
 
-            if verbose:
+            if store_logs:
                 writer.add_scalar("Loss/validation", avg_val_loss, epoch)
 
             if verbose and epoch % verbose_epoch_interval == 0:
@@ -180,7 +182,7 @@ def train_monthly_model(
             counter += 1
 
         # Log to TensorBoard
-        if verbose:
+        if store_logs:
             writer.add_scalar("Loss/best", best_loss, epoch)
 
         if verbose and epoch % 20 == 0:
@@ -189,7 +191,7 @@ def train_monthly_model(
         # Only stop if LR is at minimum AND no improvement
         current_lr = optimizer.param_groups[0]["lr"]
         if counter >= patience and current_lr <= scheduler.min_lrs[0]:
-            if verbose:
+            if store_logs:
                 writer.add_text("Training", f"Early stop at epoch {epoch}", epoch)
             break
 
@@ -208,7 +210,7 @@ def train_monthly_model(
             )
 
     # Close the writer when done
-    if verbose:
+    if store_logs:
         writer.close()
 
     if verbose:

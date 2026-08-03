@@ -69,6 +69,7 @@ def _train(tune_config, static_args):
         store_model=False,
         verbose=False,
         tune_checkpoint=True,
+        store_logs=False,
     )
 
 
