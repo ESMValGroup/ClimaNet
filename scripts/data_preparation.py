@@ -5,7 +5,7 @@ import xarray as xr
 import numpy as np
 from dask.distributed import Client, LocalCluster
 
-from climanet.utils import data_preparation, data_split
+from climanet.utils import data_preparation
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
