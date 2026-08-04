@@ -179,8 +179,7 @@ def _run_validation(
     return avg_val_loss
 
 
-def _load_checkpoint(model, optimizer):
-    loaded_checkpoint = tune.get_checkpoint()
+def _load_checkpoint(model, optimizer, loaded_checkpoint):
     with loaded_checkpoint.as_directory() as loaded_checkpoint_dir:
         loaded_checkpoint_dir = Path(loaded_checkpoint_dir).resolve()
         checkpoint = torch.load(loaded_checkpoint_dir / "checkpoint.pt")
@@ -229,8 +228,10 @@ def train_monthly_model(
     counter = 0
     best_state_dict = None  # Store best model state
 
-    if tune.get_checkpoint():
-        _load_checkpoint(model, optimizer)
+    if training_config.tune_checkpoint:
+        checkpoint = tune.get_checkpoint()
+        if checkpoint is not None:
+            _load_checkpoint(model, optimizer, checkpoint)
 
     # Add scheduler - reduces LR instead of stopping immediately
     scheduler = ReduceLROnPlateau(
