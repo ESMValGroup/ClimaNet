@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 
 import xarray as xr
+import numpy as np
 from dask.distributed import Client, LocalCluster
 
 from climanet.utils import data_preparation, data_split
@@ -24,20 +25,15 @@ if __name__ == "__main__":
     run_dir = Path(args.storage_path).resolve()
     var_name = "tos"
 
-    hourly_files = data_split(
-        data_folder,
-        filename_pattern=f"*_hr_ERA5dc_masked_{var_name}.nc",
-        train_range=(2018, 2020),
-        validation_range=(2021, 2021),
-        test_range=(2022, 2022),
-    )
-    monthly_files = data_split(
-        data_folder,
-        filename_pattern=f"*_mon_ERA5dc_full_{var_name}.nc",
-        train_range=(2018, 2020),
-        validation_range=(2021, 2021),
-        test_range=(2022, 2022),
-    )
+    years = [2018, 2019, 2020, 2021, 2022]
+    hourly_files = [
+        f for f in data_folder.glob(f"*_hr_ERA5dc_masked_{var_name}.nc")
+        if int(f.name[:4]) in years
+    ]
+    monthly_files = [
+        f for f in data_folder.glob(f"*_mon_ERA5dc_full_{var_name}.nc")
+        if int(f.name[:4]) in years
+    ]
 
     # Set up Dask cluster
     cluster = LocalCluster(
@@ -50,18 +46,32 @@ if __name__ == "__main__":
     client = Client(cluster)
     print(client)
 
-    # read data: only train with 3 years of data (2018-2020)
-    input_data = xr.open_mfdataset(hourly_files["train"])
-    monthly_data = xr.open_mfdataset(monthly_files["train"])
+    # read data: lazy
+    input_data = xr.open_mfdataset(sorted(hourly_files))
+    monthly_data = xr.open_mfdataset(sorted(monthly_files))
 
-    # prepare data
-    _ = data_preparation(
-        input_data[var_name],
-        monthly_data[var_name],
-        run_dir=run_dir,
-        calculate_residuals=True,
-        is_hourly=True,
-        save_to_zarr=True,
-    )
+    # loop over year
+    years = np.unique(monthly_data.time.dt.year)
+    for year in years:
+        input_data_year = input_data[var_name].sel(
+            time=str(year)
+        )
+        monthly_data_year = monthly_data[var_name].sel(
+            time=str(year)
+        )
+        # create subfolder for each year
+        run_dir_year = run_dir / f"{year}"
+        run_dir_year.mkdir(parents=True, exist_ok=True)
+
+        # prepare data
+        _ = data_preparation(
+            input_data_year,
+            monthly_data_year,
+            run_dir=run_dir_year,
+            calculate_residuals=True,
+            is_hourly=True,
+            save_to_zarr=True,
+        )
+        print(f"Data preparation for year {year} completed.")
 
     client.close()
