@@ -66,14 +66,21 @@ def _train_data_preparation(
         is_hourly=False,
         dataset_patch_size=(1, 16, 16),
         dataset_stride=None,
+        run_dir=".",
 ):
     # prepare data
+    year = np.unique(monthly_data.time.dt.year)
+    data_dir = Path(run_dir) / f"{year[0]}"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
     (input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features) = (
         data_preparation(
             input_data,
             monthly_data,
             calculate_residuals=calculate_residuals,
             is_hourly=is_hourly,
+            save_to_zarr=True,
+            run_dir=data_dir,
         )
     )
 
@@ -105,6 +112,7 @@ def _train_one_year(
     dataloader_batch_size=32,
     dataloader_shuffle=True,
     dataloader_num_workers=0,
+    run_dir=".",
 ):
     dataset = _train_data_preparation(
         input_data_year,
@@ -114,6 +122,7 @@ def _train_one_year(
         is_hourly=is_hourly,
         dataset_patch_size=dataset_patch_size,
         dataset_stride=dataset_stride,
+        run_dir=run_dir,
     )
 
     use_cuda = device == "cuda"
@@ -277,6 +286,7 @@ def train_monthly_model(
                 dataloader_batch_size=dataloader_config.batch_size,
                 dataloader_shuffle=dataloader_config.shuffle,
                 dataloader_num_workers=dataloader_config.num_workers,
+                run_dir=run_dir,
             )
             epoch_loss += loss_year
             total_num_batches += num_batches_year

@@ -701,6 +701,25 @@ def data_preparation(
     if not var_name:
         raise ValueError("Input data must have a name (variable name)")
 
+    # make filenames
+    run_dir = Path(run_dir).resolve()
+    input_da_path = run_dir / "input_da.zarr"
+    input_da_nan_mask_path = run_dir / "input_da_nan_mask.zarr"
+    monthly_da_path = run_dir / "monthly_da.zarr"
+    padded_days_mask_path = run_dir / "padded_days_mask.zarr"
+    time_features_path = run_dir / "time_features.zarr"
+
+    # Check if the zarr files already exist, if so, open them and return the datasets
+    input_da = xr.open_zarr(input_da_path)[var_name] if input_da_path.exists() else None
+    input_da_nan_mask = xr.open_zarr(input_da_nan_mask_path)[var_name] if input_da_nan_mask_path.exists() else None
+    monthly_da = xr.open_zarr(monthly_da_path)[var_name] if monthly_da_path.exists() else None
+    padded_days_mask = xr.open_zarr(padded_days_mask_path)[var_name] if padded_days_mask_path.exists() else None
+    time_features = xr.open_zarr(time_features_path)[var_name] if time_features_path.exists() else None
+
+    # if one of the datasets is None, we need to compute them
+    if None not in [input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features]:
+        return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
+
     if calculate_residuals:
         input_data_averaged = input_data.resample({time_dim: "MS"}).mean(skipna=True)
         input_data_averaged[time_dim] = monthly_data[time_dim]
@@ -769,14 +788,14 @@ def data_preparation(
 
     if save_to_zarr:
         # these will be saved as xr.Dataset
-        input_da.to_zarr(f"{run_dir}/input_da.zarr", mode="w", zarr_format=2, consolidated=True)
+        input_da.to_zarr(input_da_path, mode="w", zarr_format=2, consolidated=True)
         input_da_nan_mask.to_zarr(
-            f"{run_dir}/input_da_nan_mask.zarr", mode="w", encoding=encoding_input_da_nan_mask, zarr_format=2, consolidated=True
+            input_da_nan_mask_path, mode="w", encoding=encoding_input_da_nan_mask, zarr_format=2, consolidated=True
         )
-        monthly_da.to_zarr(f"{run_dir}/monthly_da.zarr", mode="w", zarr_format=2, consolidated=True)
+        monthly_da.to_zarr(monthly_da_path, mode="w", zarr_format=2, consolidated=True)
         padded_days_mask.to_zarr(
-            f"{run_dir}/padded_days_mask.zarr", mode="w", encoding=encoding_padded_days_mask, zarr_format=2, consolidated=True
+            padded_days_mask_path, mode="w", encoding=encoding_padded_days_mask, zarr_format=2, consolidated=True
         )
-        time_features.to_zarr(f"{run_dir}/time_features.zarr", mode="w", zarr_format=2, consolidated=True)
+        time_features.to_zarr(time_features_path, mode="w", zarr_format=2, consolidated=True)
 
     return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
