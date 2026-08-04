@@ -3,14 +3,14 @@ import pytest
 import torch
 
 from climanet.geo_embedding_utils import (
-    real_sph_harm,
-    compute_sh_on_grid,
-    compute_area_weights,
-    fit_weighted_sh_pca,
     apply_sh_pca_projection,
     calculate_sh_geo_pos_embeddings,
+    compute_area_weights,
     compute_patch_geo_pos_embedding,
     compute_patch_scale_features,
+    compute_sh_on_grid,
+    fit_weighted_sh_pca,
+    real_sph_harm,
 )
 
 

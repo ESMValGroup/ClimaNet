@@ -1,10 +1,12 @@
-from torch.utils.data import Dataset
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils.data import DataLoader
+from pathlib import Path
+
 import torch
+from ray import tune
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data import DataLoader, Dataset
 
 from climanet.predict import predict_monthly_var
-from climanet.utils import setup_logging, compute_masked_loss, save_model
+from climanet.utils import compute_masked_loss, save_model, setup_logging
 
 
 def _run_one_batch(model: torch.nn.Module, batch: dict):
@@ -38,6 +40,7 @@ def train_monthly_model(
     verbose: bool = True,
     dataloader_num_workers: int = 2,
     verbose_epoch_interval: int = 20,
+    tune_checkpoint: bool = False,
 ):
     """Train the model to predict monthly data from daily data.
     Args:
@@ -82,6 +85,14 @@ def train_monthly_model(
     counter = 0
     best_state_dict = None  # Store best model state
 
+    if tune.get_checkpoint():
+        loaded_checkpoint = tune.get_checkpoint()
+        with loaded_checkpoint.as_directory() as loaded_checkpoint_dir:
+            loaded_checkpoint_dir = Path(loaded_checkpoint_dir).resolve()
+            checkpoint = torch.load(loaded_checkpoint_dir / "checkpoint.pt")
+            model.load_state_dict(checkpoint["model_state_dict"])
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
     # Add scheduler - reduces LR instead of stopping immediately
     scheduler = ReduceLROnPlateau(
         optimizer,
@@ -121,14 +132,14 @@ def train_monthly_model(
             optimizer.zero_grad(set_to_none=True)
 
         # Calculate average epoch loss
-        avg_epoch_loss = epoch_loss.item() / (i + 1)
-        writer.add_scalar("Loss/train", avg_epoch_loss, epoch)
+        avg_train_loss = epoch_loss.item() / (i + 1)
+        writer.add_scalar("Loss/train", avg_train_loss, epoch)
+        avg_epoch_loss = avg_train_loss  # Initially use training loss
 
         # Validation loss (optional)
         if validation_dataset is not None:
             # Store train loss for gap calculation
-            avg_train_loss = avg_epoch_loss
-            _, avg_epoch_loss = predict_monthly_var(
+            _, avg_val_loss = predict_monthly_var(
                 model,
                 validation_dataset,
                 batch_size=batch_size,
@@ -140,18 +151,17 @@ def train_monthly_model(
                 run_dir=run_dir,
                 dataloader_num_workers=dataloader_num_workers,
             )
-            writer.add_scalar("Loss/validation", avg_epoch_loss, epoch)
+            writer.add_scalar("Loss/validation", avg_val_loss, epoch)
+            avg_epoch_loss = avg_val_loss  # Use validation loss if exists
 
             if verbose and epoch % verbose_epoch_interval == 0:
-                gap = avg_epoch_loss - avg_train_loss
+                gap = avg_val_loss - avg_train_loss
                 print(f"Epoch {epoch}: gap between train and val loss: {gap:.6f}")
 
         # Step scheduler
         scheduler.step(avg_epoch_loss)
 
         # Log to TensorBoard
-        writer.add_scalar("Loss/train", avg_epoch_loss, epoch)
-        writer.add_scalar("Loss/best", best_loss, epoch)
 
         # Early stopping check
         # Consider improvement only if loss decreases more than a small threshold
@@ -161,6 +171,9 @@ def train_monthly_model(
             counter = 0
         else:
             counter += 1
+
+        # Log to TensorBoard
+        writer.add_scalar("Loss/best", best_loss, epoch)
 
         if verbose and epoch % 20 == 0:
             print(f"Epoch {epoch}: best_loss = {best_loss:.6f}")
@@ -174,6 +187,13 @@ def train_monthly_model(
     # Restore best model
     if best_state_dict is not None:
         model.load_state_dict(best_state_dict)
+
+    if tune_checkpoint:
+        # Save the model and optimizer state for Ray Tune checkpointing
+        save_model(model, optimizer, run_dir, filename="checkpoint.pt", verbose=False)
+        tune.report(
+            {"loss": best_loss}, checkpoint=tune.Checkpoint.from_directory(run_dir)
+        )
 
     # Close the writer when done
     writer.close()

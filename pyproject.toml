@@ -15,9 +15,11 @@ dependencies = [
     "matplotlib>=3.10.8",
     "netcdf4>=1.7.4",
     "scipy>=1.17.1",
+    "tbparse>=0.0.9",
     "tensorboard",
     "torch>=2.10.0",
     "xarray>=2025.12.0",
+    "ray[tune]",
 ]
 
 [dependency-groups]
@@ -39,3 +41,6 @@ packages = ["climanet"]
 
 [tool.ruff]
 exclude = ["notebooks"]
+
+[tool.ruff.lint]
+ignore = ["RUF013"]
