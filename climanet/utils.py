@@ -124,6 +124,14 @@ def add_month_day_dims(
         .reindex(T=np.arange(1, 32), M=month_keys)
     )
 
+    # fix chunks
+    daily_indexed = daily_indexed.chunk({
+        "M": 1,
+        "T": -1,
+        "lat": 100,
+        "lon": 100,
+    })
+
     # Force dim order: (M, T, H, W) (and keep any other non-time dims after M,T)
     other_dims = [d for d in daily_ts.dims if d != time_dim]  # e.g. ["H", "W"]
     daily_indexed = daily_indexed.transpose("M", "T", *other_dims)
@@ -159,6 +167,14 @@ def add_month_day_dims(
         .unstack(time_dim)
         .reindex(T=np.arange(1, 32), M=month_keys)
     )
+
+    # fix chunks
+    time_indexed = time_indexed.chunk({
+        "M": 1,
+        "T": -1,
+        "lat": 100,
+        "lon": 100,
+    })
 
     # month-of_year (moy), day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
     # here we choose to use the tropical year length (365.2422 day, which we round to 365.24) as the
@@ -336,13 +352,21 @@ def add_month_hour_dims(
         .unstack(time_dim)
         .reindex(T=np.arange(1, 745), M=month_keys)  # 744 = 31 days * 24 hours
     )
+
+    # fix chunks
+    hourly_indexed = hourly_indexed.chunk({
+        "M": 1,
+        "T": -1,
+        "lat": 100,
+        "lon": 100,
+    })
+
     # Force dim order: (M, T, H, W)
     other_dims = [d for d in hourly_ts.dims if d != time_dim]
     hourly_indexed = hourly_indexed.transpose("M", "T", *other_dims)
 
     # Build padded hours mask from hourly_indexed (NaN locations)
     padded_hours_mask = ~hourly_indexed.notnull().any(dim=spatial_dims)
-
 
     # Preserve the original time coordinates for monthly data (M,)
     month_time = xr.DataArray(
@@ -370,6 +394,13 @@ def add_month_hour_dims(
         .unstack(time_dim)
         .reindex(T=np.arange(1, 745), M=month_keys)
     )
+    # fix chunks
+    time_indexed = time_indexed.chunk({
+        "M": 1,
+        "T": -1,
+        "lat": 100,
+        "lon": 100,
+    })
 
     # Determine month-of-year, day-of-year (doy) and hour-of-day (hod)
     moy_period = 12.0
@@ -732,8 +763,8 @@ def data_preparation(
     monthly_da = monthly_da.astype("float32")
 
     # rechunk data
-    input_da = input_da.chunk({"M": 1, "lat": 100, "lon": 100})
-    input_da_nan_mask = input_da_nan_mask.chunk({"M": 1, "lat": 100, "lon": 100}) # bool
+    input_da = input_da.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
+    input_da_nan_mask = input_da_nan_mask.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100}) # bool
     monthly_da = monthly_da.chunk({"M": 1, "lat": 100, "lon": 100})
     padded_days_mask = padded_days_mask.chunk({"M": 1}) # bool
     time_features = time_features.chunk({"M": 1})
