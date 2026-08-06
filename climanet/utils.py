@@ -691,7 +691,7 @@ def data_preparation(
     run_dir=".",
     calculate_residuals=True,
     is_hourly=False,
-    save_to_zarr=False
+    save_to_zarr=False,
 ):
     """Prepare the data for training."""
     if time_dim not in input_data.dims or time_dim not in monthly_data.dims:
@@ -700,25 +700,6 @@ def data_preparation(
     var_name = input_data.name
     if not var_name:
         raise ValueError("Input data must have a name (variable name)")
-
-    # make filenames
-    run_dir = Path(run_dir).resolve()
-    input_da_path = run_dir / "input_da.zarr"
-    input_da_nan_mask_path = run_dir / "input_da_nan_mask.zarr"
-    monthly_da_path = run_dir / "monthly_da.zarr"
-    padded_days_mask_path = run_dir / "padded_days_mask.zarr"
-    time_features_path = run_dir / "time_features.zarr"
-
-    # Check if the zarr files already exist, if so, open them and return the datasets
-    input_da = xr.open_zarr(input_da_path)[var_name] if input_da_path.exists() else None
-    input_da_nan_mask = xr.open_zarr(input_da_nan_mask_path)[var_name] if input_da_nan_mask_path.exists() else None
-    monthly_da = xr.open_zarr(monthly_da_path)[var_name] if monthly_da_path.exists() else None
-    padded_days_mask = xr.open_zarr(padded_days_mask_path)[var_name] if padded_days_mask_path.exists() else None
-    time_features = xr.open_zarr(time_features_path)[var_name] if time_features_path.exists() else None
-
-    # if one of the datasets is None, we need to compute them
-    if None not in [input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features]:
-        return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
 
     if calculate_residuals:
         input_data_averaged = input_data.resample({time_dim: "MS"}).mean(skipna=True)
@@ -787,6 +768,16 @@ def data_preparation(
     }
 
     if save_to_zarr:
+        # Create the run directory if it doesn't exist
+        data_path = Path(run_dir).resolve()
+        data_path.mkdir(parents=True, exist_ok=True)
+
+        input_da_path = data_path / "input_da.zarr"
+        input_da_nan_mask_path = data_path / "input_da_nan_mask.zarr"
+        monthly_da_path = data_path / "monthly_da.zarr"
+        padded_days_mask_path = data_path / "padded_days_mask.zarr"
+        time_features_path = data_path / "time_features.zarr"
+
         # these will be saved as xr.Dataset
         input_da.to_zarr(input_da_path, mode="w", zarr_format=2, consolidated=True)
         input_da_nan_mask.to_zarr(
@@ -799,3 +790,44 @@ def data_preparation(
         time_features.to_zarr(time_features_path, mode="w", zarr_format=2, consolidated=True)
 
     return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
+
+
+def read_st_data(data_path=".", var_name="tos"):
+    """Read preprocessed spatio-temporal data from zarr files.
+    Args:
+        data_path (str): Path to the directory containing the zarr files.
+        var_name (str): Name of the variable to read from the zarr files.
+
+    Returns:
+        tuple: A tuple containing the following xarray.DataArray objects:
+            - input_da
+            - input_da_nan_mask
+            - monthly_da
+            - padded_days_mask
+            - time_features
+    """
+
+    # make filenames
+    data_path = Path(data_path).resolve()
+
+    input_da_path = data_path / "input_da.zarr"
+    input_da_nan_mask_path = data_path / "input_da_nan_mask.zarr"
+    monthly_da_path = data_path / "monthly_da.zarr"
+    padded_days_mask_path = data_path / "padded_days_mask.zarr"
+    time_features_path = data_path / "time_features.zarr"
+
+    # Check if the zarr files already exist, if so, open them and return the datasets
+    input_da = xr.open_zarr(input_da_path)[var_name] if input_da_path.exists() else None
+    input_da_nan_mask = xr.open_zarr(input_da_nan_mask_path)[var_name] if input_da_nan_mask_path.exists() else None
+    monthly_da = xr.open_zarr(monthly_da_path)[var_name] if monthly_da_path.exists() else None
+    padded_days_mask = xr.open_zarr(padded_days_mask_path)[var_name] if padded_days_mask_path.exists() else None
+    time_features = xr.open_zarr(time_features_path)[var_name] if time_features_path.exists() else None
+
+    # if one of the datasets is None, we need to compute them
+    datasets = [input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features]
+    if all(ds is not None for ds in datasets):
+        return tuple(datasets)
+    else:
+        raise FileNotFoundError(
+            "One or more required zarr files are missing. Run data_preparation() first to generate them."
+        )
