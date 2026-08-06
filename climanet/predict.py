@@ -6,10 +6,9 @@ import torch
 import xarray as xr
 from torch.utils.data import DataLoader, Dataset
 
-from climanet.dataset import DataLoaderConfig, DatasetConfig, STDataset
+from climanet.dataset import DataLoaderConfig
 from climanet.utils import (
     compute_masked_loss,
-    data_preparation,
     load_model,
     setup_logging,
 )
@@ -27,7 +26,9 @@ class PredictionConfig:
     verbose: bool = False
 
 
-def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
+def _save_netcdf(
+        predictions: np.ndarray, dataset: Dataset, save_dir: str, residuals: bool = False
+    ):
     """Helper function to convert predictions to xarray and save as netCDF."""
     _, M, H, W = predictions.shape
 
@@ -64,7 +65,12 @@ def _save_netcdf(predictions: np.ndarray, dataset: Dataset, save_dir: str):
 
     for t in times:
         time_str = np.datetime_as_string(t, unit="M").replace("-", "")
-        ds_pred.sel(time=[t]).to_netcdf(f"{save_dir}/{time_str}_predictions.nc")
+
+        file_name = f"{save_dir}/{time_str}_{var_name}_prediction.nc"
+        if residuals:
+            file_name = f"{save_dir}/{time_str}_{var_name}_prediction_residual.nc"
+
+        ds_pred.sel(time=[t]).to_netcdf(file_name)
 
 
 def _move_batch_to_device(batch: dict, device: str):
@@ -89,117 +95,11 @@ def _run_one_batch(model: torch.nn.Module, batch: dict, device: str):
     return loss, pred
 
 
-def _predict_data_preparation(
-    input_data,
-    monthly_data,
-    land_mask,
-    calculate_residuals=True,
-    is_hourly=False,
-    dataset_patch_size=(1, 16, 16),
-    dataset_stride=None,
-):
-    # prepare data
-    (input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features) = (
-        data_preparation(
-            input_data,
-            monthly_data,
-            calculate_residuals=calculate_residuals,
-            is_hourly=is_hourly,
-        )
-    )
-
-    return STDataset(
-        input_da=input_da,
-        input_da_nan_mask=input_da_nan_mask,
-        monthly_da=monthly_da,
-        padded_days_mask=padded_days_mask,
-        time_features=time_features,
-        land_mask=land_mask,
-        patch_size=dataset_patch_size,
-        stride=dataset_stride,
-    )
-
-
-def _predict_one_year(
-    model: torch.nn.Module,
-    input_data_year,
-    monthly_data_year,
-    land_mask,
-    calculate_residuals=True,
-    is_hourly=False,
-    dataset_patch_size=(1, 16, 16),
-    dataset_stride=None,
-    dataloader_batch_size=32,
-    dataloader_shuffle=True,
-    dataloader_num_workers=0,
-    device: str = "cpu",
-    run_dir: str = ".",
-    verbose: bool = False,
-    save_predictions: bool = True,
-):
-    dataset = _predict_data_preparation(
-        input_data_year,
-        monthly_data_year,
-        land_mask,
-        calculate_residuals=calculate_residuals,
-        is_hourly=is_hourly,
-        dataset_patch_size=dataset_patch_size,
-        dataset_stride=dataset_stride,
-    )
-
-    use_cuda = device == "cuda"
-    dataloader = DataLoader(
-        dataset,
-        batch_size=dataloader_batch_size,
-        shuffle=dataloader_shuffle,
-        pin_memory=use_cuda,
-        num_workers=dataloader_num_workers,  # for data loading
-        persistent_workers=False,
-    )
-
-    # Initialize an empty list to store predictions
-    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
-
-    M, H, W = base_dataset.patch_size
-    all_predictions = torch.empty(len(dataset), M, H, W, device=device)
-
-    idx = 0
-    total_loss = 0.0
-    total_num_batches = len(dataloader)
-    for batch in dataloader:
-        loss, predictions = _run_one_batch(model, batch, device)
-        total_loss += loss.detach()
-
-        all_predictions[idx : idx + predictions.size(0)] = predictions.detach()
-        idx += predictions.size(0)
-
-    if verbose:
-        average_loss = total_loss.item() / total_num_batches
-        print(
-            f"Processed batch {total_num_batches}, with average loss: {average_loss:.4f}"
-        )
-
-    all_predictions = all_predictions.cpu().numpy()
-    if save_predictions:
-        _save_netcdf(all_predictions, dataset, run_dir)
-
-        if verbose:
-            print(f"Predictions saved to '{run_dir}'")
-
-    del dataloader
-    del dataset
-
-    return total_loss, all_predictions, total_num_batches
-
-
 def predict_monthly_var(
     model: torch.nn.Module | str,
-    input_data,
-    monthly_data,
-    dataset_config: DatasetConfig,
+    dataset: Dataset,
     dataloader_config: DataLoaderConfig,
     prediction_config: PredictionConfig,
-    land_mask=None,
     run_dir: str = ".",
 ):
     """
@@ -223,55 +123,52 @@ def predict_monthly_var(
         A NumPy array, PyTorch tensor, or xarray Dataset containing the predicted values.
         If return_loss is True, it also returns the average loss over the dataset.
     """
+    device = prediction_config.device
     # Load the model if a path is provided
     if isinstance(model, str | Path):
-        model = load_model(model, prediction_config.device)
+        model = load_model(model, device)
 
-    model.to(prediction_config.device)
+    model.to(device)
     model.eval()
+
+    use_cuda = device == "cuda"
+    dataloader = DataLoader(
+        dataset,
+        batch_size=dataloader_config.batch_size,
+        shuffle=True,
+        pin_memory=use_cuda,
+        num_workers=dataloader_config.num_workers,  # for data loading
+        persistent_workers=True,  # keep workers alive between epochs
+    )
+    num_batches = len(dataloader)
 
     # Set up logging
     writer = setup_logging(run_dir)
 
-    # get years from training data
-    years = np.unique(monthly_data.time.dt.year)
+    # Initialize an empty list to store predictions
+    base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
 
-    # create a nympy array to store all predictions
-    all_predictions = []
+    M, H, W = base_dataset.patch_size
+    all_predictions = torch.empty(len(dataset), M, H, W, device=device)
 
     with torch.inference_mode():
-        total_loss = 0.0
-        total_num_batches = 0
+        idx = 0
+        average_loss = 0.0
+        for i, batch in enumerate(dataloader):
+            loss, predictions = _run_one_batch(model, batch, device)
+            average_loss += loss.detach()
 
-        for year in years:
-            input_data_year = input_data[dataset_config.var_name].sel(time=str(year))
-            monthly_data_year = monthly_data[dataset_config.var_name].sel(
-                time=str(year)
-            )
-            loss_year, predictions_year, num_batches_year = _predict_one_year(
-                model=model,
-                input_data_year=input_data_year,
-                monthly_data_year=monthly_data_year,
-                land_mask=land_mask,
-                calculate_residuals=prediction_config.calculate_residuals,
-                is_hourly=dataset_config.is_hourly,
-                dataset_patch_size=dataset_config.patch_size,
-                dataset_stride=dataset_config.stride,
-                dataloader_batch_size=dataloader_config.batch_size,
-                dataloader_shuffle=dataloader_config.shuffle,
-                dataloader_num_workers=dataloader_config.num_workers,
-                device=prediction_config.device,
-                run_dir=run_dir,
-                verbose=prediction_config.verbose,
-                save_predictions=prediction_config.save_predictions,
-            )
-            total_loss += loss_year
-            total_num_batches += num_batches_year
+            all_predictions[idx : idx + predictions.size(0)] = predictions.detach()
+            idx += predictions.size(0)
 
-            if prediction_config.return_numpy:
-                all_predictions.append(predictions_year)
+            if prediction_config.verbose:
+                print(
+                    f"Processed batch {i + 1}/{num_batches}, with loss: {loss.item():.4f}"
+                )
 
-        average_loss = total_loss.item() / total_num_batches
+            writer.add_scalar("Progress/Batch", i + 1, idx)
+
+        average_loss = average_loss.item() / num_batches
     if prediction_config.verbose:
         print(f"Average loss over all batches: {average_loss:.4f}")
     writer.add_scalar("Loss/Average", average_loss)
@@ -280,11 +177,18 @@ def predict_monthly_var(
     writer.close()
 
     if prediction_config.return_numpy:
+        all_predictions = all_predictions.cpu().numpy()
         if prediction_config.return_loss:
-            return np.stack(all_predictions, axis=0), average_loss
-        return np.stack(all_predictions, axis=0)
+            all_predictions = (all_predictions, average_loss)
+
+    if prediction_config.save_predictions:
+        if not prediction_config.return_numpy:
+            all_predictions = all_predictions.cpu().numpy()
+        all_predictions = _save_netcdf(
+            all_predictions, dataset, run_dir, residuals=prediction_config.calculate_residuals
+        )
 
     if prediction_config.return_loss:
-        return average_loss
+        all_predictions = average_loss
 
-    return None
+    return all_predictions

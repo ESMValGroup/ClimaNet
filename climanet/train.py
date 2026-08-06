@@ -1,17 +1,15 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 import torch
 from ray import tune
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
-from climanet.dataset import DataLoaderConfig, DatasetConfig, STDataset
+from climanet.dataset import DataLoaderConfig
 from climanet.predict import PredictionConfig, predict_monthly_var
 from climanet.utils import (
     compute_masked_loss,
-    data_preparation,
     save_model,
     setup_logging,
 )
@@ -38,7 +36,7 @@ def _move_batch_to_device(batch: dict, device: str):
     return {k: v.to(device, non_blocking=use_cuda) for k, v in batch.items()}
 
 
-def _run_one_batch(model: torch.nn.Module, batch: dict, accumulation_steps, device):
+def _run_one_batch(model: torch.nn.Module, batch: dict, device):
     batch = _move_batch_to_device(batch, device)
     pred = model(
         batch["daily_patch"],
@@ -51,108 +49,7 @@ def _run_one_batch(model: torch.nn.Module, batch: dict, accumulation_steps, devi
     )  # (B, M, H, W)
 
     # Compute masked loss
-    loss = compute_masked_loss(pred, batch["monthly_patch"], batch["land_mask_patch"])
-    scaled_loss = loss * (1.0 / accumulation_steps)
-    scaled_loss.backward()
-
-    return loss
-
-
-def _train_data_preparation(
-        input_data,
-        monthly_data,
-        land_mask,
-        calculate_residuals=True,
-        is_hourly=False,
-        dataset_patch_size=(1, 16, 16),
-        dataset_stride=None,
-        run_dir=".",
-):
-    # prepare data
-    year = np.unique(monthly_data.time.dt.year)
-    data_dir = Path(run_dir) / f"{year[0]}"
-    data_dir.mkdir(parents=True, exist_ok=True)
-
-    (input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features) = (
-        data_preparation(
-            input_data,
-            monthly_data,
-            calculate_residuals=calculate_residuals,
-            is_hourly=is_hourly,
-            save_to_zarr=True,
-            run_dir=data_dir,
-        )
-    )
-
-    return STDataset(
-        input_da=input_da,
-        input_da_nan_mask=input_da_nan_mask,
-        monthly_da=monthly_da,
-        padded_days_mask=padded_days_mask,
-        time_features=time_features,
-        land_mask=land_mask,
-        patch_size=dataset_patch_size,
-        stride=dataset_stride,
-    )
-
-
-def _train_one_year(
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer,
-    input_data_year,
-    monthly_data_year,
-    land_mask,
-    accumulation_counter,
-    calculate_residuals=True,
-    is_hourly=False,
-    device="cpu",
-    dataset_patch_size=(1, 16, 16),
-    dataset_stride=None,
-    accumulation_steps=1,
-    dataloader_batch_size=32,
-    dataloader_shuffle=True,
-    dataloader_num_workers=0,
-    run_dir=".",
-):
-    dataset = _train_data_preparation(
-        input_data_year,
-        monthly_data_year,
-        land_mask,
-        calculate_residuals=calculate_residuals,
-        is_hourly=is_hourly,
-        dataset_patch_size=dataset_patch_size,
-        dataset_stride=dataset_stride,
-        run_dir=run_dir,
-    )
-
-    use_cuda = device == "cuda"
-    dataloader = DataLoader(
-        dataset,
-        batch_size=dataloader_batch_size,
-        shuffle=dataloader_shuffle,
-        pin_memory=use_cuda,
-        num_workers=dataloader_num_workers,  # for data loading
-        persistent_workers=False,
-    )
-
-    total_loss = 0.0
-    num_batches_year = len(dataloader)
-
-    for batch in dataloader:
-        loss = _run_one_batch(model, batch, accumulation_steps, device)
-
-        # Track unscaled loss for logging
-        total_loss += loss.detach()
-        accumulation_counter += 1
-
-        if accumulation_counter == accumulation_steps:
-            optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
-            accumulation_counter = 0
-
-    del dataloader
-    del dataset
-    return total_loss, num_batches_year, accumulation_counter
+    return compute_masked_loss(pred, batch["monthly_patch"], batch["land_mask_patch"])
 
 
 def _run_validation(
@@ -198,14 +95,10 @@ def _load_checkpoint(model, optimizer, loaded_checkpoint):
 
 def train_monthly_model(
     model: torch.nn.Module,
-    input_data_train,
-    monthly_data_train,
+    dataset_train,
     dataloader_config: DataLoaderConfig,
-    dataset_config: DatasetConfig,
     training_config: TrainConfig,
-    input_data_validation=None,
-    monthly_data_validation=None,
-    land_mask=None,
+    dataset_validation=None,
     run_dir: str = ".",
 ):
     """Train the model to predict monthly data from daily data.
@@ -223,16 +116,31 @@ def train_monthly_model(
     Returns:
         The trained model.
     """
+    device = training_config.device
     # Initialize the model
-    model = model.to(training_config.device)
+    model = model.to(device)
 
     # Set up logging
     writer = setup_logging(run_dir)
+
+    # Create data loader
+
+    use_cuda = device == "cuda"
+    dataloader = DataLoader(
+        dataset_train,
+        batch_size=dataloader_config.batch_size,
+        shuffle=dataloader_config.shuffle,
+        pin_memory=use_cuda,
+        num_workers=dataloader_config.num_workers,  # for data loading
+        persistent_workers=True,  # keep workers alive between epochs
+    )
+    num_batches = len(dataloader)
 
     # Set the optimizer
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=training_config.optimizer_lr, weight_decay=1e-2
     )
+
     best_loss = float("inf")
     counter = 0
     best_state_dict = None  # Store best model state
@@ -251,71 +159,55 @@ def train_monthly_model(
         min_lr=1e-7,
     )
 
-    # get years from training data
-    years = np.unique(monthly_data_train.time.dt.year)
-
     model.train()
     for epoch in range(training_config.num_epoch):
         epoch_loss = 0.0
-        total_num_batches = 0
-        accumulation_counter = 0
-
         optimizer.zero_grad()
 
-        for year in years:
-            input_data_year = input_data_train[dataset_config.var_name].sel(
-                time=str(year)
-            )
-            monthly_data_year = monthly_data_train[dataset_config.var_name].sel(
-                time=str(year)
-            )
+        for i, batch in enumerate(dataloader):
+            loss = _run_one_batch(model, batch, device)
 
-            loss_year, num_batches_year, accumulation_counter = _train_one_year(
-                model=model,
-                optimizer=optimizer,
-                input_data_year=input_data_year,
-                monthly_data_year=monthly_data_year,
-                land_mask=land_mask,
-                accumulation_counter=accumulation_counter,
-                calculate_residuals=training_config.calculate_residuals,
-                is_hourly=dataset_config.is_hourly,
-                device=training_config.device,
-                dataset_patch_size=dataset_config.patch_size,
-                dataset_stride=dataset_config.stride,
-                accumulation_steps=training_config.accumulation_steps,
-                dataloader_batch_size=dataloader_config.batch_size,
-                dataloader_shuffle=dataloader_config.shuffle,
-                dataloader_num_workers=dataloader_config.num_workers,
-                run_dir=run_dir,
-            )
-            epoch_loss += loss_year
-            total_num_batches += num_batches_year
+            # Scale loss for gradient accumulation
+            scaled_loss = loss * (1.0 / training_config.accumulation_steps)
+            scaled_loss.backward()
 
-        # Flush remaining accumulated gradients after ALL years
-        if accumulation_counter != 0:
+            # Track unscaled loss for logging
+            epoch_loss += loss.detach()
+
+            # Update weights every accumulation_steps batches
+            if (i + 1) % training_config.accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
+
+        # Handle remaining gradients if num_batches is not divisible by accumulation_steps
+        if (i + 1) % training_config.accumulation_steps != 0:
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
-            accumulation_counter = 0
 
         # Calculate average epoch loss
-        avg_train_loss = epoch_loss.item() / total_num_batches
+        avg_train_loss = epoch_loss.item() / num_batches
         writer.add_scalar("Loss/train", avg_train_loss, epoch)
         avg_epoch_loss = avg_train_loss  # Initially use training loss
 
         # Validation loss (optional)
-        if input_data_validation is not None:
-            avg_val_loss = _run_validation(
+        if dataset_validation is not None:
+            prediction_config = PredictionConfig(
+                calculate_residuals=training_config.calculate_residuals,
+                device=training_config.device,
+                save_predictions=False,
+                return_loss=True,
+                return_numpy=False,
+                verbose=False,
+            )
+            # Store train loss for gap calculation
+            avg_val_loss = predict_monthly_var(
                 model,
-                input_data_validation,
-                monthly_data_validation,
-                land_mask,
-                dataset_config,
-                dataloader_config,
-                training_config,
-                run_dir,
+                dataset_validation,
+                dataloader_config=dataloader_config,
+                prediction_config=prediction_config,
+                run_dir=run_dir,
             )
             avg_epoch_loss = avg_val_loss
-
             writer.add_scalar("Loss/validation", avg_val_loss, epoch)
 
             if (
