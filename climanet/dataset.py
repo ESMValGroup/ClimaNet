@@ -290,8 +290,8 @@ class STDataset(Dataset):
                 M=slice(m, m + pm),
                 **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
             )
-
             daily_nan_mask_t_patch = torch.from_numpy(daily_nan_mask_t_patch.to_numpy()).contiguous().unsqueeze(0)
+
             monthly_t_patch = self.monthly_da.isel(
                 M=slice(m, m + pm),
                 **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
