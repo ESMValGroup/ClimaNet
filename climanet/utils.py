@@ -172,8 +172,6 @@ def add_month_day_dims(
     time_indexed = time_indexed.chunk({
         "M": 1,
         "T": -1,
-        "lat": 100,
-        "lon": 100,
     })
 
     # month-of_year (moy), day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
@@ -398,8 +396,6 @@ def add_month_hour_dims(
     time_indexed = time_indexed.chunk({
         "M": 1,
         "T": -1,
-        "lat": 100,
-        "lon": 100,
     })
 
     # Determine month-of-year, day-of-year (doy) and hour-of-day (hod)
