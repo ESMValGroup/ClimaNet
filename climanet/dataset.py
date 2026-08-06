@@ -14,21 +14,6 @@ from .geo_embedding_utils import (
 
 
 @dataclass
-class DatasetConfig:
-    """Configuration for the spatiotemporal dataset."""
-
-    is_hourly: bool = False
-    var_name: str = "tos"
-    spatial_dims: tuple[str, str] = ("lat", "lon")
-    patch_size: tuple[int, int, int] = (1, 16, 16)
-    stride: tuple[int, int] = None
-    sh_pos_table: str = None
-    sh_embed_dim: int = 96
-    sh_order_L: int = 10
-    verbose: bool = False
-
-
-@dataclass
 class DataLoaderConfig:
     """Configuration for the data loader."""
 
@@ -122,7 +107,7 @@ class STDataset(Dataset):
         # Materialize data arrays to contiguous tensors for efficient access
         # Note: This may consume significant memory for large datasets.
         # Note: with load_lazy getitem becomes slower
-        if load_lazy:
+        if self.load_lazy:
             self.daily_data_t = None
             self.daily_nan_mask_t = None
             self.monthly_data_t = None
@@ -222,7 +207,7 @@ class STDataset(Dataset):
         if last_m < M or last_i < H or last_j < W:
             warnings.warn(
                 f"Patches do not fully cover the image. "
-                f"Uncovered pixels: {M - last_m} in time, {H - last_i} in height, {W - last_j} in width. "
+                f"Uncovered pixels: {M - last_m} in month, {H - last_i} in height, {W - last_j} in width. "
                 f"Consider adjusting stride or adding edge patches.",
                 UserWarning,
             )
@@ -296,31 +281,33 @@ class STDataset(Dataset):
 
         if self.load_lazy:
             daily_t_patch = self.input_da.isel(
-                time=slice(m, m + pm),
+                M=slice(m, m + pm),
                 **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
                 )
             daily_t_patch = torch.from_numpy(daily_t_patch.to_numpy()).contiguous().unsqueeze(0)
 
             daily_nan_mask_t_patch = self.input_da_nan_mask.isel(
-                time=slice(m, m + pm),
+                M=slice(m, m + pm),
                 **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
             )
 
             daily_nan_mask_t_patch = torch.from_numpy(daily_nan_mask_t_patch.to_numpy()).contiguous().unsqueeze(0)
             monthly_t_patch = self.monthly_da.isel(
-                time=slice(m, m + pm),
+                M=slice(m, m + pm),
                 **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
             )
+            monthly_t_patch = torch.from_numpy(monthly_t_patch.to_numpy()).contiguous()
+
             if self.land_mask is not None:
                 land_t_patch = self.land_mask.isel(
                     **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
                 )
                 land_t_patch = self._prepare_land_mask(land_t_patch)
 
-            daily_timef_patch = self.time_features.isel(time=slice(m, m + pm))
+            daily_timef_patch = self.time_features.isel(M=slice(m, m + pm))
             daily_timef_patch = torch.from_numpy(daily_timef_patch.to_numpy().astype(np.float32, copy=False)).contiguous()
 
-            padded_days_mask_patch = self.padded_days_mask.isel(time=slice(m, m + pm))
+            padded_days_mask_patch = self.padded_days_mask.isel(M=slice(m, m + pm))
             padded_days_mask_patch = torch.from_numpy(padded_days_mask_patch.to_numpy()).bool()
         else:
             # Extract the patch data
