@@ -165,9 +165,6 @@ def predict_monthly_var(
                     f"Processed batch {i + 1}/{num_batches}, with loss: {loss.item():.4f}"
                 )
 
-            if prediction_config.store_logs:
-                writer.add_scalar("Progress/Batch", i + 1, idx)
-
         average_loss = average_loss.item() / num_batches
 
     if prediction_config.verbose:
