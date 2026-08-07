@@ -90,7 +90,6 @@ def train_monthly_model(
         writer = setup_logging(run_dir)
 
     # Create data loader
-
     use_cuda = device == "cuda"
     dataloader = DataLoader(
         dataset_train,
@@ -155,9 +154,6 @@ def train_monthly_model(
         avg_train_loss = epoch_loss.item() / num_batches
         avg_epoch_loss = avg_train_loss  # Initially use training loss
 
-        if training_config.store_logs:
-            writer.add_scalar("Loss/train", avg_train_loss, epoch)
-
         # Validation loss (optional)
         if dataset_validation is not None:
             prediction_config = PredictionConfig(
@@ -178,9 +174,6 @@ def train_monthly_model(
                 run_dir=run_dir,
             )
             avg_epoch_loss = avg_val_loss
-
-            if training_config.store_logs:
-                writer.add_scalar("Loss/validation", avg_val_loss, epoch)
 
             if (
                 training_config.verbose
@@ -225,7 +218,6 @@ def train_monthly_model(
     if training_config.tune_checkpoint:
         with tempfile.TemporaryDirectory() as checkpoint_dir:
             checkpoint_path = Path(checkpoint_dir)
-
             # Save the model and optimizer state for Ray Tune checkpointing
             save_model(model, optimizer, checkpoint_path, filename="checkpoint.pt", verbose=False)
             tune.report(
