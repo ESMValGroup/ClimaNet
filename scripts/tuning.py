@@ -3,10 +3,10 @@ import time
 from pathlib import Path
 
 import ray
+import xarray as xr
 from ray import tune
 
 from climanet.tune import run_tune
-from climanet.utils import data_split
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -21,7 +21,12 @@ if __name__ == "__main__":
         default=1,
     )
     parser.add_argument(
-        "--data-dir",
+        "--data-dir-train",
+        type=str,
+        default=Path("./data").resolve(),
+    )
+    parser.add_argument(
+        "--data-dir-validation",
         type=str,
         default=Path("./data").resolve(),
     )
@@ -37,35 +42,24 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    data_folder = Path(args.data_dir).resolve()
+    data_folder_train = Path(args.data_dir_train).resolve()
+    data_folder_validation = Path(args.data_dir_validation).resolve()
     lsm_folder = Path(args.lsm_dir).resolve()
     var_name = "tos"
 
-    hourly_files = data_split(
-        data_folder,
-        filename_pattern=f"*_hr_ERA5dc_masked_{var_name}.nc",
-        train_range=(2020, 2020),
-        validation_range=(2021, 2021),
-        test_range=(2022, 2022),
-    )
-    monthly_files = data_split(
-        data_folder,
-        filename_pattern=f"*_mon_ERA5dc_full_{var_name}.nc",
-        train_range=(2020, 2020),
-        validation_range=(2021, 2021),
-        test_range=(2022, 2022),
-    )
+    land_mask_data = xr.open_dataset(lsm_folder / "era5_lsm_bool.nc")["lsm"]
+
     data_config_train = {
-        "input_data_dir": hourly_files["train"],
-        "land_mask_data": lsm_folder / "era5_lsm_bool.nc",
+        "input_data_dir": data_folder_train,
+        "land_mask_data": ray.put(land_mask_data),
         "load_lazy": False,  # one year fits in memory
         "patch_size": (1, 40, 40),
         "stride": (20, 20),
     }
 
     data_config_validation = {
-        "input_data_dir": hourly_files["validation"],
-        "land_mask_data": lsm_folder / "era5_lsm_bool.nc",
+        "input_data_dir": data_folder_validation,
+        "land_mask_data": ray.put(land_mask_data),
         "load_lazy": False,  # one year fits in memory
         "patch_size": (1, 40, 40),
         "stride": (20, 20),

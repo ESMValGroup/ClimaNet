@@ -115,8 +115,16 @@ def run_tune(tune_config: dict, static_args: dict):
     experiment_path = f"{static_args['run_dir']}/{experiment_name}"
     if Path(experiment_path).exists():
         tuner = ray.tune.Tuner.restore(
+            ray.tune.with_resources(
+                ray.tune.with_parameters(_train, static_args=static_args),
+                resources={
+                    "cpu": static_args["cpu_per_trial"],
+                    "gpu": static_args["gpu_per_trial"],
+                },
+            ),
             experiment_path,
             resume_errored=True,
+            resume_unfinished=True,
         )
     else:
         tuner = ray.tune.Tuner(

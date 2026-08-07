@@ -6,6 +6,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=128
 #SBATCH --gpus-per-task=4
+#SBATCH --mem=0
 #SBATCH --exclusive
 #SBATCH --time=12:00:00
 #SBATCH --account=bd0854
@@ -22,7 +23,8 @@ source "$UV_ENV/bin/activate"
 SCRATCH="/scratch/b/$USER/tune_results"
 
 # data directory (adjust this path to your data location)
-DATA_DIR="$HOME/scratch/b/$USER/data"
+DATA_DIR_TRAIN="$HOME/scratch/b/$USER/data"
+DATA_DIR_VALIDATION="$HOME/scratch/b/$USER/data"
 LSM_DIR="$HOME/scratch/b/$USER/data"
 
 nodes=$(scontrol show hostnames "$SLURM_JOB_NODELIST")
@@ -100,5 +102,6 @@ python -u $HOME/ClimaNet/scripts/tuning.py \
     --storage-path "$SCRATCH" \
     --num-nodes "$SLURM_NNODES" \
     --ray-address "$head_node_ip" \
-    --data-dir "$DATA_DIR" \
+    --data-dir-train "$DATA_DIR_TRAIN" \
+    --data-dir-validation "$DATA_DIR_VALIDATION" \
     --lsm-dir "$LSM_DIR"
