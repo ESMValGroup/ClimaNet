@@ -135,10 +135,11 @@ def predict_monthly_var(
     dataloader = DataLoader(
         dataset,
         batch_size=dataloader_config.batch_size,
-        shuffle=True,
+        shuffle=dataloader_config.shuffle,
         pin_memory=use_cuda,
         num_workers=dataloader_config.num_workers,  # for data loading
-        persistent_workers=True,  # keep workers alive between epochs
+        persistent_workers=dataloader_config.persistent_workers,  # keep workers alive between epochs
+        multiprocessing_context=dataloader_config.multiprocessing_context,
     )
     num_batches = len(dataloader)
 
@@ -169,6 +170,7 @@ def predict_monthly_var(
             writer.add_scalar("Progress/Batch", i + 1, idx)
 
         average_loss = average_loss.item() / num_batches
+
     if prediction_config.verbose:
         print(f"Average loss over all batches: {average_loss:.4f}")
     writer.add_scalar("Loss/Average", average_loss)

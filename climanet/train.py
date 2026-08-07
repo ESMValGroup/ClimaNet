@@ -52,39 +52,6 @@ def _run_one_batch(model: torch.nn.Module, batch: dict, device):
     return compute_masked_loss(pred, batch["monthly_patch"], batch["land_mask_patch"])
 
 
-def _run_validation(
-    model,
-    input_data_validation,
-    monthly_data_validation,
-    land_mask,
-    dataset_config,
-    dataloader_config,
-    training_config,
-    run_dir,
-):
-    prediction_config = PredictionConfig(
-        calculate_residuals=training_config.calculate_residuals,
-        device=training_config.device,
-        save_predictions=False,
-        return_loss=True,
-        return_numpy=False,
-        verbose=False,
-    )
-    # Store train loss for gap calculation
-    avg_val_loss = predict_monthly_var(
-        model=model,
-        input_data=input_data_validation,
-        monthly_data=monthly_data_validation,
-        land_mask=land_mask,
-        dataset_config=dataset_config,
-        dataloader_config=dataloader_config,
-        prediction_config=prediction_config,
-        run_dir=run_dir,
-    )
-
-    return avg_val_loss
-
-
 def _load_checkpoint(model, optimizer, loaded_checkpoint):
     with loaded_checkpoint.as_directory() as loaded_checkpoint_dir:
         loaded_checkpoint_dir = Path(loaded_checkpoint_dir).resolve()
@@ -132,7 +99,8 @@ def train_monthly_model(
         shuffle=dataloader_config.shuffle,
         pin_memory=use_cuda,
         num_workers=dataloader_config.num_workers,  # for data loading
-        persistent_workers=True,  # keep workers alive between epochs
+        persistent_workers=dataloader_config.persistent_workers,  # keep workers alive between epochs
+        multiprocessing_context=dataloader_config.multiprocessing_context,
     )
     num_batches = len(dataloader)
 
