@@ -167,6 +167,7 @@ def train_monthly_model(
                 return_loss=True,
                 return_numpy=False,
                 verbose=False,
+                store_logs=False,
             )
             # Store train loss for gap calculation
             avg_val_loss = predict_monthly_var(

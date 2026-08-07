@@ -137,7 +137,8 @@ def predict_monthly_var(
     num_batches = len(dataloader)
 
     # Set up logging
-    writer = setup_logging(run_dir)
+    if prediction_config.store_logs:
+        writer = setup_logging(run_dir)
 
     # Initialize an empty list to store predictions
     base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
