@@ -1,6 +1,6 @@
 import warnings
 from dataclasses import dataclass
-
+from pathlib import Path
 import numpy as np
 import torch
 import xarray as xr
@@ -23,6 +23,8 @@ class DataLoaderConfig:
     pin_memory: bool = False
     persistent_workers: bool = False
     device: str = "cpu"  # or "cuda"
+    multiprocessing_context: str = "spawn"
+    persistent_workers: bool = True
 
 
 class STDataset(Dataset):
@@ -84,6 +86,7 @@ class STDataset(Dataset):
         self.padded_days_mask = padded_days_mask
         self.time_features = time_features
         self.land_mask = land_mask
+
         self.stride = stride if stride is not None else (patch_size[1], patch_size[2])
 
         self.sh_embed_dim = sh_embed_dim
@@ -280,6 +283,7 @@ class STDataset(Dataset):
         pm, ph, pw = self.patch_size
 
         if self.load_lazy:
+
             daily_t_patch = self.input_da.isel(
                 M=slice(m, m + pm),
                 **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
