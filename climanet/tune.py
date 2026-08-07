@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import ray
+from ray.air.config import CheckpointConfig
 from ray.tune.schedulers import ASHAScheduler
 
 from climanet.dataset import DataLoaderConfig, STDataset
@@ -66,6 +67,7 @@ def _train(tune_config, static_args):
         verbose_epoch_interval=20,
         tune_checkpoint=True,
         store_model=False,
+        store_logs=False,
     )
 
     set_seed()
@@ -123,6 +125,13 @@ def run_tune(tune_config: dict, static_args: dict):
                 },
             ),
             experiment_path,
+            ray.tune.with_resources(
+                ray.tune.with_parameters(_train, static_args=static_args),
+                resources={
+                    "cpu": static_args["cpu_per_trial"],
+                    "gpu": static_args["gpu_per_trial"],
+                },
+            ),
             resume_errored=True,
             resume_unfinished=True,
         )
@@ -144,7 +153,13 @@ def run_tune(tune_config: dict, static_args: dict):
             ),
             param_space=tune_config,
             run_config=ray.tune.RunConfig(
-                storage_path=static_args["run_dir"], name=experiment_name
+                storage_path=static_args["run_dir"],
+                name=experiment_name,
+                checkpoint_config=CheckpointConfig(
+                    num_to_keep=1,
+                    checkpoint_score_attribute="loss",
+                    checkpoint_score_order="min",
+                ),
             ),
         )
 

@@ -24,6 +24,7 @@ class PredictionConfig:
     return_loss: bool = False
     device: str = "cpu"
     verbose: bool = False
+    store_logs: bool = True
 
 
 def _save_netcdf(
@@ -144,6 +145,10 @@ def predict_monthly_var(
     M, H, W = base_dataset.patch_size
     all_predictions = torch.empty(len(dataset), M, H, W, device=device)
 
+    # Set up logging
+    if prediction_config.store_logs:
+        writer = setup_logging(run_dir)
+
     with torch.inference_mode():
         idx = 0
         average_loss = 0.0
@@ -159,16 +164,20 @@ def predict_monthly_var(
                     f"Processed batch {i + 1}/{num_batches}, with loss: {loss.item():.4f}"
                 )
 
-            writer.add_scalar("Progress/Batch", i + 1, idx)
+            if prediction_config.store_logs:
+                writer.add_scalar("Progress/Batch", i + 1, idx)
 
         average_loss = average_loss.item() / num_batches
 
     if prediction_config.verbose:
         print(f"Average loss over all batches: {average_loss:.4f}")
-    writer.add_scalar("Loss/Average", average_loss)
+
+    if prediction_config.store_logs:
+        writer.add_scalar("Loss/Average", average_loss)
 
     # Close the writer when done
-    writer.close()
+    if prediction_config.store_logs:
+        writer.close()
 
     if prediction_config.return_numpy:
         all_predictions = all_predictions.cpu().numpy()

@@ -1,3 +1,4 @@
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +30,7 @@ class TrainConfig:
     verbose_epoch_interval: int = 20
     tune_checkpoint: bool = False
     store_model: bool = True
+    store_logs: bool = True
 
 
 def _move_batch_to_device(batch: dict, device: str):
@@ -84,7 +86,8 @@ def train_monthly_model(
     model = model.to(device)
 
     # Set up logging
-    writer = setup_logging(run_dir)
+    if training_config.store_logs:
+        writer = setup_logging(run_dir)
 
     # Create data loader
 
@@ -150,8 +153,10 @@ def train_monthly_model(
 
         # Calculate average epoch loss
         avg_train_loss = epoch_loss.item() / num_batches
-        writer.add_scalar("Loss/train", avg_train_loss, epoch)
         avg_epoch_loss = avg_train_loss  # Initially use training loss
+
+        if training_config.store_logs:
+            writer.add_scalar("Loss/train", avg_train_loss, epoch)
 
         # Validation loss (optional)
         if dataset_validation is not None:
@@ -172,7 +177,9 @@ def train_monthly_model(
                 run_dir=run_dir,
             )
             avg_epoch_loss = avg_val_loss
-            writer.add_scalar("Loss/validation", avg_val_loss, epoch)
+
+            if training_config.store_logs:
+                writer.add_scalar("Loss/validation", avg_val_loss, epoch)
 
             if (
                 training_config.verbose
@@ -194,7 +201,8 @@ def train_monthly_model(
             counter += 1
 
         # Log to TensorBoard
-        writer.add_scalar("Loss/best", best_loss, epoch)
+        if training_config.store_logs:
+            writer.add_scalar("Loss/best", best_loss, epoch)
 
         if (
             training_config.verbose
@@ -205,7 +213,8 @@ def train_monthly_model(
         # Only stop if LR is at minimum AND no improvement
         current_lr = optimizer.param_groups[0]["lr"]
         if counter >= training_config.patience and current_lr <= scheduler.min_lrs[0]:
-            writer.add_text("Training", f"Early stop at epoch {epoch}", epoch)
+            if training_config.store_logs:
+                writer.add_text("Training", f"Early stop at epoch {epoch}", epoch)
             break
 
     # Restore best model
@@ -213,14 +222,18 @@ def train_monthly_model(
         model.load_state_dict(best_state_dict)
 
     if training_config.tune_checkpoint:
-        # Save the model and optimizer state for Ray Tune checkpointing
-        save_model(model, optimizer, run_dir, filename="checkpoint.pt", verbose=False)
-        tune.report(
-            {"loss": best_loss}, checkpoint=tune.Checkpoint.from_directory(run_dir)
-        )
+        with tempfile.TemporaryDirectory() as checkpoint_dir:
+            checkpoint_path = Path(checkpoint_dir)
+
+            # Save the model and optimizer state for Ray Tune checkpointing
+            save_model(model, optimizer, checkpoint_path, filename="checkpoint.pt", verbose=False)
+            tune.report(
+                {"loss": best_loss}, checkpoint=tune.Checkpoint.from_directory(checkpoint_path)
+            )
 
     # Close the writer when done
-    writer.close()
+    if training_config.store_logs:
+        writer.close()
 
     if training_config.verbose:
         print(f"Training complete. Best loss: {best_loss:.6f}")
