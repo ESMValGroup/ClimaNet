@@ -1,5 +1,6 @@
 import warnings
 from dataclasses import dataclass
+
 import numpy as np
 import torch
 import xarray as xr
@@ -20,10 +21,9 @@ class DataLoaderConfig:
     shuffle: bool = True
     num_workers: int = 4
     pin_memory: bool = False
-    persistent_workers: bool = False
+    persistent_workers: bool = True  # True when num_workers > 0
     device: str = "cpu"  # or "cuda"
     multiprocessing_context: str = "spawn"
-    persistent_workers: bool = True
 
 
 class STDataset(Dataset):
