@@ -27,8 +27,8 @@ class PredictionConfig:
 
 
 def _save_netcdf(
-        predictions: np.ndarray, dataset: Dataset, save_dir: str, residuals: bool = False
-    ):
+    predictions: np.ndarray, dataset: Dataset, save_dir: str, residuals: bool = False
+):
     """Helper function to convert predictions to xarray and save as netCDF."""
     _, M, H, W = predictions.shape
 
@@ -187,7 +187,10 @@ def predict_monthly_var(
         if not prediction_config.return_numpy:
             all_predictions = all_predictions.cpu().numpy()
         all_predictions = _save_netcdf(
-            all_predictions, dataset, run_dir, residuals=prediction_config.calculate_residuals
+            all_predictions,
+            dataset,
+            run_dir,
+            residuals=prediction_config.calculate_residuals,
         )
 
     if prediction_config.return_loss:

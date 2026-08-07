@@ -125,12 +125,14 @@ def add_month_day_dims(
     )
 
     # fix chunks
-    daily_indexed = daily_indexed.chunk({
-        "M": 1,
-        "T": -1,
-        "lat": 100,
-        "lon": 100,
-    })
+    daily_indexed = daily_indexed.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "lat": 100,
+            "lon": 100,
+        }
+    )
 
     # Force dim order: (M, T, H, W) (and keep any other non-time dims after M,T)
     other_dims = [d for d in daily_ts.dims if d != time_dim]  # e.g. ["H", "W"]
@@ -194,11 +196,13 @@ def add_month_day_dims(
     ).transpose("M", "T", "feature")
 
     # fix chunks
-    time_features = time_features.chunk({
-        "M": 1,
-        "T": -1,
-        "feature": -1,
-    })
+    time_features = time_features.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "feature": -1,
+        }
+    )
 
     return daily_indexed, monthly_m, padded_days_mask, time_features
 
@@ -353,12 +357,14 @@ def add_month_hour_dims(
     )
 
     # fix chunks
-    hourly_indexed = hourly_indexed.chunk({
-        "M": 1,
-        "T": -1,
-        "lat": 100,
-        "lon": 100,
-    })
+    hourly_indexed = hourly_indexed.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "lat": 100,
+            "lon": 100,
+        }
+    )
 
     # Force dim order: (M, T, H, W)
     other_dims = [d for d in hourly_ts.dims if d != time_dim]
@@ -414,11 +420,13 @@ def add_month_hour_dims(
     ).transpose("M", "T", "feature")
 
     # fix chunks
-    time_features = time_features.chunk({
-        "M": 1,
-        "T": -1,
-        "feature": -1,
-    })
+    time_features = time_features.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "feature": -1,
+        }
+    )
 
     return hourly_indexed, monthly_m, padded_hours_mask, time_features
 
@@ -763,9 +771,9 @@ def data_preparation(
 
     # rechunk data
     input_da = input_da.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
-    input_da_nan_mask = input_da_nan_mask.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100}) # bool
+    input_da_nan_mask = input_da_nan_mask.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
     monthly_da = monthly_da.chunk({"M": 1, "lat": 100, "lon": 100})
-    padded_days_mask = padded_days_mask.chunk({"M": 1}) # bool
+    padded_days_mask = padded_days_mask.chunk({"M": 1})
     time_features = time_features.chunk({"M": 1})
 
     # set names
@@ -811,13 +819,23 @@ def data_preparation(
         # these will be saved as xr.Dataset
         input_da.to_zarr(input_da_path, mode="w", zarr_format=2, consolidated=True)
         input_da_nan_mask.to_zarr(
-            input_da_nan_mask_path, mode="w", encoding=encoding_input_da_nan_mask, zarr_format=2, consolidated=True
+            input_da_nan_mask_path,
+            mode="w",
+            encoding=encoding_input_da_nan_mask,
+            zarr_format=2,
+            consolidated=True,
         )
         monthly_da.to_zarr(monthly_da_path, mode="w", zarr_format=2, consolidated=True)
         padded_days_mask.to_zarr(
-            padded_days_mask_path, mode="w", encoding=encoding_padded_days_mask, zarr_format=2, consolidated=True
+            padded_days_mask_path,
+            mode="w",
+            encoding=encoding_padded_days_mask,
+            zarr_format=2,
+            consolidated=True,
         )
-        time_features.to_zarr(time_features_path, mode="w", zarr_format=2, consolidated=True)
+        time_features.to_zarr(
+            time_features_path, mode="w", zarr_format=2, consolidated=True
+        )
 
     return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
 

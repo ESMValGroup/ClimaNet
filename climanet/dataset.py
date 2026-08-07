@@ -51,7 +51,7 @@ class STDataset(Dataset):
         sh_pos_table: str = None,  # Optional; str formatted path to precomputed table of sh
         sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
         sh_order_L: int = 10,
-        verbose: bool= False,
+        verbose: bool = False,
         load_lazy: bool = False,
     ):
         """Initialize the dataset with daily and monthly data, and optional land mask.
@@ -121,9 +121,13 @@ class STDataset(Dataset):
             self.daily_nan_mask_t = torch.from_numpy(
                 self.input_da_nan_mask.to_numpy()
             ).contiguous()
-            self.monthly_data_t = torch.from_numpy(self.monthly_da.to_numpy()).contiguous()
+            self.monthly_data_t = torch.from_numpy(
+                self.monthly_da.to_numpy()
+            ).contiguous()
             self.land_mask_t = self._prepare_land_mask(self.land_mask)
-            self.padded_days_t = torch.from_numpy(self.padded_days_mask.to_numpy()).bool()
+            self.padded_days_t = torch.from_numpy(
+                self.padded_days_mask.to_numpy()
+            ).bool()
             self.daily_timef_t = torch.from_numpy(
                 self.time_features.to_numpy().astype(np.float32, copy=False)
             ).contiguous()
@@ -282,36 +286,57 @@ class STDataset(Dataset):
         pm, ph, pw = self.patch_size
 
         if self.load_lazy:
-
             daily_t_patch = self.input_da.isel(
                 M=slice(m, m + pm),
-                **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
-                )
-            daily_t_patch = torch.from_numpy(daily_t_patch.to_numpy()).contiguous().unsqueeze(0)
+                **{
+                    self.spatial_dims[0]: slice(i, i + ph),
+                    self.spatial_dims[1]: slice(j, j + pw),
+                },
+            )
+            daily_t_patch = (
+                torch.from_numpy(daily_t_patch.to_numpy()).contiguous().unsqueeze(0)
+            )
 
             daily_nan_mask_t_patch = self.input_da_nan_mask.isel(
                 M=slice(m, m + pm),
-                **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
+                **{
+                    self.spatial_dims[0]: slice(i, i + ph),
+                    self.spatial_dims[1]: slice(j, j + pw),
+                },
             )
-            daily_nan_mask_t_patch = torch.from_numpy(daily_nan_mask_t_patch.to_numpy()).contiguous().unsqueeze(0)
+            daily_nan_mask_t_patch = (
+                torch.from_numpy(daily_nan_mask_t_patch.to_numpy())
+                .contiguous()
+                .unsqueeze(0)
+            )
 
             monthly_t_patch = self.monthly_da.isel(
                 M=slice(m, m + pm),
-                **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
+                **{
+                    self.spatial_dims[0]: slice(i, i + ph),
+                    self.spatial_dims[1]: slice(j, j + pw),
+                },
             )
             monthly_t_patch = torch.from_numpy(monthly_t_patch.to_numpy()).contiguous()
 
             if self.land_mask is not None:
                 land_t_patch = self.land_mask.isel(
-                    **{self.spatial_dims[0]: slice(i, i + ph), self.spatial_dims[1]: slice(j, j + pw)}
+                    **{
+                        self.spatial_dims[0]: slice(i, i + ph),
+                        self.spatial_dims[1]: slice(j, j + pw),
+                    },
                 )
                 land_t_patch = self._prepare_land_mask(land_t_patch)
 
             daily_timef_patch = self.time_features.isel(M=slice(m, m + pm))
-            daily_timef_patch = torch.from_numpy(daily_timef_patch.to_numpy().astype(np.float32, copy=False)).contiguous()
+            daily_timef_patch = torch.from_numpy(
+                daily_timef_patch.to_numpy().astype(np.float32, copy=False)
+            ).contiguous()
 
             padded_days_mask_patch = self.padded_days_mask.isel(M=slice(m, m + pm))
-            padded_days_mask_patch = torch.from_numpy(padded_days_mask_patch.to_numpy()).bool()
+            padded_days_mask_patch = torch.from_numpy(
+                padded_days_mask_patch.to_numpy()
+            ).bool()
         else:
             # Extract the patch data
             daily_t_patch = self.daily_data_t[
