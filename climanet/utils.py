@@ -168,12 +168,6 @@ def add_month_day_dims(
         .reindex(T=np.arange(1, 32), M=month_keys)
     )
 
-    # fix chunks
-    time_indexed = time_indexed.chunk({
-        "M": 1,
-        "T": -1,
-    })
-
     # month-of_year (moy), day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
     # here we choose to use the tropical year length (365.2422 day, which we round to 365.24) as the
     # period to return to the position of the sun relative to the Earth
@@ -198,6 +192,13 @@ def add_month_day_dims(
     time_features = xr.concat(
         [moy_phase, doy_phase, hod_phase], dim="feature"
     ).transpose("M", "T", "feature")
+
+    # fix chunks
+    time_features = time_features.chunk({
+        "M": 1,
+        "T": -1,
+        "feature": -1,
+    })
 
     return daily_indexed, monthly_m, padded_days_mask, time_features
 
@@ -392,11 +393,6 @@ def add_month_hour_dims(
         .unstack(time_dim)
         .reindex(T=np.arange(1, 745), M=month_keys)
     )
-    # fix chunks
-    time_indexed = time_indexed.chunk({
-        "M": 1,
-        "T": -1,
-    })
 
     # Determine month-of-year, day-of-year (doy) and hour-of-day (hod)
     moy_period = 12.0
@@ -416,6 +412,13 @@ def add_month_hour_dims(
     time_features = xr.concat(
         [moy_phase, doy_phase, hod_phase], dim="feature"
     ).transpose("M", "T", "feature")
+
+    # fix chunks
+    time_features = time_features.chunk({
+        "M": 1,
+        "T": -1,
+        "feature": -1,
+    })
 
     return hourly_indexed, monthly_m, padded_hours_mask, time_features
 
@@ -844,17 +847,11 @@ def read_st_data(data_path=".", var_name="tos"):
     time_features_path = data_path / "time_features.zarr"
 
     # Check if the zarr files already exist, if so, open them and return the datasets
-    input_da = xr.open_zarr(input_da_path)[var_name] if input_da_path.exists() else None
-    input_da_nan_mask = xr.open_zarr(input_da_nan_mask_path)[var_name] if input_da_nan_mask_path.exists() else None
-    monthly_da = xr.open_zarr(monthly_da_path)[var_name] if monthly_da_path.exists() else None
-    padded_days_mask = xr.open_zarr(padded_days_mask_path)[var_name] if padded_days_mask_path.exists() else None
-    time_features = xr.open_zarr(time_features_path)[var_name] if time_features_path.exists() else None
+    input_da = xr.open_zarr(input_da_path)[var_name]
+    input_da_nan_mask = xr.open_zarr(input_da_nan_mask_path)[var_name]
+    monthly_da = xr.open_zarr(monthly_da_path)[var_name]
+    padded_days_mask = xr.open_zarr(padded_days_mask_path)[var_name]
+    time_features = xr.open_zarr(time_features_path)[var_name]
 
     # if one of the datasets is None, we need to compute them
-    datasets = [input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features]
-    if all(ds is not None for ds in datasets):
-        return tuple(datasets)
-    else:
-        raise FileNotFoundError(
-            "One or more required zarr files are missing. Run data_preparation() first to generate them."
-        )
+    return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
