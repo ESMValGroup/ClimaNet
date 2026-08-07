@@ -56,21 +56,19 @@ if __name__ == "__main__":
         test_range=(2022, 2022),
     )
     data_config_train = {
-        "input_data": hourly_files["train"],
-        "input_chunks": None,
-        "monthly_data": monthly_files["train"],
-        "monthly_chunks": None,
+        "input_data_dir": hourly_files["train"],
         "land_mask_data": lsm_folder / "era5_lsm_bool.nc",
-        "land_mask_chunks": None,
+        "load_lazy": False,  # one year fits in memory
+        "patch_size": (1, 40, 40),
+        "stride": (20, 20),
     }
 
     data_config_validation = {
-        "input_data": hourly_files["validation"],
-        "input_chunks": None,
-        "monthly_data": monthly_files["validation"],
-        "monthly_chunks": None,
+        "input_data_dir": hourly_files["validation"],
         "land_mask_data": lsm_folder / "era5_lsm_bool.nc",
-        "land_mask_chunks": None,
+        "load_lazy": False,  # one year fits in memory
+        "patch_size": (1, 40, 40),
+        "stride": (20, 20),
     }
 
     # dont use ray.put() (i.e. object store) when data is large
@@ -86,8 +84,8 @@ if __name__ == "__main__":
         "run_dir": args.storage_path,
         "device": "cuda",
         "dataloader_num_workers": 4,
-        "dataset_patch_size": (1, 40, 40),
-        "dataset_stride": (20, 20),
+        "dataloader_persistent_workers": True,
+        "dataloader_multiprocessing_context": None,  # load_lazy is False
         "num_epoch": 100,
         "max_concurrent_trials": args.num_nodes * 2,  # less than GPUs per node (4) avoid OOM
         "experiment_name": "climanet_tune",
