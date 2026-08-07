@@ -108,17 +108,9 @@ def predict_monthly_var(
     Args:
         model: A trained PyTorch model or a path to a saved model file.
         dataset: A PyTorch Dataset containing the input data for prediction.
-        batch_size: The number of samples to process in each batch during prediction.
-        return_numpy: If True, returns predictions as a NumPy array.
-            Otherwise, returns a PyTorch tensor.
-        save_predictions: If True, convert the predictions to xarray and
-            save to disk as netCDF files and return the xarray Dataset.
-        return_loss: If True, also return the average loss over the dataset.
-        device: The device to run the predictions on (e.g., 'cpu' or 'cuda').
+        dataloader_config: Configuration for the DataLoader, see DataLoaderConfig for details.
+        prediction_config: Configuration for the prediction process, see PredictionConfig for details.
         run_dir: Directory to save log files and predictions.
-        verbose: If True, prints progress information during prediction.
-        dataloader_num_workers: how many subprocesses to use for data loading.
-            See torch DataLoader docs for details.
     Returns:
         A NumPy array, PyTorch tensor, or xarray Dataset containing the predicted values.
         If return_loss is True, it also returns the average loss over the dataset.

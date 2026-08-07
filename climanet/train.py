@@ -71,14 +71,10 @@ def train_monthly_model(
     """Train the model to predict monthly data from daily data.
     Args:
         model: the PyTorch model to train
-        input_data_train: xarray Dataset containing daily/hourly data
-        monthly_data_train: xarray Dataset containing monthly data
-        dataloader_config: configuration for the DataLoader
-        dataset_config: configuration for the Dataset
-        training_config: configuration for the training process
-        input_data_validation: xarray Dataset containing daily/hourly validation data (optional)
-        monthly_data_validation: xarray Dataset containing monthly validation data (optional)
-        land_mask: xarray Dataarray containing land mask (optional)
+        dataset_train: the training dataset
+        dataloader_config: configuration for the data loader, see DataLoaderConfig for details.
+        training_config: configuration for the training process, see TrainConfig for details.
+        dataset_validation: the validation dataset, if provided, will be used to compute validation loss.
         run_dir: directory to save logs and model checkpoints
     Returns:
         The trained model.

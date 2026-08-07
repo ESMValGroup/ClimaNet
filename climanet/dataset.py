@@ -75,7 +75,7 @@ class STDataset(Dataset):
             sh_embed_dim: Dimension of the spherical harmonics embedding.
             sh_order_L: Order of the spherical harmonics.
             verbose: If True, print dataset creation details.
-            load_lazy: If True, use data lazily from xarray DataArrays
+            load_lazy: If True, use data lazily with zarr backend. This may slow down getitem but saves memory.
         """
         self.spatial_dims = spatial_dims
         self.patch_size = patch_size

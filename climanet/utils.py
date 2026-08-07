@@ -731,7 +731,25 @@ def data_preparation(
     is_hourly=False,
     save_to_zarr=False,
 ):
-    """Prepare the data for training."""
+    """Prepare the data for training.
+
+    Args:
+        input_data (xr.DataArray): The input data (daily or hourly).
+        monthly_data (xr.DataArray): The monthly data.
+        time_dim (str): The name of the time dimension in the data arrays.
+        run_dir (str): Directory to save the preprocessed data.
+        calculate_residuals (bool): Whether to calculate residuals between input and monthly data.
+        is_hourly (bool): Whether the input data is hourly (True) or daily (False).
+        save_to_zarr (bool): Whether to save the preprocessed data to zarr files.
+    Returns:
+        tuple: A tuple containing the following xarray.DataArray objects:
+            - input_da: The reshaped input data with dimensions (M, T, H, W).
+            - input_da_nan_mask: A boolean mask indicating NaN locations in the input data.
+            - monthly_da: The reshaped monthly data with dimensions (M, H, W).
+            - padded_days_mask: A boolean mask indicating padded days/hours in the input data.
+            - time_features: A DataArray containing cyclic time features (month, day, hour).
+
+    """
     if time_dim not in input_data.dims or time_dim not in monthly_data.dims:
         raise ValueError(f"Time dimension '{time_dim}' not found in input data")
 
