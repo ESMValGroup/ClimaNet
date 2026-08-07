@@ -6,8 +6,8 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=128
 #SBATCH --gpus-per-task=4
-#SBATCH --mem=0
 #SBATCH --exclusive
+#SBATCH --mem=0
 #SBATCH --time=12:00:00
 #SBATCH --account=bd0854
 #SBATCH --output=tuning_%j.out
@@ -20,7 +20,7 @@ UV_ENV="$HOME/climanet_py311"
 source "$UV_ENV/bin/activate"
 
 # Set the scratch directory because they are avialable to all nodes
-SCRATCH="/scratch/b/$USER/tune_results"
+SCRATCH="/scratch/b/$USER/tune"
 
 # data directory (adjust this path to your data location)
 DATA_DIR_TRAIN="$HOME/scratch/b/$USER/data"
@@ -70,7 +70,7 @@ srun --nodes=1 --ntasks=1 -w "$head_node" \
         --num-cpus=128 \
         --num-gpus=4 \
         --object-store-memory 5000000000 \
-        --temp-dir "$SCRATCH/ray_logs" \
+        --temp-dir "$SCRATCH/log" \
         --block
     " &
 
@@ -87,7 +87,7 @@ for node in "${nodes_array[@]:1}"; do
             --num-cpus=128 \
             --num-gpus=4 \
             --object-store-memory 5000000000 \
-            --temp-dir "$SCRATCH/ray_logs" \
+            --temp-dir "$SCRATCH/log" \
             --block
         " &
 
@@ -105,3 +105,5 @@ python -u $HOME/ClimaNet/scripts/tuning.py \
     --data-dir-train "$DATA_DIR_TRAIN" \
     --data-dir-validation "$DATA_DIR_VALIDATION" \
     --lsm-dir "$LSM_DIR"
+
+echo "**********Tuning script completed.************"

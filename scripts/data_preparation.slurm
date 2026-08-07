@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=256G
 #SBATCH --exclusive
-#SBATCH --time=8:00:00
+#SBATCH --time=04:00:00
 #SBATCH --account=bd0854
 #SBATCH --output=data_preparation_%j.out
 
@@ -26,3 +26,5 @@ DATA_DIR="$HOME/scratch/b/$USER/data"
 python -u $HOME/ClimaNet/scripts/data_preparation.py \
     --storage-path "$SCRATCH" \
     --data-dir "$DATA_DIR"
+
+echo "Data preparation is done!"
