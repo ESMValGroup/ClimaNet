@@ -77,12 +77,12 @@ if __name__ == "__main__":
         "gpu_per_trial": 1,
         "run_dir": args.storage_path,
         "device": "cuda",
-        "dataloader_num_workers": 4,
+        "dataloader_num_workers": 1,
         "dataloader_persistent_workers": True,
         "dataloader_multiprocessing_context": None,  # load_lazy is False
         "num_epoch": 100,
         "max_concurrent_trials": args.num_nodes * 2,  # less than GPUs per node (4) avoid OOM
-        "experiment_name": "climanet_tune",
+        "experiment_name": "sst_01",
     }
 
     # parameters to tune
@@ -96,9 +96,7 @@ if __name__ == "__main__":
         "spatial_heads": tune.choice([2, 4, 8]),
         "optimizer_lr": tune.loguniform(1e-3, 1e-1),
         "batch_config": tune.grid_search([
-            {"batch_size": 100, "accumulation_steps": 1},
-            {"batch_size": 200, "accumulation_steps": 2},
-            {"batch_size": 400, "accumulation_steps": 2},
+            {"batch_size": 100, "accumulation_steps": 2},
         ]),
     }
 
