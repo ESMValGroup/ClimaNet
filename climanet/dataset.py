@@ -48,7 +48,6 @@ class STDataset(Dataset):
         spatial_dims: tuple[str, str] = ("lat", "lon"),
         patch_size: tuple[int, int, int] = (1, 16, 16),  # (Month, lat, lon)
         stride: tuple[int, int] = None,
-        sh_pos_table: str = None,  # Optional; str formatted path to precomputed table of sh
         sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
         sh_order_L: int = 10,
         verbose: bool = False,
@@ -144,31 +143,12 @@ class STDataset(Dataset):
         M, H, W = self.input_da.shape[0], self.input_da.shape[2], self.input_da.shape[3]
         self.patch_indices = self._compute_patch_indices(M, H, W)
 
-        # Precompute geoposition and scale embeddings for patches
-        self.sh_geo_pos = None
-        self.geo_pos_table = self._get_geo_pos(sh_pos_table)
-        self.patch_geo_embeddings, self.patch_scale_features = (
-            self._compute_geoscalepatch_embeddings()
-        )
-
-        self.scale_f_dim = torch.tensor(self.patch_scale_features.shape[-1])
         self.sh_embed_dim_t = torch.tensor(self.sh_embed_dim)
         self.harmonic_order_t = torch.tensor(self.sh_order_L)
 
-    def _get_geo_pos(self, sh_pos_table: str):
-        """Calculate or retrieve spherical harmonics based geo position embeddings."""
-        if sh_pos_table is None:
-            self.sh_geo_pos = calculate_sh_geo_pos_embeddings(
-                self.lat_coords, self.lon_coords, self.sh_order_L, self.sh_embed_dim
-            )
-        else:
-            # load then set embed dim and sh order L from here
-            raise (RuntimeError("load method not implemented"))
-            # TODO implement load functionality. loaded tensor should
-            # be placed in self.sh_geo_pos. return sh_pos_table to
-            # preserve provenance in dataset. IMPORTANT check
-            # compatability of L and sh_dim between requested
-            # and loaded. Raise error if not consistent
+        self.geo_pos_t = calculate_sh_geo_pos_embeddings(
+            self.lat_coords, self.lon_coords, self.sh_order_L, self.sh_embed_dim
+        )
 
     def _compute_patch_indices(self, M: int, H: int, W: int) -> list:
         """Generate patch start indices with coverage warning (overlap support)."""
@@ -232,36 +212,6 @@ class STDataset(Dataset):
             print(f"Overlap: {overlap_h} pixels (height), {overlap_w} pixels (width)")
 
         return [(m, i, j) for m in m_starts for i in i_starts for j in j_starts]
-
-    def _compute_geoscalepatch_embeddings(self):
-        patch_geo_embeddings = []
-        patch_scale_features = []
-
-        for _, i, j in self.patch_indices:
-            _, ph, pw = self.patch_size
-            geo_pos_tensor = self.sh_geo_pos[
-                i : i + ph,
-                j : j + pw,
-            ]
-            lat_patch = self.lat_coords[i : i + ph]
-            lon_patch = self.lon_coords[j : j + pw]
-
-            geo_emb = compute_patch_geo_pos_embedding(
-                geo_pos_tensor,
-                lat_patch,
-            )
-            scale_feat = compute_patch_scale_features(
-                lat_patch,
-                lon_patch,
-            )
-
-            patch_geo_embeddings.append(geo_emb)
-            patch_scale_features.append(scale_feat)
-
-        patch_geo_embeddings = torch.stack(patch_geo_embeddings).contiguous().clone()
-        patch_scale_features = torch.stack(patch_scale_features).contiguous().clone()
-
-        return patch_geo_embeddings, patch_scale_features
 
     def _prepare_land_mask(self, land_mask):
         """Convert land mask to tensor."""
@@ -367,11 +317,15 @@ class STDataset(Dataset):
         lat_patch = self.lat_coords[i : i + ph]  # (H,) -> (pH,)
         lon_patch = self.lon_coords[j : j + pw]  # (W,) -> (pW,)
 
-        # get patch geo pos embedding
-        geo_pos_embedding_t = self.patch_geo_embeddings[idx]  # (sh_dim,)
+        geo_pos_embedding_t = compute_patch_geo_pos_embedding(
+            self.geo_pos_t[i : i + ph, j : j + pw],
+            lat_patch,
+        )
 
-        # get scale feature for patch
-        scale_feature_t = self.patch_scale_features[idx]  # (10,)
+        scale_feature_t = compute_patch_scale_features(
+            lat_patch,
+            lon_patch,
+        )
 
         # Convert to dictionary
         return {
@@ -385,8 +339,10 @@ class STDataset(Dataset):
             "geo_pos_embedding_patch": geo_pos_embedding_t,  # (sh_embed_dim,)
             "sh_embed_dim": self.sh_embed_dim_t,
             "harmonic_order": self.harmonic_order_t,
-            "scale_f_dim": self.scale_f_dim,
             "coords": torch.tensor([m, i, j]),
             "lat_patch": lat_patch,  # (pH,)
             "lon_patch": lon_patch,  # (pW,)
         }
+
+    def __getitems__(self, indices):
+        return [self.__getitem__(i) for i in indices]
