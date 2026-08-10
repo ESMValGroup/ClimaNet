@@ -4,6 +4,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import numcodecs
 import numpy as np
 import psutil
 import torch
@@ -123,6 +124,16 @@ def add_month_day_dims(
         .reindex(T=np.arange(1, 32), M=month_keys)
     )
 
+    # fix chunks
+    daily_indexed = daily_indexed.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "lat": 100,
+            "lon": 100,
+        }
+    )
+
     # Force dim order: (M, T, H, W) (and keep any other non-time dims after M,T)
     other_dims = [d for d in daily_ts.dims if d != time_dim]  # e.g. ["H", "W"]
     daily_indexed = daily_indexed.transpose("M", "T", *other_dims)
@@ -130,12 +141,20 @@ def add_month_day_dims(
     # Build padded days mask from daily_indexed (NaN locations)
     padded_days_mask = ~daily_indexed.notnull().any(dim=spatial_dims)
 
+    # Preserve the original time coordinates for monthly data (M,)
+    month_time = xr.DataArray(
+        monthly_ts[time_dim].values,
+        dims="M",
+        coords={"M": mkey.values},
+    )
+
     # Align monthly data to same month keys/order
     monthly_m = (
         monthly_ts.assign_coords(M=(time_dim, mkey.values))
         .swap_dims({time_dim: "M"})
         .drop_vars(time_dim)
         .sel(M=month_keys)
+        .assign_coords(M=month_time.sel(M=month_keys).values)
     )
 
     # Build aligned datetime array (M,T)
@@ -175,6 +194,15 @@ def add_month_day_dims(
     time_features = xr.concat(
         [moy_phase, doy_phase, hod_phase], dim="feature"
     ).transpose("M", "T", "feature")
+
+    # fix chunks
+    time_features = time_features.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "feature": -1,
+        }
+    )
 
     return daily_indexed, monthly_m, padded_days_mask, time_features
 
@@ -327,6 +355,17 @@ def add_month_hour_dims(
         .unstack(time_dim)
         .reindex(T=np.arange(1, 745), M=month_keys)  # 744 = 31 days * 24 hours
     )
+
+    # fix chunks
+    hourly_indexed = hourly_indexed.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "lat": 100,
+            "lon": 100,
+        }
+    )
+
     # Force dim order: (M, T, H, W)
     other_dims = [d for d in hourly_ts.dims if d != time_dim]
     hourly_indexed = hourly_indexed.transpose("M", "T", *other_dims)
@@ -334,12 +373,20 @@ def add_month_hour_dims(
     # Build padded hours mask from hourly_indexed (NaN locations)
     padded_hours_mask = ~hourly_indexed.notnull().any(dim=spatial_dims)
 
+    # Preserve the original time coordinates for monthly data (M,)
+    month_time = xr.DataArray(
+        monthly_ts[time_dim].values,
+        dims="M",
+        coords={"M": mkey.values},
+    )
+
     # Align monthly data to same month keys/order
     monthly_m = (
         monthly_ts.assign_coords(M=(time_dim, mkey.values))
         .swap_dims({time_dim: "M"})
         .drop_vars(time_dim)
         .sel(M=month_keys)
+        .assign_coords(M=month_time.sel(M=month_keys).values)
     )
 
     # Build aligned datetime array (M, T)
@@ -371,6 +418,15 @@ def add_month_hour_dims(
     time_features = xr.concat(
         [moy_phase, doy_phase, hod_phase], dim="feature"
     ).transpose("M", "T", "feature")
+
+    # fix chunks
+    time_features = time_features.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "feature": -1,
+        }
+    )
 
     return hourly_indexed, monthly_m, padded_hours_mask, time_features
 
@@ -410,7 +466,11 @@ def plot_results(
     target, predictions, label="SST K", title=("Target", "Prediction"), error=False
 ):
     fig, axs = plt.subplots(
-        nrows=len(target.time), ncols=2, figsize=(10, 8), constrained_layout=True
+        nrows=len(target.time),
+        ncols=2,
+        figsize=(10, 5),
+        constrained_layout=True,
+        squeeze=False,
     )
 
     for t in range(len(target.time)):
@@ -460,30 +520,27 @@ def plot_histograms(
         ncols=1,
         figsize=(8, 4 * len(target.time)),
         constrained_layout=True,
+        squeeze=False,
     )
-
-    # Handle single timestep case
-    if len(target.time) == 1:
-        axs = axs.reshape(1, -1)
 
     for t in range(len(target.time)):
         target_t = target.isel(time=t)
         pred_t = predictions.isel(time=t)
 
         # Target histogram
-        axs[t].hist(
+        axs[t, 0].hist(
             target_t.values.flatten(), bins=bins, alpha=0.7, color="blue", density=True
         )
-        axs[t].set_xlabel(label)
-        axs[t].set_ylabel("Probability Density")
-        axs[t].grid(True, alpha=0.3)
+        axs[t, 0].set_xlabel(label)
+        axs[t, 0].set_ylabel("Probability Density")
+        axs[t, 0].grid(True, alpha=0.3)
 
         # Prediction histogram (overlaid)
-        axs[t].hist(
+        axs[t, 0].hist(
             pred_t.values.flatten(), bins=bins, alpha=0.7, color="orange", density=True
         )
-        axs[t].legend(legend_labels)
-        axs[t].set_title(
+        axs[t, 0].legend(legend_labels)
+        axs[t, 0].set_title(
             f"Histogram {legend_labels[0]} vs {legend_labels[1]}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
         )
 
@@ -663,3 +720,174 @@ def plot_loss(
     plt.xlabel("Step")
     plt.ylabel(f"Average loss per epoch ({unit})")
     plt.legend()
+
+
+def data_preparation(
+    input_data: xr.DataArray,
+    monthly_data: xr.DataArray,
+    time_dim="time",
+    run_dir=".",
+    calculate_residuals=True,
+    is_hourly=False,
+    save_to_zarr=False,
+):
+    """Prepare the data for training.
+
+    Args:
+        input_data (xr.DataArray): The input data (daily or hourly).
+        monthly_data (xr.DataArray): The monthly data.
+        time_dim (str): The name of the time dimension in the data arrays.
+        run_dir (str): Directory to save the preprocessed data.
+        calculate_residuals (bool): Whether to calculate residuals between input and monthly data.
+        is_hourly (bool): Whether the input data is hourly (True) or daily (False).
+        save_to_zarr (bool): Whether to save the preprocessed data to zarr files.
+    Returns:
+        tuple: A tuple containing the following xarray.DataArray objects:
+            - input_da: The reshaped input data with dimensions (M, T, H, W).
+            - input_da_nan_mask: A boolean mask indicating NaN locations in the input data.
+            - monthly_da: The reshaped monthly data with dimensions (M, H, W).
+            - padded_days_mask: A boolean mask indicating padded days/hours in the input data.
+            - time_features: A DataArray containing cyclic time features (month, day, hour).
+
+    """
+    if time_dim not in input_data.dims or time_dim not in monthly_data.dims:
+        raise ValueError(f"Time dimension '{time_dim}' not found in input data")
+
+    var_name = input_data.name
+    if not var_name:
+        raise ValueError("Input data must have a name (variable name)")
+
+    if calculate_residuals:
+        input_data_averaged = input_data.resample({time_dim: "MS"}).mean(skipna=True)
+        input_data_averaged[time_dim] = monthly_data[time_dim]
+        monthly_data_res = monthly_data - input_data_averaged
+    else:
+        monthly_data_res = monthly_data
+
+    if is_hourly:
+        # hours_per_day == 24
+        # Reshape daily → (M, T=31*24, H, W), monthly → (M, H, W),
+        # and get padded_days_mask → (M, T=31*24)
+        input_da, monthly_da, padded_days_mask, time_features = add_month_hour_dims(
+            input_data, monthly_data_res, time_dim=time_dim
+        )
+    else:
+        # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
+        # and get padded_days_mask → (M, T=31)
+        input_da, monthly_da, padded_days_mask, time_features = add_month_day_dims(
+            input_data, monthly_data_res, time_dim=time_dim
+        )
+
+    # Precompute the NaN mask before filling NaNs
+    # input_da_nan_mask: True where NaN (i.e. missing ocean data, not land)
+    input_da_nan_mask = input_da.isnull()
+
+    # NaNs will be filled with 0 in-place
+    input_da = input_da.fillna(0.0).astype("float32")
+
+    monthly_da = monthly_da.astype("float32")
+
+    # rechunk data
+    input_da = input_da.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
+    input_da_nan_mask = input_da_nan_mask.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
+    monthly_da = monthly_da.chunk({"M": 1, "lat": 100, "lon": 100})
+    padded_days_mask = padded_days_mask.chunk({"M": 1})
+    time_features = time_features.chunk({"M": 1})
+
+    # set names
+    input_da_nan_mask.name = var_name
+    monthly_da.name = var_name
+    time_features.name = var_name
+    padded_days_mask.name = var_name
+
+    # compression for boolean masks
+    encoding_input_da_nan_mask = {
+        input_da_nan_mask.name: {
+            "dtype": "bool",
+            "compressor": numcodecs.Blosc(
+                cname="zstd",
+                clevel=3,
+                shuffle=numcodecs.Blosc.BITSHUFFLE,
+            ),
+        }
+    }
+
+    encoding_padded_days_mask = {
+        padded_days_mask.name: {
+            "dtype": "bool",
+            "compressor": numcodecs.Blosc(
+                cname="zstd",
+                clevel=3,
+                shuffle=numcodecs.Blosc.BITSHUFFLE,
+            ),
+        }
+    }
+
+    if save_to_zarr:
+        # Create the run directory if it doesn't exist
+        data_path = Path(run_dir).resolve()
+        data_path.mkdir(parents=True, exist_ok=True)
+
+        input_da_path = data_path / "input_da.zarr"
+        input_da_nan_mask_path = data_path / "input_da_nan_mask.zarr"
+        monthly_da_path = data_path / "monthly_da.zarr"
+        padded_days_mask_path = data_path / "padded_days_mask.zarr"
+        time_features_path = data_path / "time_features.zarr"
+
+        # these will be saved as xr.Dataset
+        input_da.to_zarr(input_da_path, mode="w", zarr_format=2, consolidated=True)
+        input_da_nan_mask.to_zarr(
+            input_da_nan_mask_path,
+            mode="w",
+            encoding=encoding_input_da_nan_mask,
+            zarr_format=2,
+            consolidated=True,
+        )
+        monthly_da.to_zarr(monthly_da_path, mode="w", zarr_format=2, consolidated=True)
+        padded_days_mask.to_zarr(
+            padded_days_mask_path,
+            mode="w",
+            encoding=encoding_padded_days_mask,
+            zarr_format=2,
+            consolidated=True,
+        )
+        time_features.to_zarr(
+            time_features_path, mode="w", zarr_format=2, consolidated=True
+        )
+
+    return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
+
+
+def read_st_data(data_path=".", var_name="tos"):
+    """Read preprocessed spatio-temporal data from zarr files.
+    Args:
+        data_path (str): Path to the directory containing the zarr files.
+        var_name (str): Name of the variable to read from the zarr files.
+
+    Returns:
+        tuple: A tuple containing the following xarray.DataArray objects:
+            - input_da
+            - input_da_nan_mask
+            - monthly_da
+            - padded_days_mask
+            - time_features
+    """
+
+    # make filenames
+    data_path = Path(data_path).resolve()
+
+    input_da_path = data_path / "input_da.zarr"
+    input_da_nan_mask_path = data_path / "input_da_nan_mask.zarr"
+    monthly_da_path = data_path / "monthly_da.zarr"
+    padded_days_mask_path = data_path / "padded_days_mask.zarr"
+    time_features_path = data_path / "time_features.zarr"
+
+    # Check if the zarr files already exist, if so, open them and return the datasets
+    input_da = xr.open_zarr(input_da_path)[var_name]
+    input_da_nan_mask = xr.open_zarr(input_da_nan_mask_path)[var_name]
+    monthly_da = xr.open_zarr(monthly_da_path)[var_name]
+    padded_days_mask = xr.open_zarr(padded_days_mask_path)[var_name]
+    time_features = xr.open_zarr(time_features_path)[var_name]
+
+    # if one of the datasets is None, we need to compute them
+    return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features

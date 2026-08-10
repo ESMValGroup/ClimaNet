@@ -45,10 +45,9 @@ def test_model_meta_device(dummy_batch):
     device = "meta"
 
     model = model.to(device)
-    dummy_batch = {k: v.to(device, non_blocking=False) for k, v in dummy_batch.items()}
 
     model.train()
-    loss = _run_one_batch(model, dummy_batch)
+    loss = _run_one_batch(model, dummy_batch, device=device)
     loss.backward()
 
     assert loss.device.type == "meta"
@@ -75,9 +74,8 @@ def test_model_fake_tensor(dummy_batch):
 
     model = model.to(device)
 
-    with FakeTensorMode(allow_non_fake_inputs=True) as mode:
-        dummy_batch = {k: mode.from_tensor(v) for k, v in dummy_batch.items()}
-        loss = _run_one_batch(model, dummy_batch)
+    with FakeTensorMode(allow_non_fake_inputs=True):
+        loss = _run_one_batch(model, dummy_batch, device=device)
         loss.backward()
 
     assert loss.device.type == "cpu"
