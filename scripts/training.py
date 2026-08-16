@@ -1,155 +1,240 @@
+import argparse
 from pathlib import Path
+
 import xarray as xr
-import torch
-import torch.nn.functional
+
+from climanet.dataset import DataLoaderConfig, STDataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
-from climanet.utils import (
-    set_seed,
-    configure_compute_resources,
-)
-from climanet.train import train_monthly_model
-from climanet import STDataset
-
-from torch.utils.data import random_split
+from climanet.train import TrainConfig, train_monthly_model
+from climanet.utils import read_st_data, set_seed
 
 
-def main():
-    # Data settings
-    # Data folder
-    data_folder = Path("/work/bd0854/b380103/eso4clima/output/concatenated/")
-    # Path to land-sea mask file (need to setup in the experiment directory)
-    lsm_file = "/home/b/b383704/eso4clima/data/era5_lsm_bool.nc"
-    # Must be divisible by the model patch size
-    # Default input data has 720x1440 spatial dimensions
+# Best hyperparameters from tuning experiments (README).
+BEST_PATCH_SIZE = 8
+BEST_OVERLAP = 1
+BEST_EMBED_DIM = 64
+BEST_DROPOUT = 0.2
+BEST_HIDDEN = 32
+BEST_SPATIAL_DEPTH = 3
+BEST_SPATIAL_HEADS = 2
+BEST_OPTIMIZER_LR = 0.001787422899066508
+BEST_ACCUMULATION_STEPS = 2
 
-    # Training settings
-    patch_size_model = (1, 4, 4)  # Size of model encoder (time, lat, lon).
-    num_patches = (30, 30)  # Number of patches in spatial dimensions
-    spatial_patch_size = (
-        patch_size_model[1] * num_patches[0],
-        patch_size_model[2] * num_patches[1],
-    )  # Spatial dimensions of the input data
-    stride = (spatial_patch_size[0] // 5, spatial_patch_size[1] // 5)
-    overlap = 2  # Overlap between patches (in pixels).
-    num_months = 2  # Number of months to predict (model output channels)
-    embed_dim = 128
-    dropout = 0.2
-    hidden = 128
-    batch_size = 50  # Number of samples per batch in training
-    num_epoch = 100  # Maximum number of epochs to train
-    accumulation_steps = 2  # Number of batches to accumulate gradients over
-    sh_embed_dim = 96
-    sh_order_L = 10
-    compute_threads = 96
-    dataloader_num_workers = 32
-    run_dir = "./runs"  # Directory to save logs and model checkpoints
 
-    # Get list of daily and monthly files, sort by time
-    daily_files = sorted(data_folder.rglob("20*day_ERA5dc_masked_tos.nc"))
-    monthly_files = sorted(data_folder.rglob("20*mon_ERA5dc_full_tos.nc"))
-
-    # Set seed for reproducibility
-    set_seed()
-
-    # Open datasets with chunks
-    # The chunk sizes are chosen as twice the sample patch size
-    daily_data = xr.open_mfdataset(
-        daily_files,
-        combine="by_coords",
-        chunks={
-            "time": 1,
-            "lat": spatial_patch_size[0] * 2,
-            "lon": spatial_patch_size[1] * 2,
-        },
-        data_vars="minimal",
-        coords="minimal",
-        compat="override",
-        parallel=False,
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Train ClimaNet on prepared yearly Zarr data using explicit year splits "
+            "(e.g. 3 years train, 1 year validation)."
+        )
     )
-    daily_data = daily_data.chunk(
-        {"time": 1, "lat": spatial_patch_size[0] * 2, "lon": spatial_patch_size[1] * 2}
-    )  # Mannually chunk the dataset after opening
-
-    monthly_data = xr.open_mfdataset(
-        monthly_files,
-        combine="by_coords",
-        chunks={
-            "time": 1,
-            "lat": spatial_patch_size[0] * 2,
-            "lon": spatial_patch_size[1] * 2,
-        },
-        data_vars="minimal",
-        coords="minimal",
-        compat="override",
-        parallel=False,
+    parser.add_argument(
+        "--prepared-data-dir",
+        type=Path,
+        required=True,
+        help="Directory that contains one subdirectory per year with prepared Zarr files.",
     )
-    monthly_data = monthly_data.chunk(
-        {"time": 1, "lat": spatial_patch_size[0] * 2, "lon": spatial_patch_size[1] * 2}
-    )  # Mannually chunk the dataset after opening
-
-    lsm_mask = xr.open_dataset(lsm_file)
-
-    # Use Monthly residuals as target
-    daily_data_averaged = daily_data.resample(time="MS").mean(skipna=True)
-    daily_data_averaged["time"] = monthly_data["time"]
-    monthly_data_res = monthly_data - daily_data_averaged
-
-    # create the model
-    print("Creating the model...")
-    model = SpatioTemporalModel(
-        patch_size=patch_size_model,
-        overlap=overlap,
-        num_months=num_months,
-        embed_dim=embed_dim,
-        dropout=dropout,
-        hidden=hidden,
+    parser.add_argument(
+        "--lsm-file-path",
+        type=Path,
+        required=True,
+        help="Path to land-sea mask NetCDF file.",
     )
+    parser.add_argument(
+        "--run-dir",
+        type=Path,
+        default=Path("./runs").resolve(),
+        help="Directory where logs/checkpoints are stored.",
+    )
+    parser.add_argument(
+        "--var-name",
+        type=str,
+        default="tos",
+        help="Variable name used in prepared Zarr files.",
+    )
+    parser.add_argument(
+        "--train-years",
+        type=int,
+        nargs="+",
+        default=[2018, 2019, 2020],
+        help="Years to concatenate for training.",
+    )
+    parser.add_argument(
+        "--validation-year",
+        type=int,
+        default=2021,
+        help="Year to use for validation.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda"],
+        help="Device for training.",
+    )
+    parser.add_argument("--num-epoch", type=int, default=100)
+    parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument(
+        "--accumulation-steps", type=int, default=BEST_ACCUMULATION_STEPS
+    )
+    parser.add_argument("--dataloader-num-workers", type=int, default=8)
+    parser.add_argument(
+        "--dataloader-persistent-workers",
+        action="store_true",
+        help="Enable persistent dataloader workers.",
+    )
+    return parser
 
-    # Make a dataset
-    print("Creating the dataset...")
-    dataset = STDataset(
-        daily_da=daily_data["tos"],
-        monthly_da=monthly_data_res["tos"],
-        land_mask=lsm_mask["lsm"],
-        patch_size=spatial_patch_size,  # based on the patch_size in model
+
+def _read_year_data(
+    prepared_data_dir: Path, year: int, var_name: str
+) -> tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray]:
+    year_dir = prepared_data_dir / str(year)
+    if not year_dir.exists():
+        raise FileNotFoundError(f"Prepared year folder does not exist: {year_dir}")
+    return read_st_data(data_path=year_dir, var_name=var_name)
+
+
+def _concat_years(
+    prepared_data_dir: Path, years: list[int], var_name: str
+) -> tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray]:
+    year_data = [_read_year_data(prepared_data_dir, year, var_name) for year in years]
+    input_da = xr.concat([x[0] for x in year_data], dim="M")
+    input_da_nan_mask = xr.concat([x[1] for x in year_data], dim="M")
+    monthly_da = xr.concat([x[2] for x in year_data], dim="M")
+    padded_days_mask = xr.concat([x[3] for x in year_data], dim="M")
+    time_features = xr.concat([x[4] for x in year_data], dim="M")
+    return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
+
+
+def _build_dataset(
+    prepared_data_dir: Path,
+    years: list[int],
+    var_name: str,
+    land_mask: xr.DataArray,
+    patch_size: tuple[int, int, int],
+    stride: tuple[int, int],
+    load_lazy: bool,
+) -> STDataset:
+    input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = (
+        _concat_years(prepared_data_dir, years, var_name)
+    )
+    return STDataset(
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        monthly_da=monthly_da,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
+        land_mask=land_mask,
+        patch_size=patch_size,
         stride=stride,
-        sh_embed_dim=sh_embed_dim,
-        sh_order_L=sh_order_L,
-    )
-    print(f"Total length training dataset: {len(dataset)}")
-
-    # create train test data
-    generator = torch.Generator().manual_seed(42)
-    train_size = int(0.6 * len(dataset))
-    validation_size = int(0.3 * len(dataset))
-    test_size = len(dataset) - train_size - validation_size
-    train_dataset, validation_dataset, test_dataset = random_split(
-        dataset, [train_size, validation_size, test_size], generator=generator
-    )
-    print(
-        f"Train dataset length: {len(train_dataset)}, Validation dataset length: {len(validation_dataset)}, Test dataset length: {len(test_dataset)}"
+        sh_embed_dim=96,
+        sh_order_L=10,
+        verbose=True,
+        load_lazy=load_lazy,
     )
 
-    # Device and resources
-    model = configure_compute_resources(
-        model,
-        device="cpu",
-        compute_threads=compute_threads,
-        dataloader_num_workers=dataloader_num_workers,
+
+def main() -> None:
+    args = build_parser().parse_args()
+
+    prepared_data_dir = args.prepared_data_dir.resolve()
+    lsm_file_path = args.lsm_file_path.resolve()
+    run_dir = args.run_dir.resolve()
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    if not prepared_data_dir.exists():
+        raise FileNotFoundError(
+            f"Prepared data directory does not exist: {prepared_data_dir}"
+        )
+    if not lsm_file_path.exists():
+        raise FileNotFoundError(f"LSM file does not exist: {lsm_file_path}")
+
+    all_years = [*args.train_years, args.validation_year]
+    if len(set(all_years)) != len(all_years):
+        raise ValueError(
+            "Year splits must be distinct. Check train-years/validation-year."
+        )
+
+    model_patch_size = (1, BEST_PATCH_SIZE, BEST_PATCH_SIZE)
+    num_patches = (10, 10)
+    spatial_patch_size = (
+        model_patch_size[1] * num_patches[0],
+        model_patch_size[2] * num_patches[1],
+    )
+    dataset_patch_size = (1, *spatial_patch_size)
+    stride = (spatial_patch_size[0] // 5, spatial_patch_size[1] // 5)
+
+    set_seed()
+    lsm_mask = xr.open_dataset(lsm_file_path)["lsm"]
+
+    print(f"Train years: {args.train_years}")
+    print(f"Validation year: {args.validation_year}")
+
+    dataset_train = _build_dataset(
+        prepared_data_dir=prepared_data_dir,
+        years=args.train_years,
+        var_name=args.var_name,
+        land_mask=lsm_mask,
+        patch_size=dataset_patch_size,
+        stride=stride,
+        load_lazy=True,
+    )
+    dataset_validation = _build_dataset(
+        prepared_data_dir=prepared_data_dir,
+        years=[args.validation_year],
+        var_name=args.var_name,
+        land_mask=lsm_mask,
+        patch_size=dataset_patch_size,
+        stride=stride,
+        load_lazy=True,
     )
 
-    # Train the model
-    # Results will be saved to runs/best_model.pth
+    print(f"Train dataset patches: {len(dataset_train)}")
+    print(f"Validation dataset patches: {len(dataset_validation)}")
+
+    model = SpatioTemporalModel(
+        patch_size=model_patch_size,
+        overlap=BEST_OVERLAP,
+        embed_dim=BEST_EMBED_DIM,
+        dropout=BEST_DROPOUT,
+        hidden=BEST_HIDDEN,
+        spatial_depth=BEST_SPATIAL_DEPTH,
+        spatial_heads=BEST_SPATIAL_HEADS,
+    )
+
+    dataloader_config = DataLoaderConfig(
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.dataloader_num_workers,
+        pin_memory=args.device == "cuda",
+        persistent_workers=args.dataloader_persistent_workers,
+        device=args.device,
+        multiprocessing_context="spawn",
+    )
+
+    training_config = TrainConfig(
+        calculate_residuals=True,
+        num_epoch=args.num_epoch,
+        patience=10,
+        accumulation_steps=args.accumulation_steps,
+        optimizer_lr=BEST_OPTIMIZER_LR,
+        device=args.device,
+        verbose=False,
+        verbose_epoch_interval=20,
+        tune_checkpoint=False,
+        store_model=True,
+        store_logs=True,
+    )
+
     print("Starting training...")
     _ = train_monthly_model(
-        model,
-        train_dataset,
-        validation_dataset=validation_dataset,
-        batch_size=batch_size,
-        num_epoch=num_epoch,
-        accumulation_steps=accumulation_steps,
+        model=model,
+        dataset_train=dataset_train,
+        dataloader_config=dataloader_config,
+        training_config=training_config,
+        dataset_validation=dataset_validation,
         run_dir=run_dir,
-        dataloader_num_workers=dataloader_num_workers,
     )
 
 

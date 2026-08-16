@@ -28,7 +28,7 @@
     'spatial_depth': 3,
     'spatial_heads': 2,
     'optimizer_lr': 0.001787422899066508,
-    'batch_config': {'batch_size': 100, 'accumulation_steps': 2}}
+    'batch_config': {'accumulation_steps': 2}}
  ```
 
 ### Training experiments
