@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from pathlib import Path
 import xarray as xr
 import torch
