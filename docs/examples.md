@@ -57,3 +57,11 @@ accumulation is a technique to simulate a larger batch size when memory is
 limited. `batch_size` is the number of samples processed before one gradient
 update.Start with accumulation_steps = 1 (no accumulation) Adjust based on
 training behavior i.e. noisy predictions or overfitting.
+
+## Hyperparameter tuning
+
+We provide an example of how to do hyperparameter tuning using [Ray
+Tune](https://docs.ray.io/en/latest/tune/index.html). The example is implemented
+in a Jupyter notebook, which can be found in the `notebooks` directory. For
+practical tips on hyperparameter tuning on HPC, please see to the [tuning
+documentation](./tune.md).

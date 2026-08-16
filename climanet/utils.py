@@ -1,15 +1,19 @@
-from pathlib import Path
 import random
-from typing import Tuple
-import numpy as np
-import xarray as xr
-import torch
-import psutil
-
-from torch.utils.tensorboard import SummaryWriter
+import time
+from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import numcodecs
+import numpy as np
+import psutil
+import torch
+import xarray as xr
 from matplotlib.colors import TwoSlopeNorm
+from tbparse import SummaryReader
+from torch.utils.tensorboard import SummaryWriter
+
+from climanet.st_encoder_decoder import SpatioTemporalModel
 
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
@@ -88,7 +92,7 @@ def add_month_day_dims(
     daily_ts: xr.DataArray,  # (time, H, W) daily
     monthly_ts: xr.DataArray,  # (time, H, W) monthly
     time_dim: str = "time",
-    spatial_dims: Tuple[str, str] = ("lat", "lon"),
+    spatial_dims: tuple[str, str] = ("lat", "lon"),
 ):
     """Reshape daily and monthly data to have explicit month (M) and day (T) dimensions.
 
@@ -119,6 +123,17 @@ def add_month_day_dims(
         .unstack(time_dim)
         .reindex(T=np.arange(1, 32), M=month_keys)
     )
+
+    # fix chunks
+    daily_indexed = daily_indexed.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "lat": 100,
+            "lon": 100,
+        }
+    )
+
     # Force dim order: (M, T, H, W) (and keep any other non-time dims after M,T)
     other_dims = [d for d in daily_ts.dims if d != time_dim]  # e.g. ["H", "W"]
     daily_indexed = daily_indexed.transpose("M", "T", *other_dims)
@@ -126,18 +141,26 @@ def add_month_day_dims(
     # Build padded days mask from daily_indexed (NaN locations)
     padded_days_mask = ~daily_indexed.notnull().any(dim=spatial_dims)
 
+    # Preserve the original time coordinates for monthly data (M,)
+    month_time = xr.DataArray(
+        monthly_ts[time_dim].values,
+        dims="M",
+        coords={"M": mkey.values},
+    )
+
     # Align monthly data to same month keys/order
     monthly_m = (
         monthly_ts.assign_coords(M=(time_dim, mkey.values))
         .swap_dims({time_dim: "M"})
         .drop_vars(time_dim)
         .sel(M=month_keys)
+        .assign_coords(M=month_time.sel(M=month_keys).values)
     )
 
     # Build aligned datetime array (M,T)
     time_da = daily_ts[time_dim]
 
-    #time_indexed is (M,T) with NaT for padded days
+    # time_indexed is (M,T) with NaT for padded days
     time_indexed = (
         time_da.assign_coords(
             M=(time_dim, dkey.values), T=(time_dim, time_da.dt.day.values)
@@ -147,12 +170,14 @@ def add_month_day_dims(
         .reindex(T=np.arange(1, 32), M=month_keys)
     )
 
-    # determine day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
+    # month-of_year (moy), day-of-year (doy) [and hour-of-day (hod) if applicable], fill NaT with 0 inplace
     # here we choose to use the tropical year length (365.2422 day, which we round to 365.24) as the
     # period to return to the position of the sun relative to the Earth
+    moy_period = 12.0
     doy_period = 365.24
     hod_period = 24.0
 
+    moy = time_indexed.dt.month.fillna(0)
     doy = time_indexed.dt.dayofyear.fillna(0)
 
     if "hour" in dir(time_indexed.dt):
@@ -161,12 +186,22 @@ def add_month_day_dims(
         hod = xr.zeros_like(doy)
 
     # create phase from day and hod
+    moy_phase = 2 * np.pi * (moy - 1.0) / moy_period
     doy_phase = 2 * np.pi * doy / doy_period
     hod_phase = 2 * np.pi * hod / hod_period
 
-    # Stack cyclic encodings into time_features (M,T,2)
-    time_features = xr.concat([doy_phase, hod_phase], dim="feature").transpose(
-        "M", "T", "feature"
+    # Stack cyclic encodings into time_features (M,T,3)
+    time_features = xr.concat(
+        [moy_phase, doy_phase, hod_phase], dim="feature"
+    ).transpose("M", "T", "feature")
+
+    # fix chunks
+    time_features = time_features.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "feature": -1,
+        }
     )
 
     return daily_indexed, monthly_m, padded_days_mask, time_features
@@ -195,7 +230,7 @@ def pred_to_numpy(pred, orig_H=None, orig_W=None, land_mask=None):
     return pred.detach().cpu().numpy()
 
 
-def calc_stats(arr: np.ndarray, mean_axis: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+def calc_stats(arr: np.ndarray, mean_axis: int = 0) -> tuple[np.ndarray, np.ndarray]:
     """Calculate mean and std along the specified axis, ignoring NaNs.
 
     Args:
@@ -226,7 +261,8 @@ def set_seed(seed: int = 42):
 def setup_logging(log_dir: str) -> SummaryWriter:
     """Set up TensorBoard logging directory and writer."""
     Path(log_dir).mkdir(parents=True, exist_ok=True)
-    return SummaryWriter(log_dir)
+    timestamp_utc = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
+    return SummaryWriter(log_dir, filename_suffix=f"_UTC{timestamp_utc}")
 
 
 def compute_masked_loss(
@@ -249,19 +285,157 @@ def compute_masked_loss(
     return (num / denom).mean()
 
 
-def save_model(model: torch.nn.Module, run_dir: str, verbose: bool) -> None:
+def save_model(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    run_dir: str,
+    filename="best_model.pth",
+    verbose: bool = True,
+) -> None:
     """Save model state and config to disk."""
-    model_path = Path(run_dir) / "best_model.pth"
+    Path(run_dir).mkdir(parents=True, exist_ok=True)
+    model_path = Path(run_dir) / filename
+    model = model.module if hasattr(model, "module") else model
     torch.save(
-        {"model_state_dict": model.state_dict(), "model_config": model.config},
+        {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "model_config": model.config,
+        },
         model_path,
     )
     if verbose:
         print(f"Model saved to {model_path}")
 
 
+def load_model(model_path: str, device: str):
+    """Helper function to load a model from a checkpoint."""
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    model = SpatioTemporalModel(**checkpoint["model_config"])
+    model.load_state_dict(checkpoint["model_state_dict"])
+    return model.to(device)
+
+
+def add_month_hour_dims(
+    hourly_ts: xr.DataArray,  # (time, H, W) hourly
+    monthly_ts: xr.DataArray,  # (time, H, W) monthly
+    time_dim: str = "time",
+    spatial_dims: tuple[str, str] = ("lat", "lon"),
+):
+    """Reshape hourly and monthly data to have explicit month (M) and hour (T) dimensions.
+
+    Here we assume maximum 31 days in a month with 24 hours per day = 744 hours maximum.
+    Invalid hour entries will be padded with NaN.
+
+    Returns
+    -------
+    hourly_m : xr.DataArray - dims: (M, T=744, H, W)
+    monthly_m : xr.DataArray - dims: (M, H, W)
+    padded_hours_mask : xr.DataArray - dims: (M, T=744), bool, True where hour is padded
+    time_features : xr.DataArray - dims: (M, T=744, 2)
+    """
+    # Month key as integer YYYYMM
+    hkey = hourly_ts[time_dim].dt.year * 100 + hourly_ts[time_dim].dt.month
+    mkey = monthly_ts[time_dim].dt.year * 100 + monthly_ts[time_dim].dt.month
+
+    # Unique month keys preserving order
+    _, idx = np.unique(hkey.values, return_index=True)
+    month_keys = hkey.values[np.sort(idx)]
+
+    # Create hour-of-month coordinate (1-744)
+    # hour_of_month = (day_of_month - 1) * 24 + hour_of_day + 1
+    day_of_month = hourly_ts[time_dim].dt.day.values
+    hour_of_day = hourly_ts[time_dim].dt.hour.values
+    hour_of_month = (day_of_month - 1) * 24 + hour_of_day + 1
+
+    # Add M (month key) and T (hour of month) coordinates to hourly data
+    hourly_indexed = (
+        hourly_ts.assign_coords(M=(time_dim, hkey.values), T=(time_dim, hour_of_month))
+        .set_index({time_dim: ("M", "T")})
+        .unstack(time_dim)
+        .reindex(T=np.arange(1, 745), M=month_keys)  # 744 = 31 days * 24 hours
+    )
+
+    # fix chunks
+    hourly_indexed = hourly_indexed.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "lat": 100,
+            "lon": 100,
+        }
+    )
+
+    # Force dim order: (M, T, H, W)
+    other_dims = [d for d in hourly_ts.dims if d != time_dim]
+    hourly_indexed = hourly_indexed.transpose("M", "T", *other_dims)
+
+    # Build padded hours mask from hourly_indexed (NaN locations)
+    padded_hours_mask = ~hourly_indexed.notnull().any(dim=spatial_dims)
+
+    # Preserve the original time coordinates for monthly data (M,)
+    month_time = xr.DataArray(
+        monthly_ts[time_dim].values,
+        dims="M",
+        coords={"M": mkey.values},
+    )
+
+    # Align monthly data to same month keys/order
+    monthly_m = (
+        monthly_ts.assign_coords(M=(time_dim, mkey.values))
+        .swap_dims({time_dim: "M"})
+        .drop_vars(time_dim)
+        .sel(M=month_keys)
+        .assign_coords(M=month_time.sel(M=month_keys).values)
+    )
+
+    # Build aligned datetime array (M, T)
+    time_da = hourly_ts[time_dim]
+
+    # time_indexed is (M, T) with NaT for padded hours
+    time_indexed = (
+        time_da.assign_coords(M=(time_dim, hkey.values), T=(time_dim, hour_of_month))
+        .set_index({time_dim: ("M", "T")})
+        .unstack(time_dim)
+        .reindex(T=np.arange(1, 745), M=month_keys)
+    )
+
+    # Determine month-of-year, day-of-year (doy) and hour-of-day (hod)
+    moy_period = 12.0
+    doy_period = 365.24
+    hod_period = 24.0
+
+    moy = time_indexed.dt.month.fillna(0)
+    doy = time_indexed.dt.dayofyear.fillna(0)
+    hod = time_indexed.dt.hour.fillna(0)
+
+    # Create phase from month, day and hour
+    moy_phase = 2 * np.pi * (moy - 1.0) / moy_period
+    doy_phase = 2 * np.pi * doy / doy_period
+    hod_phase = 2 * np.pi * hod / hod_period
+
+    # Stack cyclic encodings into time_features (M, T, 3)
+    time_features = xr.concat(
+        [moy_phase, doy_phase, hod_phase], dim="feature"
+    ).transpose("M", "T", "feature")
+
+    # fix chunks
+    time_features = time_features.chunk(
+        {
+            "M": 1,
+            "T": -1,
+            "feature": -1,
+        }
+    )
+
+    return hourly_indexed, monthly_m, padded_hours_mask, time_features
+
+
 def configure_compute_resources(
-    model: torch.nn.Module, device: str, compute_threads: int, dataloader_num_workers: int
+    model: torch.nn.Module,
+    device: str,
+    compute_threads: int,
+    dataloader_num_workers: int,
 ) -> torch.nn.Module:
     """Configure model for multi-GPU and set CPU thread usage for compute (training or prediction).
 
@@ -289,18 +463,17 @@ def configure_compute_resources(
 
 
 def plot_results(
-        target, predictions, label="SST K", title=("Target", "Prediction"), error=False
-    ):
-
+    target, predictions, label="SST K", title=("Target", "Prediction"), error=False
+):
     fig, axs = plt.subplots(
         nrows=len(target.time),
         ncols=2,
-        figsize=(10, 8),
-        constrained_layout=True
+        figsize=(10, 5),
+        constrained_layout=True,
+        squeeze=False,
     )
 
     for t in range(len(target.time)):
-
         # Select data for this timestep
         target_t = target.isel(time=t)
         pred_t = predictions.isel(time=t)
@@ -312,73 +485,409 @@ def plot_results(
         abs_max = max(abs(target_min), abs(target_max), abs(pred_min), abs(pred_max))
 
         norm = None
-        cmap = "RdBu"
+        cmap = "RdBu_r"
         if error:
             norm = TwoSlopeNorm(vmin=-abs_max, vcenter=0.0, vmax=abs_max)
             cmap = "RdBu_r"
 
         # Left: truth
-        im0 = target_t.plot(
-            ax=axs[t, 0],
-            cmap=cmap,
-            norm=norm,
-            add_colorbar=False
-        )
+        _ = target_t.plot(ax=axs[t, 0], cmap=cmap, norm=norm, add_colorbar=False)
 
         # Right: prediction
-        im1 = pred_t.plot(
-            ax=axs[t, 1],
-            cmap=cmap,
-            norm=norm,
-            add_colorbar=False
-        )
+        im1 = pred_t.plot(ax=axs[t, 1], cmap=cmap, norm=norm, add_colorbar=False)
         title_1, title_2 = title
-        axs[t, 0].set_title(f"{title_1}, month={t+1}")
-        axs[t, 1].set_title(f"{title_2}, month={t+1}")
+        axs[t, 0].set_title(
+            f"{title_1}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
+        )
+        axs[t, 1].set_title(
+            f"{title_2}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
+        )
 
         # One shared colorbar for the row
-        cbar = fig.colorbar(
-            im1,
-            ax=axs[t, :],
-            orientation="vertical",
-            shrink=0.9
-        )
+        cbar = fig.colorbar(im1, ax=axs[t, :], orientation="vertical", shrink=0.9)
 
         cbar.set_label(label)
 
     plt.show()
 
 
-def plot_histograms(target, predictions, label="SST K", title=("Target", "Prediction")):
-    fig, axs = plt.subplots(
+def plot_histograms(
+    target, predictions, label="SST K", legend_labels=("Target", "Prediction"), bins=30
+):
+    """Plot histograms of target and predictions in the same figure for comparison."""
+    _, axs = plt.subplots(
         nrows=len(target.time),
-        ncols=2,
-        figsize=(12, 4 * len(target.time)),
-        constrained_layout=True
+        ncols=1,
+        figsize=(8, 4 * len(target.time)),
+        constrained_layout=True,
+        squeeze=False,
     )
-
-    # Handle single timestep case
-    if len(target.time) == 1:
-        axs = axs.reshape(1, -1)
 
     for t in range(len(target.time)):
         target_t = target.isel(time=t)
         pred_t = predictions.isel(time=t)
 
-        title_1, title_2 = title
-
         # Target histogram
-        axs[t, 0].hist(target_t.values.flatten(), bins=30, alpha=0.7, color='blue', density=True)
-        axs[t, 0].set_title(f"{title_1} Histogram, month={t+1}")
+        axs[t, 0].hist(
+            target_t.values.flatten(), bins=bins, alpha=0.7, color="blue", density=True
+        )
         axs[t, 0].set_xlabel(label)
-        axs[t, 0].set_ylabel("Frequency")
+        axs[t, 0].set_ylabel("Probability Density")
         axs[t, 0].grid(True, alpha=0.3)
 
-        # Prediction histogram
-        axs[t, 1].hist(pred_t.values.flatten(), bins=30, alpha=0.7, color='orange', density=True)
-        axs[t, 1].set_title(f"{title_2} Histogram, month={t+1}")
-        axs[t, 1].set_xlabel(label)
-        axs[t, 1].set_ylabel("Frequency")
-        axs[t, 1].grid(True, alpha=0.3)
+        # Prediction histogram (overlaid)
+        axs[t, 0].hist(
+            pred_t.values.flatten(), bins=bins, alpha=0.7, color="orange", density=True
+        )
+        axs[t, 0].legend(legend_labels)
+        axs[t, 0].set_title(
+            f"Histogram {legend_labels[0]} vs {legend_labels[1]}, month={target.time.dt.strftime('%Y-%m-%d').values[t]}"
+        )
 
     plt.show()
+
+
+def data_split(
+    data_folder,
+    filename_pattern="*_hr_ERA5dc_masked_tos.nc",
+    train_range=(2018, 2020),
+    validation_range=(2021, 2021),
+    test_range=(2022, 2022),
+):
+    """
+    Split the data into training, validation, and test sets based on the provided year ranges.
+    """
+    data_folder = Path(data_folder)
+
+    splits = {
+        "train": [],
+        "validation": [],
+        "test": [],
+    }
+
+    for file in data_folder.rglob(filename_pattern):
+        year = int(file.stem[:4])
+
+        if train_range[0] <= year <= train_range[1]:
+            splits["train"].append(file)
+        if validation_range[0] <= year <= validation_range[1]:
+            splits["validation"].append(file)
+        if test_range[0] <= year <= test_range[1]:
+            splits["test"].append(file)
+
+    for lst in splits.values():
+        lst.sort()
+
+    return splits
+
+
+def plot_nobs_vs_err(
+    nobs: xr.DataArray, err_baseline: xr.DataArray, err_predictions: xr.DataArray
+):
+    """Plot number of observations vs error for each month.
+
+    The three inputs are expected to be xarray DataArrays with dimensions (time, lat, lon).
+    They should share the same spatial and temporal coordinates.
+
+    Args:
+        nobs (xr.DataArray): Number of observations per grid cell per month. Dimensions: (time, lat, lon)
+        err_baseline (xr.DataArray): Baseline error per grid cell per month. Dimensions: (time, lat, lon)
+        err_predictions (xr.DataArray): Prediction error per grid cell per month. Dimensions: (time, lat, lon)
+    """
+    _, axes = plt.subplots(nobs.sizes["time"], 1, figsize=(5 * nobs.sizes["time"], 8))
+    if nobs.sizes["time"] == 1:
+        axes = [axes]
+
+    for i, ax in enumerate(axes):
+        ax.set_title(f"Month = {err_baseline.time.dt.strftime('%Y-%m-%d').values[i]}")
+
+        # Get unique number of observations for this month, ignoring NaNs and zeros
+        n_obs_unique = np.unique(nobs.isel(time=i).values)
+        n_obs_unique = n_obs_unique[(~np.isnan(n_obs_unique)) & (n_obs_unique > 0)]
+        n_obs_unique = n_obs_unique.astype(int)
+
+        err_by_n_obs_baseline = []
+        err_by_n_obs_predictions = []
+
+        for id_obs in n_obs_unique:
+            # Baseline error
+            err_arr = (
+                err_baseline.isel(time=i)
+                .where(nobs.isel(time=i) == id_obs)
+                .values.flatten()
+            )
+            err_arr = err_arr[~np.isnan(err_arr)]
+            if len(err_arr) == 0:
+                err_arr = np.array([np.nan])
+            err_by_n_obs_baseline.append(np.abs(err_arr))
+
+            # Prediction error
+            err_arr = (
+                err_predictions.isel(time=i)
+                .where(nobs.isel(time=i) == id_obs)
+                .values.flatten()
+            )
+            err_arr = err_arr[~np.isnan(err_arr)]
+            if len(err_arr) == 0:
+                err_arr = np.array([np.nan])
+            err_by_n_obs_predictions.append(np.abs(err_arr))
+
+        h1 = ax.violinplot(
+            err_by_n_obs_baseline,
+            positions=n_obs_unique,
+            showmedians=True,
+            showextrema=True,
+            points=500,
+        )
+        h2 = ax.violinplot(
+            err_by_n_obs_predictions,
+            positions=n_obs_unique,
+            showmedians=True,
+            showextrema=True,
+            points=500,
+        )
+
+        # Style: thinner outlines + less prominent extrema
+        for body in h1["bodies"]:
+            body.set_facecolor("tab:blue")
+            body.set_edgecolor("tab:blue")
+            body.set_alpha(0.45)
+            body.set_linewidth(0.5)
+
+        for body in h2["bodies"]:
+            body.set_facecolor("tab:orange")
+            body.set_edgecolor("tab:orange")
+            body.set_alpha(0.45)
+            body.set_linewidth(0.5)
+
+        for h in (h1, h2):
+            h["cmedians"].set_linewidth(0.9)
+            h["cmedians"].set_alpha(0.9)
+
+            h["cbars"].set_linewidth(0.35)
+            h["cbars"].set_alpha(0.2)
+            h["cmins"].set_linewidth(0.35)
+            h["cmins"].set_alpha(0.2)
+            h["cmaxes"].set_linewidth(0.35)
+            h["cmaxes"].set_alpha(0.2)
+
+        ax.set_xlabel("Number of Observations")
+        ax.set_ylabel("Symmetric log-scaled Absolute Error (K)")
+
+        # Non-linear y-axis: keeps detail near 0 and compresses larger values.
+        ax.set_yscale("symlog", linthresh=0.05, linscale=0.8, base=10)
+
+        # Show major ticks as plain decimals instead of scientific/log notation.
+        ax.yaxis.set_major_locator(
+            mticker.SymmetricalLogLocator(base=10, linthresh=0.05)
+        )
+        ax.yaxis.set_major_formatter(
+            mticker.FuncFormatter(lambda y, _: f"{y:.3f}".rstrip("0").rstrip("."))
+        )
+        ax.yaxis.set_minor_formatter(mticker.NullFormatter())
+
+        ax.legend(
+            [h1["bodies"][0], h2["bodies"][0]],
+            ["Baseline", "Prediction"],
+            loc="upper right",
+        )
+
+    plt.tight_layout()
+
+
+def plot_loss(
+    run_dir: str | Path,
+    list_loss_var: list[str],
+    unit: str = "K",
+    figsize: tuple[int, int] = (10, 5),
+):
+    """Plot training and validation loss from TensorBoard logs.
+
+    Args:
+        run_dir (str | Path): Directory containing TensorBoard logs.
+        list_loss_var (list[str]): List of loss variable names to plot.
+        unit (str, optional): Unit of the loss values. Defaults to "K".
+        figsize (Tuple[int, int], optional): Size of the figure. Defaults to (10, 5).
+    """
+    # Load saved training status with tbparse.SummaryReader
+    reader = SummaryReader(run_dir)
+
+    # plot training and validation loss
+    plt.figure(figsize=figsize)
+    for loss_var in list_loss_var:
+        loss = reader.scalars[reader.scalars["tag"] == loss_var]
+        plt.plot(loss["step"], loss["value"], label=loss_var)
+    plt.xlabel("Step")
+    plt.ylabel(f"Average loss per epoch ({unit})")
+    plt.legend()
+
+
+def data_preparation(
+    input_data: xr.DataArray,
+    monthly_data: xr.DataArray,
+    time_dim="time",
+    run_dir=".",
+    calculate_residuals=True,
+    is_hourly=False,
+    save_to_zarr=False,
+):
+    """Prepare the data for training.
+
+    Args:
+        input_data (xr.DataArray): The input data (daily or hourly).
+        monthly_data (xr.DataArray): The monthly data.
+        time_dim (str): The name of the time dimension in the data arrays.
+        run_dir (str): Directory to save the preprocessed data.
+        calculate_residuals (bool): Whether to calculate residuals between input and monthly data.
+        is_hourly (bool): Whether the input data is hourly (True) or daily (False).
+        save_to_zarr (bool): Whether to save the preprocessed data to zarr files.
+    Returns:
+        tuple: A tuple containing the following xarray.DataArray objects:
+            - input_da: The reshaped input data with dimensions (M, T, H, W).
+            - input_da_nan_mask: A boolean mask indicating NaN locations in the input data.
+            - monthly_da: The reshaped monthly data with dimensions (M, H, W).
+            - padded_days_mask: A boolean mask indicating padded days/hours in the input data.
+            - time_features: A DataArray containing cyclic time features (month, day, hour).
+
+    """
+    if time_dim not in input_data.dims or time_dim not in monthly_data.dims:
+        raise ValueError(f"Time dimension '{time_dim}' not found in input data")
+
+    var_name = input_data.name
+    if not var_name:
+        raise ValueError("Input data must have a name (variable name)")
+
+    if calculate_residuals:
+        input_data_averaged = input_data.resample({time_dim: "MS"}).mean(skipna=True)
+        input_data_averaged[time_dim] = monthly_data[time_dim]
+        monthly_data_res = monthly_data - input_data_averaged
+    else:
+        monthly_data_res = monthly_data
+
+    if is_hourly:
+        # hours_per_day == 24
+        # Reshape daily → (M, T=31*24, H, W), monthly → (M, H, W),
+        # and get padded_days_mask → (M, T=31*24)
+        input_da, monthly_da, padded_days_mask, time_features = add_month_hour_dims(
+            input_data, monthly_data_res, time_dim=time_dim
+        )
+    else:
+        # Reshape daily → (M, T=31, H, W), monthly → (M, H, W),
+        # and get padded_days_mask → (M, T=31)
+        input_da, monthly_da, padded_days_mask, time_features = add_month_day_dims(
+            input_data, monthly_data_res, time_dim=time_dim
+        )
+
+    # Precompute the NaN mask before filling NaNs
+    # input_da_nan_mask: True where NaN (i.e. missing ocean data, not land)
+    input_da_nan_mask = input_da.isnull()
+
+    # NaNs will be filled with 0 in-place
+    input_da = input_da.fillna(0.0).astype("float32")
+
+    monthly_da = monthly_da.astype("float32")
+
+    # rechunk data
+    input_da = input_da.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
+    input_da_nan_mask = input_da_nan_mask.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
+    monthly_da = monthly_da.chunk({"M": 1, "lat": 100, "lon": 100})
+    padded_days_mask = padded_days_mask.chunk({"M": 1})
+    time_features = time_features.chunk({"M": 1})
+
+    # set names
+    input_da_nan_mask.name = var_name
+    monthly_da.name = var_name
+    time_features.name = var_name
+    padded_days_mask.name = var_name
+
+    # compression for boolean masks
+    encoding_input_da_nan_mask = {
+        input_da_nan_mask.name: {
+            "dtype": "bool",
+            "compressor": numcodecs.Blosc(
+                cname="zstd",
+                clevel=3,
+                shuffle=numcodecs.Blosc.BITSHUFFLE,
+            ),
+        }
+    }
+
+    encoding_padded_days_mask = {
+        padded_days_mask.name: {
+            "dtype": "bool",
+            "compressor": numcodecs.Blosc(
+                cname="zstd",
+                clevel=3,
+                shuffle=numcodecs.Blosc.BITSHUFFLE,
+            ),
+        }
+    }
+
+    if save_to_zarr:
+        # Create the run directory if it doesn't exist
+        data_path = Path(run_dir).resolve()
+        data_path.mkdir(parents=True, exist_ok=True)
+
+        input_da_path = data_path / "input_da.zarr"
+        input_da_nan_mask_path = data_path / "input_da_nan_mask.zarr"
+        monthly_da_path = data_path / "monthly_da.zarr"
+        padded_days_mask_path = data_path / "padded_days_mask.zarr"
+        time_features_path = data_path / "time_features.zarr"
+
+        # these will be saved as xr.Dataset
+        input_da.to_zarr(input_da_path, mode="w", zarr_format=2, consolidated=True)
+        input_da_nan_mask.to_zarr(
+            input_da_nan_mask_path,
+            mode="w",
+            encoding=encoding_input_da_nan_mask,
+            zarr_format=2,
+            consolidated=True,
+        )
+        monthly_da.to_zarr(monthly_da_path, mode="w", zarr_format=2, consolidated=True)
+        padded_days_mask.to_zarr(
+            padded_days_mask_path,
+            mode="w",
+            encoding=encoding_padded_days_mask,
+            zarr_format=2,
+            consolidated=True,
+        )
+        time_features.to_zarr(
+            time_features_path, mode="w", zarr_format=2, consolidated=True
+        )
+
+    return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
+
+
+def read_st_data(data_path=".", var_name="tos"):
+    """Read preprocessed spatio-temporal data from zarr files.
+    Args:
+        data_path (str): Path to the directory containing the zarr files.
+        var_name (str): Name of the variable to read from the zarr files.
+
+    Returns:
+        tuple: A tuple containing the following xarray.DataArray objects:
+            - input_da
+            - input_da_nan_mask
+            - monthly_da
+            - padded_days_mask
+            - time_features
+    """
+
+    # make filenames
+    data_path = Path(data_path).resolve()
+
+    input_da_path = data_path / "input_da.zarr"
+    input_da_nan_mask_path = data_path / "input_da_nan_mask.zarr"
+    monthly_da_path = data_path / "monthly_da.zarr"
+    padded_days_mask_path = data_path / "padded_days_mask.zarr"
+    time_features_path = data_path / "time_features.zarr"
+
+    # Check if the zarr files already exist, if so, open them and return the datasets
+    input_da = xr.open_zarr(input_da_path)[var_name]
+    input_da_nan_mask = xr.open_zarr(input_da_nan_mask_path)[var_name]
+    monthly_da = xr.open_zarr(monthly_da_path)[var_name]
+    padded_days_mask = xr.open_zarr(padded_days_mask_path)[var_name]
+    time_features = xr.open_zarr(time_features_path)[var_name]
+
+    # if one of the datasets is None, we need to compute them
+    return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
