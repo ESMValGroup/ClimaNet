@@ -2,7 +2,7 @@
 #SBATCH --job-name=training
 #SBATCH --partition=gpu
 #SBATCH --constraint=a100_80
-#SBATCH --nodes=20
+#SBATCH --nodes=5
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=128
 #SBATCH --gpus-per-task=4
@@ -17,9 +17,9 @@ set -euo pipefail
 source /home/b/b383704/eso4clima/ClimaNet/.venv/bin/activate
 
 # Prepared yearly zarr folders, e.g. /work/<account_id>/eso4clima/preprocessed/sst/
-PREPARED_DATA_DIR="/work/bd0854/eso4clima/preprocessed/sst"
+PREPARED_DATA_DIR="/home/b/b383704/eso4clima/data/preprocessed_data/"
 LSM_FILE_PATH="/home/b/b383704/eso4clima/data/era5_lsm_bool.nc"
-RUN_DIR="/home/b/b383704/eso4clima/run_training_three_year/run"
+RUN_DIR="/home/b/b383704/eso4clima/train_three_years/run"
 
 python -u /home/b/b383704/eso4clima/ClimaNet/scripts/training.py \
   --prepared-data-dir "$PREPARED_DATA_DIR" \
