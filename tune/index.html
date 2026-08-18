@@ -9,10 +9,6 @@
       
       
       
-        <link rel="prev" href="..">
-      
-      
-        <link rel="next" href="../api/st_encoder_decoder/">
       
       
         
@@ -23,7 +19,7 @@
     
     
       
-        <title>Examples - ClimaNet</title>
+        <title>Tune - ClimaNet</title>
       
     
     
@@ -116,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Examples
+              Tune
             
           </span>
         </div>
@@ -238,11 +234,9 @@
   
   
   
-    
   
-  
-    <li class="md-tabs__item md-tabs__item--active">
-      <a href="./" class="md-tabs__link">
+    <li class="md-tabs__item">
+      <a href="../examples/" class="md-tabs__link">
         
   
   
@@ -357,37 +351,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Examples
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
         
   
   
@@ -403,65 +370,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#prediction-of-monthly-sst" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prediction of Monthly SST
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Prediction of Monthly SST">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#setting-patch-sizes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Setting patch sizes
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hyperparameter-tuning" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hyperparameter tuning
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -606,22 +514,77 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prediction-of-monthly-sst" class="md-nav__link">
+  <a href="#hyperparameter-tuning-on-hpc" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prediction of Monthly SST
+        Hyperparameter tuning on HPC
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Prediction of Monthly SST">
+    <nav class="md-nav" aria-label="Hyperparameter tuning on HPC">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#setting-patch-sizes" class="md-nav__link">
+  <a href="#data-preparation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Setting patch sizes
+        Data preparation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#static-configuration-of-ray-tune" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static configuration of Ray Tune
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-space-configuration-of-ray-tune" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search space configuration of Ray Tune
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uv-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UV environment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slurm-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Slurm script
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ray-tune-distributed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ray Tune distributed
       
     </span>
   </a>
@@ -630,17 +593,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hyperparameter-tuning" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hyperparameter tuning
-      
-    </span>
-  </a>
   
 </li>
       
@@ -665,74 +617,126 @@
 
 
 <h1 id="_1"></h1>
-<h2 id="prediction-of-monthly-sst">Prediction of Monthly SST</h2>
-<p>We provide an example of how to use the <code>st_encoder_decoder</code> module to predict
-monthly sea surface temperature (SST) using a spatio-temporal encoder-decoder
-architecture. The example is implemented in a Jupyter notebook, which can be
-found in the <code>notebooks</code> directory.</p>
-<h3 id="setting-patch-sizes">Setting patch sizes</h3>
-<p>In the example notebook, there are two patch sizes that need to be set: the
-spatial patch size in <code>SpatioTemporalModel</code> and the spatial patch size in
-<code>STDataset</code>. These are two different patch sizes with different purposes. Here
-we called them <code>model_patch_size</code> and <code>dataset_patch_size</code> and explained what to
-consider when setting these two patch sizes.</p>
+<h2 id="hyperparameter-tuning-on-hpc">Hyperparameter tuning on HPC</h2>
+<p>In ClimaNet, we implement the hyperparameter tuning using <a href="https://docs.ray.io/en/latest/tune/index.html">Ray
+Tune</a>. An example is implemented
+in a Jupyter notebook, which can be found in the <code>notebooks</code> directory.</p>
+<p>But here we provide some practical tips on hyperparameter tuning on HPC using
+GPU nodes. The scripts including configs for hyperparameter tuning can be found
+in the <code>scripts</code> directory.</p>
+<h3 id="data-preparation">Data preparation</h3>
+<p>For hyperparameter tuning, we use three subsets of train/validation/test data.
+The train and validation data are used in training workflow to calculate the
+loss and validation metrics. We use continuous data for example year 2020 for
+training, 2021 for validation, and 2022 for testing. The test data is used to
+evaluate the model performance after training. The test data is not used in
+training or validation. It is common that after hyperparameter tuning, the model
+is retrained, and then evaluated on a test data. See the python script
+<code>tuning.py</code> in the <code>scripts</code> directory.</p>
+<h3 id="static-configuration-of-ray-tune">Static configuration of Ray Tune</h3>
+<p>Here an example of static configuration of Ray Tune. This parameters are not
+used in the hyperparameter tuning. The parameters are set in the <code>tuning.py</code>
+script in the <code>scripts</code> directory:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">static_args</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>        <span class="s2">"max_num_epochs"</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="s2">"num_trials"</span><span class="p">:</span> <span class="mi">50</span><span class="p">,</span>  <span class="c1"># this is num_samples in ray.tune.TuneConfig</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="s2">"cpu_per_trial"</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="s2">"gpu_per_trial"</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="s2">"run_dir"</span><span class="p">:</span> <span class="n">args</span><span class="o">.</span><span class="n">storage_path</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        <span class="s2">"device"</span><span class="p">:</span> <span class="s2">"cuda"</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="s2">"dataloader_num_workers"</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="s2">"data_config_train"</span><span class="p">:</span> <span class="n">data_config_train</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="s2">"data_config_validation"</span><span class="p">:</span> <span class="n">data_config_validation</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="s2">"num_epoch"</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="s2">"max_concurrent_trials"</span><span class="p">:</span> <span class="n">args</span><span class="o">.</span><span class="n">num_nodes</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span>  <span class="c1"># less than GPUs per node (4) avoid OOM</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="s2">"experiment_name"</span><span class="p">:</span> <span class="s2">"climanet_tune"</span><span class="p">,</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="p">}</span>
+</code></pre></div>
 <ul>
 <li>
-<p>model_patch_size: this is used in <code>VideoEncoder</code> where a video is split into
-  non-overlapping spatio-temporal patches using a 3D convolution. The patch size
-  should be set based on the spatial scale of the input data and the desired
-  level of spatial abstraction. A larger patch size will capture more spatial
-  context and fits in memory but may also lead to a loss of fine-grained
-  details. A smaller patch size will capture finer details with higher costs but
-  may also lead to a loss of broader context.</p>
+<p>We dont use ray object store for data but we pass the data config to each
+  trial. This is because the data is large and we want to avoid OOM. The data is
+  loaded in each trial from disk.</p>
 </li>
 <li>
-<p>dataset_patch_size: this is used in <code>STDataset</code> where the input data is split
-  into (non-overlapping) spatial patches to manage memory in training and
-  inference. The overlapping patches is disable because the loss function is
-  computed on each patch icluding gaps. Otherwise, some pixels will be included
-  in loss computation multiple times. The patch size should be set based on the
-  available computational resources and spatial variability of the input data.
-  The <code>dataset_patch_size</code> should be divisible by <code>model_patch_size</code>. We have to
-  make sure that data is represntive enough for training purposes. Note that
-  large <code>dataset_patch_size</code> might lead to memory issues during training and
-  inference. During inference on a larger spatial extent, you'll need to handle
-  stitching the patches.</p>
+<p>The <code>max_num_epochs</code> is set to be 100. This is the maximum number of epochs
+  for each trial. The training will stop if the model converges before reaching
+  this number. This is set based on our experiments. You can adjust this number
+  based on your data and model.
+ The <code>num_trials</code> is set to be 50. This is the number of trials for
+  hyperparameter tuning. You can adjust this number based on your data and
+  model. But for deep learning models, this is usually enough to explore the
+  hyperparameter space.</p>
 </li>
-<li>
-<p>spatial extent of input data: the input data might be used for train_test
-  split or for inference. If a model is trained on a specific
-  <code>dataset_patch_size</code>, the same <code>dataset_patch_size</code> should be used for
-  inference. If the spatial extent of the input data is larger than the
-  <code>dataset_patch_size</code>, the dataloader can be used to split the input data into
-  patches in inference and the results can be stitched together to get the final
-  prediction.Also, you may need to preprocess the predictions for
-  edge effect because of non-overlapping patches.</p>
-</li>
+<li>The <code>cpu_per_trial</code> is set to be 10 and <code>gpu_per_trial</code> is set to be 1. When
+  using Ray Tune with multiple nodes, it is recommended to use 1 GPU for model
+  training.</li>
+<li>The <code>run_dir</code> should be set to <code>SCRATCH</code> directory where nodes have access to,
+  and it is used to store the results of each trial. Remember after tuning, to
+  copy the results to project because the SCRATCH directory has usually an
+  expiration date.</li>
+<li>The <code>dataloader_num_workers</code> is set to be 4. This should not be too large to
+  avoid resource overload.</li>
+<li>The <code>max_concurrent_trials</code> is set to be less than the number of GPUs per node
+  to avoid OOM. In this example, we have 4 GPUs per node, but we set
+  <code>max_concurrent_trials</code> to 2 per node.</li>
 </ul>
-<p>! Note: It is better to have larger <code>dataset_patch_size</code> and smaller <code>model_patch_size</code>.</p>
-<ul>
-<li>
-<p>Hyperparameters: In the example notebook, we didn't set the hyperparameters
-  based on any tuning or training. These parameters especially
-  <code>model_patch_size</code>, <code>dataset_patch_size</code>, <code>batch_size</code>, <code>overlap</code>, and <code>number
-  of epochs</code> can affect the model's performance. Note that the number of batches
-  should be always larger than 1 to avoid overfitting.</p>
-</li>
-<li>
-<p>accumulation_step: in training loop we use <code>accumulation_step</code>.  Gradient
-accumulation is a technique to simulate a larger batch size when memory is
-limited. <code>batch_size</code> is the number of samples processed before one gradient
-update.Start with accumulation_steps = 1 (no accumulation) Adjust based on
-training behavior i.e. noisy predictions or overfitting.</p>
-</li>
-</ul>
-<h2 id="hyperparameter-tuning">Hyperparameter tuning</h2>
-<p>We provide an example of how to do hyperparameter tuning using <a href="https://docs.ray.io/en/latest/tune/index.html">Ray
-Tune</a>. The example is implemented
-in a Jupyter notebook, which can be found in the <code>notebooks</code> directory. For
-practical tips on hyperparameter tuning on HPC, please see to the <a href="../tune/">tuning
-documentation</a>.</p>
+<h3 id="search-space-configuration-of-ray-tune">Search space configuration of Ray Tune</h3>
+<p>Here an example of search space configuration of Ray Tune. This parameters are
+used in the hyperparameter tuning. The parameters are set in the <code>tuning.py</code>
+script in the <code>scripts</code> directory:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">tune_config</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>        <span class="s2">"patch_size"</span><span class="p">:</span> <span class="n">tune</span><span class="o">.</span><span class="n">choice</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">]),</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="s2">"overlap"</span><span class="p">:</span> <span class="n">tune</span><span class="o">.</span><span class="n">choice</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]),</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        <span class="s2">"embed_dim"</span><span class="p">:</span> <span class="n">tune</span><span class="o">.</span><span class="n">choice</span><span class="p">([</span><span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">]),</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="s2">"dropout"</span><span class="p">:</span> <span class="n">tune</span><span class="o">.</span><span class="n">choice</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">]),</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="s2">"hidden"</span><span class="p">:</span> <span class="n">tune</span><span class="o">.</span><span class="n">choice</span><span class="p">([</span><span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">]),</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        <span class="s2">"spatial_depth"</span><span class="p">:</span> <span class="n">tune</span><span class="o">.</span><span class="n">choice</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]),</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>        <span class="s2">"spatial_heads"</span><span class="p">:</span> <span class="n">tune</span><span class="o">.</span><span class="n">choice</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">]),</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        <span class="s2">"optimizer_lr"</span><span class="p">:</span> <span class="n">tune</span><span class="o">.</span><span class="n">loguniform</span><span class="p">(</span><span class="mf">1e-3</span><span class="p">,</span> <span class="mf">1e-1</span><span class="p">),</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>        <span class="s2">"batch_config"</span><span class="p">:</span> <span class="n">tune</span><span class="o">.</span><span class="n">grid_search</span><span class="p">([</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>            <span class="p">{</span><span class="s2">"batch_size"</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span> <span class="s2">"accumulation_steps"</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>            <span class="p">{</span><span class="s2">"batch_size"</span><span class="p">:</span> <span class="mi">200</span><span class="p">,</span> <span class="s2">"accumulation_steps"</span><span class="p">:</span> <span class="mi">2</span><span class="p">},</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>            <span class="p">{</span><span class="s2">"batch_size"</span><span class="p">:</span> <span class="mi">400</span><span class="p">,</span> <span class="s2">"accumulation_steps"</span><span class="p">:</span> <span class="mi">2</span><span class="p">},</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>        <span class="p">]),</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="p">}</span>
+</code></pre></div>
+<p>We set the largest value in each parameter based on our experiments and
+available GPU memory. The smallest value is set based on the minimum value that
+we think is reasonable for the model. You can adjust these values based on your
+data and model.</p>
+<h3 id="uv-environment">UV environment</h3>
+<p>We use UV to create a virtual environment where <code>ClimaNet</code> and its dependencies
+are installed. Due to known multiprocessing cleanup race in the newest versions
+of python, pytorch multiprocessing/DataLoader workers and ray, you may get some
+warnings when multiprocessing is done in background. To avoid this, you can use
+a virtual environment with python 3.11. So in slurm script in the <code>scripts</code>
+directory, you see something like because we want to specify which python
+version to use:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">UV_ENV</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/climanet_py314"</span>
+</code></pre></div>
+<h3 id="slurm-script">Slurm script</h3>
+<p>A sbatch script is provided in the <code>scripts</code> directory. You can adjust the
+parameters in the script based on your data and model. The script will submit a
+job to the HPC cluster and run the hyperparameter tuning using the python script
+<code>tuning.py</code> in the <code>scripts</code> directory. The script will use the static
+configuration and search space configuration specified in the <code>tuning.py</code>
+script.</p>
+<p>The script will also save the results of each trial in the <code>run_dir</code> specified
+in the static configuration.</p>
+<p>The SBATCH parameters are according to the <a href="https://docs.dkrz.de/doc/levante/running-jobs/partitions-and-limits.html">DKRZ Levante
+limits</a>
+and <a href="https://docs.dkrz.de/doc/levante/running-jobs/using-gpu-nodes.html">GPU
+specifications</a>.
+You can adjust these parameters based on your cluster.</p>
+<h3 id="ray-tune-distributed">Ray Tune distributed</h3>
+<p>For setting Ray Tune distributed, checkout this <a href="https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm-template.html#slurm-template">Ray slurm
+example</a>.
+We dont use <code>ray symmetric-run</code> because it has issues with getting node ip
+addresses. Instead, we use <code>ray start --head</code> on the first node and <code>ray start
+--address</code> on the other nodes. We also set a few environment variables related
+to timeout for different components of Ray. The environment variables are set in
+the slurm script in the <code>scripts</code> directory.</p>
 
 
 
