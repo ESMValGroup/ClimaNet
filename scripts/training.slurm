@@ -20,16 +20,16 @@ UV_ENV="$HOME/climanet_py314"
 source "$UV_ENV/bin/activate"
 
 # Set the scratch directory because they are avialable to all nodes
-SCRATCH="/scratch/b/$USER/tune"
+RUN_DIR="/scratch/b/$USER/train"
 
 # data directory (adjust this path to your data location)
-PREPARED_DATA_DIR="$HOME/scratch/b/$USER/data"
-TUNE_DIR="$HOME/scratch/b/$USER/tune"
-LSM_DIR="$HOME/scratch/b/$USER/data"
+PREPARED_DATA_DIR="/scratch/b/$USER/data"
+TUNE_DIR="/scratch/b/$USER/tune"
+LSM_DIR="/scratch/b/$USER/data"
 
-echo "Starting tuning.py script..."
+echo "Starting training.py script..."
 python -u $HOME/ClimaNet/scripts/training.py \
-  --run-dir "$SCRATCH" \
+  --run-dir "$RUN_DIR" \
   --num-nodes "$SLURM_NNODES" \
   --prepared-data-dir "$PREPARED_DATA_DIR" \
   --tune-dir "$TUNE_DIR" \

@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     var_name = "tos"
     prepared_data_dir = Path(args.prepared_data_dir).resolve()
-    lsm_file_path = Path(args.lsm_dir).resolve()
+    lsm_dir = Path(args.lsm_dir).resolve()
     tune_dir = Path(args.tune_dir).resolve()
     run_dir = Path(args.run_dir).resolve()
 
@@ -88,7 +88,8 @@ if __name__ == "__main__":
     set_seed()
 
     # Build dataset for training and validation
-    lsm_mask = xr.open_dataset(lsm_file_path)  # make sure is dask array
+    lsm_file_path = lsm_dir / "era5_lsm_bool.nc"
+    lsm_mask = xr.open_dataset(lsm_file_path)["lsm"]  # make sure is dask array
 
     dataset_patch_size = (1, 40, 40)
     dataset_stride = (20, 20)
@@ -98,7 +99,7 @@ if __name__ == "__main__":
         prepared_data_dir=prepared_data_dir,
         years=train_years,
         var_name=var_name,
-        land_mask=lsm_mask["lsm"],
+        land_mask=lsm_mask,
         patch_size=dataset_patch_size,
         stride=dataset_stride,
     )
@@ -108,7 +109,7 @@ if __name__ == "__main__":
         prepared_data_dir=prepared_data_dir,
         years=validation_year,
         var_name=var_name,
-        land_mask=lsm_mask["lsm"],
+        land_mask=lsm_mask,
         patch_size=dataset_patch_size,
         stride=dataset_stride,
     )
