@@ -69,6 +69,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     var_name = "tos"
+    device = "cuda"
     prepared_data_dir = Path(args.prepared_data_dir).resolve()
     lsm_dir = Path(args.lsm_dir).resolve()
     tune_dir = Path(args.tune_dir).resolve()
@@ -111,13 +112,14 @@ if __name__ == "__main__":
 
     # Build the dataloader config
     dataloader_num_workers = 32  # adjust if needed
+    use_cuda = device == "cuda"
     dataloader_config = DataLoaderConfig(
-        batch_size=best_config["batch_config"]["batch_size"], # adjust if OOM issue
+        batch_size=500, # adjust if OOM issue
         shuffle=True,
         num_workers=dataloader_num_workers,
-        pin_memory=True,
+        pin_memory=use_cuda,
         persistent_workers=True,
-        device="cuda",
+        device=device,
         multiprocessing_context="spawn",
     )
 
@@ -143,7 +145,7 @@ if __name__ == "__main__":
     # move the model to GPU and configure compute resources
     model = configure_compute_resources(
         model,
-        device="cuda",
+        device=device,
         compute_threads=None,  # on gpu, it is not used
         dataloader_num_workers=dataloader_num_workers
     )
@@ -153,10 +155,10 @@ if __name__ == "__main__":
         calculate_residuals=True,
         num_epoch=101,
         patience=10,
-        accumulation_steps=best_config["batch_config"]["accumulation_steps"],
+        accumulation_steps=2,
         optimizer_lr=best_config["optimizer_lr"],
-        device="cuda",
-        verbose=False,
+        device=device,
+        verbose=True,
         verbose_epoch_interval=20,
         tune_checkpoint=False,
         store_model=True,
