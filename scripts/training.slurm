@@ -30,7 +30,6 @@ LSM_DIR="/scratch/b/$USER/data"
 echo "Starting training.py script..."
 python -u $HOME/ClimaNet/scripts/training.py \
   --run-dir "$RUN_DIR" \
-  --num-nodes "$SLURM_NNODES" \
   --prepared-data-dir "$PREPARED_DATA_DIR" \
   --tune-dir "$TUNE_DIR" \
   --lsm-dir "$LSM_DIR"

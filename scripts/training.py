@@ -52,11 +52,6 @@ if __name__ == "__main__":
         default=Path("./run_dir").resolve(),
     )
     parser.add_argument(
-        "--num-nodes",
-        type=int,
-        default=1,
-    )
-    parser.add_argument(
         "--prepared-data-dir",
         type=str,
         default=Path("./data").resolve(),
@@ -115,8 +110,7 @@ if __name__ == "__main__":
     )
 
     # Build the dataloader config
-    compute_threads = args.num_nodes - 2  # leave 2 threads for other processes
-    dataloader_num_workers = compute_threads // 4  # use integer division
+    dataloader_num_workers = 32  # adjust if needed
     dataloader_config = DataLoaderConfig(
         batch_size=best_config["batch_config"]["batch_size"], # adjust if OOM issue
         shuffle=True,
@@ -150,7 +144,7 @@ if __name__ == "__main__":
     model = configure_compute_resources(
         model,
         device="cuda",
-        compute_threads=compute_threads,
+        compute_threads=None,  # on gpu, it is not used
         dataloader_num_workers=dataloader_num_workers
     )
 
