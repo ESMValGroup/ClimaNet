@@ -25,6 +25,9 @@ class TrainConfig:
     patience: int = 10
     accumulation_steps: int = 1
     optimizer_lr: float = 1e-3
+    optimizer_weight_decay: float = 1e-2
+    scheduler_lr_factor: float = 0.1
+    scheduler_min_lr: float = 1e-5
     device: str = "cpu"
     verbose: bool = False
     verbose_epoch_interval: int = 20
@@ -104,7 +107,9 @@ def train_monthly_model(
 
     # Set the optimizer
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=training_config.optimizer_lr, weight_decay=1e-2
+        model.parameters(),
+        lr=training_config.optimizer_lr,
+        weight_decay=training_config.optimizer_weight_decay,
     )
 
     best_loss = float("inf")
@@ -120,9 +125,9 @@ def train_monthly_model(
     scheduler = ReduceLROnPlateau(
         optimizer,
         mode="min",
-        factor=0.5,
+        factor=training_config.scheduler_lr_factor,
         patience=training_config.patience // 2,  # Reduce LR before early stop triggers
-        min_lr=1e-7,
+        min_lr=training_config.scheduler_min_lr,
     )
 
     model.train()
