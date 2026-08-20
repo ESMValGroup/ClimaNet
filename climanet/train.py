@@ -154,6 +154,9 @@ def train_monthly_model(
         avg_train_loss = epoch_loss.item() / num_batches
         avg_epoch_loss = avg_train_loss  # Initially use training loss
 
+        if training_config.store_logs:
+            writer.add_scalar("Loss/train", avg_train_loss, epoch)
+
         # Validation loss (optional)
         if dataset_validation is not None:
             prediction_config = PredictionConfig(
@@ -174,6 +177,9 @@ def train_monthly_model(
                 run_dir=run_dir,
             )
             avg_epoch_loss = avg_val_loss
+
+            if training_config.store_logs:
+                writer.add_scalar("Loss/validation", avg_val_loss, epoch)
 
             if (
                 training_config.verbose
