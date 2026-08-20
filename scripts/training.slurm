@@ -13,27 +13,26 @@
 #SBATCH --output=training_%j.out
 
 set -euo pipefail
+ulimit -s 204800
 
-source /home/b/b383704/eso4clima/ClimaNet/.venv/bin/activate
+# Activate uv env
+UV_ENV="$HOME/climanet_py314"
+source "$UV_ENV/bin/activate"
 
-# Prepared yearly zarr folders, e.g. /work/<account_id>/eso4clima/preprocessed/sst/
-PREPARED_DATA_DIR="/home/b/b383704/eso4clima/data/preprocessed_data/"
-LSM_FILE_PATH="/home/b/b383704/eso4clima/data/era5_lsm_bool.nc"
-RUN_DIR="/home/b/b383704/eso4clima/train_three_years/run"
+# Set the scratch directory because they are avialable to all nodes
+SCRATCH="/scratch/b/$USER/tune"
 
-python -u /home/b/b383704/eso4clima/ClimaNet/scripts/training.py \
+# data directory (adjust this path to your data location)
+PREPARED_DATA_DIR="$HOME/scratch/b/$USER/data"
+TUNE_DIR="$HOME/scratch/b/$USER/tune"
+LSM_DIR="$HOME/scratch/b/$USER/data"
+
+echo "Starting tuning.py script..."
+python -u $HOME/ClimaNet/scripts/training.py \
+  --run-dir "$SCRATCH" \
+  --num-nodes "$SLURM_NNODES" \
   --prepared-data-dir "$PREPARED_DATA_DIR" \
-  --lsm-file-path "$LSM_FILE_PATH" \
-  --run-dir "$RUN_DIR" \
-  --var-name tos \
-  --train-years 2018 2019 2020 \
-  --validation-year 2021 \
-  --device cuda \
-  --batch-size 100 \
-  --dataloader-num-workers 32 \
-  --dataloader-persistent-workers
+  --tune-dir "$TUNE_DIR" \
+  --lsm-dir "$LSM_DIR"
 
-echo "==== Slurm accounting summary ${SLURM_JOB_ID} ===="
-sstat --allsteps -j "$SLURM_JOB_ID" \
-  --format=JobID,NTasks,AveCPU,AveRSS,MaxRSS,MaxVMSize,TresUsageInAve,TresUsageInMax \
-  --parsable2
+echo "**********Training script completed.************"
