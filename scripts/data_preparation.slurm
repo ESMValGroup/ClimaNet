@@ -14,16 +14,16 @@ set -euo pipefail
 ulimit -s 204800
 
 # Activate uv env
-UV_ENV="/home/b/b383704/eso4clima/ClimaNet/.venv"
+UV_ENV="$HOME/climanet_py314"
 source "$UV_ENV/bin/activate"
 
 # Set the scratch directory because they are avialable to all nodes
-SCRATCH="/home/b/b383704/eso4clima/data/preprocessed_data"
+SCRATCH="/scratch/b/$USER/data_preparation/hourly"
 
 # data directory (adjust this path to your data location)
-DATA_DIR="/work/bd0854/b380103/eso4clima/output/sst/concatenated/"
+DATA_DIR="$HOME/scratch/b/$USER/data"
 
-python -u /home/b/b383704/eso4clima/data_preparation/data_preparation.py \
+python -u $HOME/ClimaNet/scripts/data_preparation.py \
     --storage-path "$SCRATCH" \
     --data-dir "$DATA_DIR"
 
