@@ -215,6 +215,8 @@ def train_monthly_model(
         if counter >= training_config.patience and current_lr <= scheduler.min_lrs[0]:
             if training_config.store_logs:
                 writer.add_text("Training", f"Early stop at epoch {epoch}", epoch)
+            if training_config.verbose:
+                print(f"Early stopping triggered at epoch {epoch}. Best loss: {best_loss:.6f}")
             break
 
     # Restore best model
