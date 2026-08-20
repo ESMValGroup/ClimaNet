@@ -2,7 +2,7 @@
 #SBATCH --job-name=training
 #SBATCH --partition=gpu
 #SBATCH --constraint=a100_80
-#SBATCH --nodes=5
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=128
 #SBATCH --gpus-per-task=4
@@ -29,7 +29,7 @@ python -u /home/b/b383704/eso4clima/ClimaNet/scripts/training.py \
   --train-years 2018 2019 2020 \
   --validation-year 2021 \
   --device cuda \
-  --batch-size 500 \
+  --batch-size 100 \
   --dataloader-num-workers 32 \
   --dataloader-persistent-workers
 
