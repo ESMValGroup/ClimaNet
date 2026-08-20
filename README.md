@@ -2,6 +2,8 @@
 
 [![License](https://img.shields.io/github/license/ESMValGroup/ClimaNet)](https://opensource.org/licenses/Apache-2.0)
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21996148.svg)](https://doi.org/10.5281/zenodo.21996148)
+
 ## Installation
 
 We recommend using `uv` to manage the dependencies needed. Please refer to the [uv documentation](https://docs.astral.sh/uv/getting-started/installation/) for installation instructions of `uv`.
