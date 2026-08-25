@@ -114,7 +114,7 @@ if __name__ == "__main__":
     dataloader_num_workers = 32  # adjust if needed
     use_cuda = device == "cuda"
     dataloader_config = DataLoaderConfig(
-        batch_size=500, # adjust if OOM issue
+        batch_size=100, # adjust if OOM issue
         shuffle=True,
         num_workers=dataloader_num_workers,
         pin_memory=use_cuda,
