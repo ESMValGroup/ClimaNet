@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=128
 #SBATCH --time=02:00:00
 #SBATCH --account=bd0854
-#SBATCH --partition=compute
+#SBATCH --partition=gpu
 #SBATCH --output=climanet_eval_%j.out
 #SBATCH --error=climanet_eval_%j.err
 

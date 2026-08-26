@@ -120,12 +120,12 @@ def main() -> None:
     lsm_mask = xr.open_dataset(lsm_file_path)
 
     num_patches = (10, 10)
-    patch_size = (1, 4, 4)
+    patch_size = (1, 40, 40)
     spatial_patch_size = (
         patch_size[1] * num_patches[0],
         patch_size[2] * num_patches[1],
     )
-    stride = (spatial_patch_size[0] // 5, spatial_patch_size[1] // 5)
+    stride = (20, 20)
 
     dataset_test = STDataset(
         input_da=input_da,
@@ -148,7 +148,7 @@ def main() -> None:
 
     # Get the best hyperparameters
     best_hyperparameters = best_result.get_best_config(metric="loss", mode="min")
-    print(f"Best config: {best_hyperparameters}")
+    print(f"Best hyperparameters: {best_hyperparameters}")
 
     # Get the best model
     best_checkpoint = best_result.checkpoint
