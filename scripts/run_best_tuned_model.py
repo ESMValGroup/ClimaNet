@@ -145,6 +145,12 @@ def main() -> None:
 
     analysis = tune.ExperimentAnalysis(str(experiment_path))
     best_result = analysis.get_best_trial("loss", "min")
+
+    # Get the best hyperparameters
+    best_hyperparameters = best_result.get_best_config(metric="loss", mode="min")
+    print(f"Best config: {best_hyperparameters}")
+
+    # Get the best model
     best_checkpoint = best_result.checkpoint
     model_path = Path(best_checkpoint.path) / "checkpoint.pt"
     print(f"Best checkpoint path: {model_path}")
