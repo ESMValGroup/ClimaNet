@@ -6,7 +6,7 @@ from ray import tune
 
 from climanet.dataset import DataLoaderConfig, STDataset
 from climanet.predict import PredictionConfig, predict_monthly_var
-from climanet.utils import data_preparation, read_st_data
+from climanet.utils import read_st_data
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--test-data-dir",
         type=Path,
         required=True,
-        help="Directory containing the test NetCDF files.",
+        help="Directory containing the test Zarr files.",
     )
     parser.add_argument(
         "--lsm-file-path",
@@ -91,28 +91,9 @@ def main() -> None:
     print(f"Using daily files ({len(input_files)}): {input_files[:3]} ...")
     print(f"Using monthly files ({len(monthly_files)}): {monthly_files[:3]} ...")
 
-    daily_data_test = xr.open_mfdataset(
-        input_files, combine="by_coords", parallel=False
-    )
-    monthly_data_test = xr.open_mfdataset(
-        monthly_files, combine="by_coords", parallel=False
-    )
-
-    test_data_zarr_dir = run_dir / "test_data_zarr"
-    test_data_zarr_dir.mkdir(parents=True, exist_ok=True)
-
-    _ = data_preparation(
-        daily_data_test[args.var_name],
-        monthly_data_test[args.var_name],
-        calculate_residuals=True,
-        is_hourly=True,
-        save_to_zarr=True,
-        run_dir=test_data_zarr_dir,
-    )
-
     input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = (
         read_st_data(
-            data_path=test_data_zarr_dir,
+            data_path=test_data_dir,
             var_name=args.var_name,
         )
     )
