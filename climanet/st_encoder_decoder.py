@@ -435,6 +435,7 @@ class MonthlyConvDecoder(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
             nn.GroupNorm(num_groups=8, num_channels=out_channels),
             nn.GELU(),
+
             nn.Dropout2d(dropout),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.GroupNorm(num_groups=8, num_channels=out_channels),
@@ -568,56 +569,6 @@ class GeoPositionScaleEmbedding(nn.Module):
         return geo_emb
 
 
-class SpatialTransformer(nn.Module):
-    """Spatial Transformer for spatial feature mixing.
-
-    This module applies a standard Transformer encoder to a sequence of spatial tokens
-    (patch embeddings), allowing information to be mixed across all spatial locations.
-
-    Key points:
-        - Uses multi-head self-attention and feedforward layers.
-        - Designed to operate on flattened spatial tokens.
-    """
-
-    def __init__(self, embed_dim=128, depth=2, num_heads=4, mlp_ratio=4.0, dropout=0.0):
-        """Initialize the spatial transformer.
-        Args:
-            embed_dim: Dimension of the embedding. Default is 128.
-                The embedding dimensions are multiples of 64 (e.g., 64, 128,
-                256). This can be tuned.
-            depth: Number of transformer encoder layers. Default is 2. This can be
-                increased for more complex spatial mixing.
-            num_heads: Number of attention heads in each layer. Default is 4.
-                When embed_dim is 128, 4 heads is a common choice.
-            mlp_ratio: Ratio of feedforward hidden dimension to embed_dim. Default is 4.0.
-            dropout: Dropout rate applied to attention and feedforward layers. Default is 0.0.
-        """
-        super().__init__()
-
-        # a single Transformer encoder block that
-        # performs self-attention and feedforward processing
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=embed_dim,
-            nhead=num_heads,
-            dim_feedforward=int(embed_dim * mlp_ratio),
-            batch_first=True,
-            dropout=dropout,
-            activation="gelu",
-        )
-        # stack multiple layers to form the full encoder
-        self.enc = nn.TransformerEncoder(encoder_layer, num_layers=depth)
-
-    def forward(self, x):
-        """Forward pass of the spatial transformer.
-        Args:
-            x: Input tensor of shape (B, N, C), where N = number of spatial tokens (H'*W') and
-                C = embedding dimension
-        Returns:
-            Tensor of shape (B, N, C) with spatially mixed features across patches
-        """
-        return self.enc(x)
-
-
 class SpatioTemporalModel(nn.Module):
     """Spatio-Temporal Model for Monthly Prediction.
 
@@ -645,8 +596,6 @@ class SpatioTemporalModel(nn.Module):
         patch_size=(1, 4, 4),
         hidden=256,
         overlap=1,
-        spatial_depth=2,
-        spatial_heads=4,
         dropout=0.0,
         sh_dim=96,
         scale_dim=10,
@@ -662,8 +611,6 @@ class SpatioTemporalModel(nn.Module):
             overlap: Overlap for deconvolution in the decoder
             max_H: Maximum spatial height for 2D positional encoding
             max_W: Maximum spatial width for 2D positional encoding
-            spatial_depth: Number of layers in the spatial Transformer
-            spatial_heads: Number of attention heads in the spatial Transformer
             dropout: Dropout rate for regularization in various components. Increase it if there is overfitting.
             sh_dim: Dimension of spherical harmonics based pca of geo-position
             scale_dim: Dimension of patch-level patch-scale features
@@ -691,12 +638,7 @@ class SpatioTemporalModel(nn.Module):
             scale_dim=scale_dim,
             embed_dim=embed_dim,
         )
-        self.spatial_tr = SpatialTransformer(
-            embed_dim=embed_dim,
-            depth=spatial_depth,
-            num_heads=spatial_heads,
-            dropout=dropout,
-        )
+
         self.decoder = MonthlyConvDecoder(
             embed_dim=embed_dim,
             patch_h=patch_size[1],
@@ -806,15 +748,6 @@ class SpatioTemporalModel(nn.Module):
         # we use weighted mean patch embedding, see `geo_embedding_utils.py`
         geo_emb = geo_emb_flat.view(B, 1, Hp * Wp, embed_dim)  # (B, 1, Hp*Wp, E)
         x = agg_latent + geo_emb  # (B, M, Hp*Wp, E)
-
-        # Step 4: Spatial mixing with Transformer
-        # spatial transformer input shape = (B, N, C), output shape = (B, N, C) C: embedding dimension
-        # M is folded in B.
-
-        C = x.shape[-1]
-        x = x.reshape(B * M, Hp * Wp, C)
-        x = self.spatial_tr(x)
-        x = x.view(B, M, Hp * Wp, C)
 
         # Step 5: Decode to full-resolution 2D map
         # decoder input shape is (B, M*Hp*Wp, C), C: embedding dimension
