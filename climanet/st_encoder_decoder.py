@@ -787,20 +787,24 @@ class SpatioTemporalModel(nn.Module):
             )  # (B, M, Hp*Wp, embed_dim)
 
         # Step 3: Add geo position and scale encodings
+        B = geo_pos_embedding_patch.shape[0]
+
         if self.use_checkpoint:
-            geo_emb = checkpoint(
+            geo_emb_flat = checkpoint(
                 self.geo_embedding,
-                geo_pos_embedding_patch,
-                scale_feature_patch,
+                geo_pos_embedding_patch.view(B * Hp * Wp, -1),
+                scale_feature_patch.view(B * Hp * Wp, -1),
                 use_reentrant=False,
             )[:, None, None, :]  # (B,1,1,E)
         else:
-            geo_emb = self.geo_embedding(geo_pos_embedding_patch, scale_feature_patch)[
-                :, None, None, :
-            ]  # (B,1,1,E)
+            geo_emb_flat = self.geo_embedding(
+                geo_pos_embedding_patch.view(B * Hp * Wp, -1),
+                scale_feature_patch.view(B * Hp * Wp, -1)
+            )  # (B*Hp*Wp, E)
 
         # Broadcasting: same geo embedding for all M months at each Hp*Wp location
         # we use weighted mean patch embedding, see `geo_embedding_utils.py`
+        geo_emb = geo_emb_flat.view(B, 1, Hp * Wp, embed_dim)  # (B, 1, Hp*Wp, E)
         x = agg_latent + geo_emb  # (B, M, Hp*Wp, E)
 
         # Step 4: Spatial mixing with Transformer

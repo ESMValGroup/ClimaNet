@@ -45,6 +45,7 @@ class STDataset(Dataset):
         padded_days_mask: xr.DataArray,
         time_features: xr.DataArray,
         land_mask: xr.DataArray = None,
+        model_patch_size: tuple[int, int, int] = (1, 4, 4),  # (Month, lat, lon)
         spatial_dims: tuple[str, str] = ("lat", "lon"),
         crop_size: tuple[int, int, int] = (1, 16, 16),  # (Month, lat, lon)
         stride: tuple[int, int] = None,
@@ -84,6 +85,7 @@ class STDataset(Dataset):
         self.padded_days_mask = padded_days_mask
         self.time_features = time_features
         self.land_mask = land_mask
+        self.model_patch_size = model_patch_size
 
         self.stride = stride if stride is not None else (crop_size[1], crop_size[2])
 
@@ -317,15 +319,9 @@ class STDataset(Dataset):
         lat_crop = self.lat_coords[i : i + ph]  # (H,) -> (pH,)
         lon_crop = self.lon_coords[j : j + pw]  # (W,) -> (pW,)
 
-        geo_pos_embedding_t = compute_patch_geo_pos_embedding(
-            self.geo_pos_t[i : i + ph, j : j + pw],
-            lat_crop,
-        )
-
-        scale_feature_t = compute_patch_scale_features(
-            lat_crop,
-            lon_crop,
-        )
+        # compute geo_pos_embedding and scale_feature for each model patch within the dataset crop
+        geo_pos_embedding_t = self._compute_patch_geo_pos_embedding(i, j)  # (Hp*Wp, sh_embed_dim)
+        scale_feature_t = self._compute_patch_scale_features(i, j)  # (Hp*Wp, scale_dim)
 
         # Convert to dictionary
         return {
@@ -346,3 +342,49 @@ class STDataset(Dataset):
 
     def __getitems__(self, indices):
         return [self.__getitem__(i) for i in indices]
+
+    def _compute_patch_geo_pos_embedding(self, i: int, j: int):
+        pm, ph, pw = self.crop_size
+        model_patch_m, model_patch_h, model_patch_w = self.model_patch_size
+        Hp = ph // model_patch_h
+        Wp = pw // model_patch_w
+
+        geo_pos_embeddings_list = []
+        for hi in range(Hp):
+            for wi in range(Wp):
+                # Geo embedding for this model patch within the dataset patch
+                h_start = i + hi * model_patch_h
+                h_end = h_start + model_patch_h
+                w_start = j + wi * model_patch_w
+                w_end = w_start + model_patch_w
+
+                patch_geo = compute_patch_geo_pos_embedding(
+                    self.geo_pos_t[h_start:h_end, w_start:w_end],
+                    self.lat_coords[h_start:h_end],
+                )
+                geo_pos_embeddings_list.append(patch_geo)
+
+        # Shape: (Hp*Wp, sh_embed_dim)
+        return torch.stack(geo_pos_embeddings_list)
+
+    def _compute_patch_scale_features(self, i: int, j: int):
+        pm, ph, pw = self.crop_size
+        model_patch_m, model_patch_h, model_patch_w = self.model_patch_size
+        Hp = ph // model_patch_h
+        Wp = pw // model_patch_w
+
+        scale_features_list = []
+        for hi in range(Hp):
+            for wi in range(Wp):
+                h_start = i + hi * model_patch_h
+                h_end = h_start + model_patch_h
+                w_start = j + wi * model_patch_w
+                w_end = w_start + model_patch_w
+
+                patch_scale = compute_patch_scale_features(
+                    self.lat_coords[h_start:h_end],
+                    self.lon_coords[w_start:w_end],
+                )
+                scale_features_list.append(patch_scale)
+
+        return torch.stack(scale_features_list)  # (Hp*Wp, scale_dim)
