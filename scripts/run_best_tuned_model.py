@@ -160,7 +160,7 @@ def main() -> None:
         return_numpy=False,
         save_predictions=False,
         return_loss=True,
-        device="cpu",
+        device="cuda",
         verbose=False,
     )
 
@@ -170,7 +170,7 @@ def main() -> None:
         num_workers=0,
         pin_memory=False,
         persistent_workers=False,
-        device="cpu",
+        device="cuda",
         multiprocessing_context=None,
     )
 
@@ -182,8 +182,7 @@ def main() -> None:
         run_dir=run_dir,
     )
 
-    print("Test loss:")
-    print(test_loss)
+    print("Test loss:", test_loss)
 
 
 if __name__ == "__main__":
