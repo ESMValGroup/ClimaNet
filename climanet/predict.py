@@ -44,8 +44,8 @@ def _save_netcdf(
     full_predictions = np.full(
         (len(times), len(lats), len(lons)), np.nan, dtype=predictions.dtype
     )
-    for i, patch_idx in enumerate(indices):
-        month_start, lat_start, lon_start = base_dataset.patch_indices[patch_idx]
+    for i, data_idx in enumerate(indices):
+        month_start, lat_start, lon_start = base_dataset.crop_indices[data_idx]
         full_predictions[
             month_start : month_start + M,
             lat_start : lat_start + H,
@@ -143,7 +143,7 @@ def predict_monthly_var(
     # Initialize an empty list to store predictions
     base_dataset = dataset.dataset if hasattr(dataset, "dataset") else dataset
 
-    M, H, W = base_dataset.patch_size
+    M, H, W = base_dataset.crop_size
     all_predictions = torch.empty(len(dataset), M, H, W, device=device)
 
     # Set up logging
