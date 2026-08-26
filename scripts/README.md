@@ -2,17 +2,17 @@
 
 ## Structure
 
-- `data_preparation.*`: Scripts for preparing the data for training, tuning and evaluation. Mainly converting large netCDF files to Zarr storage with specific chunking strategies. This allows executing training for larger-than-memory datasets.
+- `data_preparation.*`: Scripts for preparing the data for training, tuning and evaluation and saving them to Zarr storage with specific chunking strategies.
 - `tuning.*`: Scripts for hyperparameter tuning.
 - `run_best_tuned_model.*`: Scripts for running the best tuned model on the test set.
 
 ## Experiments
 
-### Tuning experiments
+### Tuning experiments for SST variable
 
 - datasplit: train set = 2020, validation set = 2021, test set = 2022
-- path of tuning results: `/work/<account_id>/eso4clima/tune/`.
-- test loss: 0.036662004509047774
+- path of tuning results: `/work/<account_id>/eso4clima/tune/sst_01`.
+- test loss: 0.036662004509047774 (K)
 - hyperparameters of the best model:
   ```
     {'patch_size': 8,

@@ -151,7 +151,7 @@ def main() -> None:
 
     prediction_config = PredictionConfig(
         calculate_residuals=True,
-        return_numpy=True,
+        return_numpy=False,
         save_predictions=False,
         return_loss=True,
         device="cpu",
