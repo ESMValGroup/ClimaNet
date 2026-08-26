@@ -72,14 +72,14 @@ def main() -> None:
     if not lsm_file_path.exists():
         raise FileNotFoundError(f"LSM file does not exist: {lsm_file_path}")
 
-    daily_files = list(
+    input_files = list(
         test_data_dir.glob(f"{args.year}*_hr_ERA5dc_masked_{args.var_name}*.nc")
     )
     monthly_files = list(
         test_data_dir.glob(f"{args.year}*_mon_ERA5dc_masked_{args.var_name}*.nc")
     )
 
-    if not daily_files:
+    if not input_files:
         raise FileNotFoundError(
             f"No daily test files found for year '{args.year}' in '{test_data_dir}'"
         )
@@ -88,11 +88,11 @@ def main() -> None:
             f"No monthly test files found for year '{args.year}' in '{test_data_dir}'"
         )
 
-    print(f"Using daily files ({len(daily_files)}): {daily_files[:3]} ...")
+    print(f"Using daily files ({len(input_files)}): {input_files[:3]} ...")
     print(f"Using monthly files ({len(monthly_files)}): {monthly_files[:3]} ...")
 
     daily_data_test = xr.open_mfdataset(
-        daily_files, combine="by_coords", parallel=False
+        input_files, combine="by_coords", parallel=False
     )
     monthly_data_test = xr.open_mfdataset(
         monthly_files, combine="by_coords", parallel=False
