@@ -41,9 +41,6 @@ class VideoEncoder(nn.Module):
             2 * in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
         )
 
-        # norm is LayerNorm over the embedding dimension to normalize patch embeddings
-        self.norm = nn.LayerNorm(embed_dim)
-
     def forward(self, x, mask):
         """Forward pass with masking support via an additional validity channel.
         Args:
@@ -70,7 +67,6 @@ class VideoEncoder(nn.Module):
         x = self.proj(x)
         x = x.flatten(2).transpose(1, 2)
 
-        x = self.norm(x)
         return x
 
 
@@ -267,11 +263,11 @@ class TemporalAttentionAggregator(nn.Module):
 
         # Day scorer (within each month)
         self.day_scorer = nn.Sequential(
-            nn.LayerNorm(embed_dim),  # normalizing features
-            nn.Linear(embed_dim, embed_dim),  # learns temporal feature transformation
-            nn.GELU(),  # adds non-linearity to capture complex temporal patterns
+            nn.LayerNorm(2 * embed_dim),
+            nn.Linear(2 * embed_dim, embed_dim),
+            nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(embed_dim, 1),  # project to a single score
+            nn.Linear(embed_dim, 1),
         )
 
         # Cross month mixing
@@ -330,13 +326,19 @@ class TemporalAttentionAggregator(nn.Module):
         month_emb = self.month_embed(time_features)
         token_emb = temp_emb + month_emb
 
-        day_logits = self.day_scorer(token_emb).squeeze(-1)
+        # Make day attention depend on both the actual daily data
+        # and the temporal/calendar information.
+        token_emb_seq = token_emb.unsqueeze(1)  # (B, 1, M, Tp, C)
+        day_score_input = torch.cat(
+            [seq,token_emb_seq.expand(-1, HW, -1, -1, -1)], dim=-1,
+        )
+
+        day_logits = self.day_scorer(day_score_input).squeeze(-1)
 
         if padded_days_mask is not None:
-            day_logits = day_logits.masked_fill(padded_days_mask, float("-inf"))
+            day_logits = day_logits.masked_fill(padded_days_mask.unsqueeze(1), float("-inf"))
 
-        day_w = torch.softmax(day_logits, dim=-1)
-        day_w = day_w.unsqueeze(1).unsqueeze(-1)
+        day_w = torch.softmax(day_logits, dim=-1).unsqueeze(-1)
 
         # avoid implicit expand copies
         seq = seq.reshape(B, HW, M, Tp, C)
@@ -346,7 +348,6 @@ class TemporalAttentionAggregator(nn.Module):
 
         # avoid broadcast materialization
         aggregated_month_embed = (token_emb_seq * day_w).sum(dim=3)
-
         month_tokens = month_tokens + aggregated_month_embed
 
         z = month_tokens.reshape(B * HW, M, C)
@@ -379,7 +380,6 @@ class MonthlyConvDecoder(nn.Module):
         patch_h=4,
         patch_w=4,
         hidden=128,
-        overlap=1,
         dropout=0.0,
     ):
         """
@@ -391,14 +391,11 @@ class MonthlyConvDecoder(nn.Module):
             patch_w: Patch width
             hidden: Hidden dimension in the decoder for mixing channel features.
                 The default is 128, which can be tuned.
-            overlap: Overlap size for deconvolution. It creates smooth blending
-                between adjacent upsampled patches. Default is 1, no overlap at edges.
             dropout: Dropout rate for regularization in the refinement block. Default is 0.0.
         """
         super().__init__()
         self.patch_h = patch_h
         self.patch_w = patch_w
-        self.overlap = overlap
 
         # Mix channel features on the patch grid (Hp, Wp)
         # Input shape: (B, embed_dim, Hp, Wp) → Output shape: (B, hidden, Hp, Wp)
@@ -408,21 +405,13 @@ class MonthlyConvDecoder(nn.Module):
         self.proj = nn.Conv2d(in_channels, out_channels, kernel_size=1)
 
         # Upsample to full resolution
-        # With kernel = stride + 2*overlap and padding=overlap,
-        # output size is exact: H = Hp*patch_h, W = Wp*patch_w (no output_padding needed).
-        k_h = patch_h + 2 * overlap
-        k_w = patch_w + 2 * overlap
-        # As spatial size increases, channel count decreases to keep computation
-        # manageable; here  hidden // 2 is a design choice.
         in_channels, out_channels = hidden, hidden // 2
         self.deconv = nn.ConvTranspose2d(
             in_channels,
             out_channels,
-            kernel_size=(k_h, k_w),
+            kernel_size=(patch_h, patch_w),
             stride=(patch_h, patch_w),
-            padding=overlap,
-            output_padding=0,
-            bias=True,
+            padding=0,
         )
 
         # Final conv head to get single channel output kernel_size=3 is the most
@@ -433,12 +422,11 @@ class MonthlyConvDecoder(nn.Module):
         # Refinement block: a small conv layers to smooth patch boundaries
         self.refine = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.GroupNorm(num_groups=8, num_channels=out_channels),
+            # nn.GroupNorm(num_groups=8, num_channels=out_channels),
             nn.GELU(),
-
             nn.Dropout2d(dropout),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.GroupNorm(num_groups=8, num_channels=out_channels),
+            # nn.GroupNorm(num_groups=8, num_channels=out_channels),
             nn.GELU(),
         )
 
@@ -475,7 +463,9 @@ class MonthlyConvDecoder(nn.Module):
         out = self.deconv(out)  # (B*M, hidden//2, H, W)
 
         # Refinement CNN to smooth boundaries
+        refine_input = out
         out = self.refine(out)  # (B*M, hidden//2, H, W)
+        out = out + refine_input  # Residual connection to preserve original features
 
         # Apply final conv head to get single channel output
         out = self.head(out)  # (B*M, 1, H, W)
@@ -595,7 +585,6 @@ class SpatioTemporalModel(nn.Module):
         embed_dim=128,
         patch_size=(1, 4, 4),
         hidden=256,
-        overlap=1,
         dropout=0.0,
         sh_dim=96,
         scale_dim=10,
@@ -608,7 +597,6 @@ class SpatioTemporalModel(nn.Module):
             embed_dim: Dimension of the patch embedding
             patch_size: Tuple of (T, H, W) patch sizes for temporal and spatial patching
             hidden: Hidden dimension used in the decoder
-            overlap: Overlap for deconvolution in the decoder
             max_H: Maximum spatial height for 2D positional encoding
             max_W: Maximum spatial width for 2D positional encoding
             dropout: Dropout rate for regularization in various components. Increase it if there is overfitting.
@@ -644,7 +632,6 @@ class SpatioTemporalModel(nn.Module):
             patch_h=patch_size[1],
             patch_w=patch_size[2],
             hidden=hidden,
-            overlap=overlap,
             dropout=dropout,
         )
         self.patch_size = patch_size
