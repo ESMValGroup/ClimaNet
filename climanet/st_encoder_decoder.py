@@ -572,7 +572,7 @@ class SpatioTemporalModel(nn.Module):
     The model pipeline:
         1. Encode spatio-temporal patches using VideoEncoder.
         2. Aggregate temporal information for each spatial patch via TemporalAttentionAggregator.
-        3. Add 2D spatial positional encodings and mix spatial features with SpatialTransformer.
+        3. Add 2D spatial positional encodings.
         4. Decode aggregated tokens into a full-resolution 2D map using MonthlyConvDecoder.
 
     Output:
@@ -736,7 +736,7 @@ class SpatioTemporalModel(nn.Module):
         geo_emb = geo_emb_flat.view(B, 1, Hp * Wp, embed_dim)  # (B, 1, Hp*Wp, E)
         x = agg_latent + geo_emb  # (B, M, Hp*Wp, E)
 
-        # Step 5: Decode to full-resolution 2D map
+        # Step 4: Decode to full-resolution 2D map
         # decoder input shape is (B, M*Hp*Wp, C), C: embedding dimension
         # decoder output shape is (B, M, H, W)
         if self.use_checkpoint:
