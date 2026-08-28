@@ -331,8 +331,8 @@ class STDataset(Dataset):
             "land_mask": land_t_crop,  # (pH,pW) True=Land
             "input_data_timef": daily_timef_crop,  # (pm, T=31, 3)
             "padded_days_mask": padded_days_mask_crop,  # (pm, T=31) True=padded
-            "scale_feature": scale_feature_t,  # (10,)
-            "geo_pos_embedding": geo_pos_embedding_t,  # (sh_embed_dim,)
+            "scale_feature": scale_feature_t,  # (Hp*Wp, scale_dim)
+            "geo_pos_embedding": geo_pos_embedding_t,  # (Hp*Wp, sh_embed_dim)
             "sh_embed_dim": self.sh_embed_dim_t,
             "harmonic_order": self.harmonic_order_t,
             "coords": torch.tensor([m, i, j]),

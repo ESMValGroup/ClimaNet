@@ -655,6 +655,8 @@ class SpatioTemporalModel(nn.Module):
             daily_timef: Tensor of shape (B, M, T, 2) containing the cyclically phase encoded day-of-year
                 and hour-of-day information for the daily data
             land_mask_patch: Boolean tensor of shape (B, H, W) to mask land areas in the output
+            geo_pos_embedding_patch: Tensor of shape (B, Hp*Wp, sh_embed_dim) containing the geo-positional embeddings for each model patch within the dataset patch
+            scale_feature_patch: Tensor of shape (B, Hp*Wp, scale_dim) containing the scale features for each model patch within the dataset patch
             padded_days_mask: Optional boolean tensor of shape (B, M, T) indicating which day tokens are padded
                  (True for padded tokens). Used to mask out padded tokens in temporal attention.
         Returns:
