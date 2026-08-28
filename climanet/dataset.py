@@ -344,8 +344,8 @@ class STDataset(Dataset):
         return [self.__getitem__(i) for i in indices]
 
     def _compute_patch_geo_pos_embedding(self, i: int, j: int):
-        pm, ph, pw = self.crop_size
-        model_patch_m, model_patch_h, model_patch_w = self.model_patch_size
+        _, ph, pw = self.crop_size
+        _, model_patch_h, model_patch_w = self.model_patch_size
         Hp = ph // model_patch_h
         Wp = pw // model_patch_w
 
@@ -368,8 +368,8 @@ class STDataset(Dataset):
         return torch.stack(geo_pos_embeddings_list)
 
     def _compute_patch_scale_features(self, i: int, j: int):
-        pm, ph, pw = self.crop_size
-        model_patch_m, model_patch_h, model_patch_w = self.model_patch_size
+        _, ph, pw = self.crop_size
+        _, model_patch_h, model_patch_w = self.model_patch_size
         Hp = ph // model_patch_h
         Wp = pw // model_patch_w
 
