@@ -26,8 +26,9 @@ def _tune_data_preparation(data_config):
         padded_days_mask=padded_days_mask,
         time_features=time_features,
         land_mask=ray.get(data_config["land_mask_data"]),
-        patch_size=data_config["patch_size"],  # based on the patch_size in model
+        crop_size=data_config["crop_size"],  # based on the patch_size in model
         stride=data_config["stride"],
+        model_patch_size=data_config["model_patch_size"],
         sh_embed_dim=96,
         sh_order_L=10,
         verbose=False,
@@ -73,20 +74,14 @@ def _train(tune_config, static_args):
     set_seed()
 
     patch_size = tune_config["patch_size"]
-    overlap = tune_config["overlap"]
     embed_dim = tune_config["embed_dim"]
     dropout = tune_config["dropout"]
     hidden = tune_config["hidden"]
-    spatial_depth = tune_config["spatial_depth"]
-    spatial_heads = tune_config["spatial_heads"]
     model = SpatioTemporalModel(
         patch_size=(1, patch_size, patch_size),
-        overlap=overlap,
         embed_dim=embed_dim,
         dropout=dropout,
         hidden=hidden,
-        spatial_depth=spatial_depth,
-        spatial_heads=spatial_heads,
     )
 
     _ = train_monthly_model(

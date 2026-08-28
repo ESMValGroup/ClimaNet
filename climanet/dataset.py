@@ -325,19 +325,19 @@ class STDataset(Dataset):
 
         # Convert to dictionary
         return {
-            "daily_patch": daily_t_crop,  # (C=1, pm, T=31, pH, pW)
-            "monthly_patch": monthly_t_crop,  # (pm, pH, pW)
-            "daily_mask_patch": daily_mask_t_crop,  # (C=1, pm, T=31, pH, pW)
-            "land_mask_patch": land_t_crop,  # (pH,pW) True=Land
-            "daily_timef_patch": daily_timef_crop,  # (pm, T=31, 3)
+            "input_data": daily_t_crop,  # (C=1, pm, T=31, pH, pW)
+            "monthly_data": monthly_t_crop,  # (pm, pH, pW)
+            "input_data_mask": daily_mask_t_crop,  # (C=1, pm, T=31, pH, pW)
+            "land_mask": land_t_crop,  # (pH,pW) True=Land
+            "input_data_timef": daily_timef_crop,  # (pm, T=31, 3)
             "padded_days_mask": padded_days_mask_crop,  # (pm, T=31) True=padded
-            "scale_feature_patch": scale_feature_t,  # (10,)
-            "geo_pos_embedding_patch": geo_pos_embedding_t,  # (sh_embed_dim,)
+            "scale_feature": scale_feature_t,  # (10,)
+            "geo_pos_embedding": geo_pos_embedding_t,  # (sh_embed_dim,)
             "sh_embed_dim": self.sh_embed_dim_t,
             "harmonic_order": self.harmonic_order_t,
             "coords": torch.tensor([m, i, j]),
-            "lat_patch": lat_crop,  # (pH,)
-            "lon_patch": lon_crop,  # (pW,)
+            "lat": lat_crop,  # (pH,)
+            "lon": lon_crop,  # (pW,)
         }
 
     def __getitems__(self, indices):
