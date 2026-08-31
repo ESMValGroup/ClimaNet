@@ -178,6 +178,10 @@ def train_monthly_model(
             )
             avg_epoch_loss = avg_val_loss
 
+            # after validation, switch back to training mode because the model
+            # was set to eval mode during validation
+            model.train()
+
             if training_config.store_logs:
                 writer.add_scalar("Loss/validation", avg_val_loss, epoch)
 
