@@ -106,7 +106,6 @@ def main() -> None:
         patch_size[1] * num_patches[0],
         patch_size[2] * num_patches[1],
     )
-    stride = (20, 20)
 
     dataset_test = STDataset(
         input_da=input_da,
@@ -116,7 +115,7 @@ def main() -> None:
         time_features=time_features,
         land_mask=lsm_mask["lsm"],
         patch_size=(1, *spatial_patch_size),
-        stride=stride,
+        stride=None,
         sh_embed_dim=96,
         sh_order_L=10,
         verbose=True,
@@ -147,9 +146,9 @@ def main() -> None:
 
     dataloader_config = DataLoaderConfig(
         batch_size=10,
-        shuffle=True,
+        shuffle=False,
         num_workers=0,
-        pin_memory=False,
+        pin_memory=True,  # set it to True when device=cuda
         persistent_workers=False,
         device="cuda",
         multiprocessing_context=None,
