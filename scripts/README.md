@@ -3,7 +3,6 @@
 ## Structure
 
 - `data_preparation.*`: Scripts for preparing the data for training, tuning and evaluation and saving them to Zarr storage with specific chunking strategies.
-- `example_training.*`: example training script
 - `tuning.*`: Scripts for hyperparameter tuning.
 - `run_best_tuned_model.*`: Scripts for running the best tuned model on the test set.
 - `training.*`: Scripts for training the model with the best hyperparameters found in the tuning experiments.
