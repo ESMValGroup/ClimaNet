@@ -6,7 +6,7 @@ from ray import tune
 
 from climanet.dataset import DataLoaderConfig, STDataset
 from climanet.predict import PredictionConfig, predict_monthly_var
-from climanet.utils import data_preparation, read_st_data
+from climanet.utils import read_st_data
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--test-data-dir",
         type=Path,
         required=True,
-        help="Directory containing the test NetCDF files.",
+        help="Directory containing the test Zarr files.",
     )
     parser.add_argument(
         "--lsm-file-path",
@@ -72,14 +72,14 @@ def main() -> None:
     if not lsm_file_path.exists():
         raise FileNotFoundError(f"LSM file does not exist: {lsm_file_path}")
 
-    daily_files = list(
+    input_files = list(
         test_data_dir.glob(f"{args.year}*_hr_ERA5dc_masked_{args.var_name}*.nc")
     )
     monthly_files = list(
         test_data_dir.glob(f"{args.year}*_mon_ERA5dc_masked_{args.var_name}*.nc")
     )
 
-    if not daily_files:
+    if not input_files:
         raise FileNotFoundError(
             f"No daily test files found for year '{args.year}' in '{test_data_dir}'"
         )
@@ -88,31 +88,12 @@ def main() -> None:
             f"No monthly test files found for year '{args.year}' in '{test_data_dir}'"
         )
 
-    print(f"Using daily files ({len(daily_files)}): {daily_files[:3]} ...")
+    print(f"Using daily files ({len(input_files)}): {input_files[:3]} ...")
     print(f"Using monthly files ({len(monthly_files)}): {monthly_files[:3]} ...")
-
-    daily_data_test = xr.open_mfdataset(
-        daily_files, combine="by_coords", parallel=False
-    )
-    monthly_data_test = xr.open_mfdataset(
-        monthly_files, combine="by_coords", parallel=False
-    )
-
-    test_data_zarr_dir = run_dir / "test_data_zarr"
-    test_data_zarr_dir.mkdir(parents=True, exist_ok=True)
-
-    _ = data_preparation(
-        daily_data_test[args.var_name],
-        monthly_data_test[args.var_name],
-        calculate_residuals=True,
-        is_hourly=True,
-        save_to_zarr=True,
-        run_dir=test_data_zarr_dir,
-    )
 
     input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = (
         read_st_data(
-            data_path=test_data_zarr_dir,
+            data_path=test_data_dir,
             var_name=args.var_name,
         )
     )
@@ -120,12 +101,11 @@ def main() -> None:
     lsm_mask = xr.open_dataset(lsm_file_path)
 
     num_patches = (10, 10)
-    patch_size = (1, 4, 4)
+    patch_size = (1, 40, 40)
     spatial_patch_size = (
         patch_size[1] * num_patches[0],
         patch_size[2] * num_patches[1],
     )
-    stride = (spatial_patch_size[0] // 5, spatial_patch_size[1] // 5)
 
     dataset_test = STDataset(
         input_da=input_da,
@@ -135,7 +115,7 @@ def main() -> None:
         time_features=time_features,
         land_mask=lsm_mask["lsm"],
         patch_size=(1, *spatial_patch_size),
-        stride=stride,
+        stride=None,
         sh_embed_dim=96,
         sh_order_L=10,
         verbose=True,
@@ -145,26 +125,32 @@ def main() -> None:
 
     analysis = tune.ExperimentAnalysis(str(experiment_path))
     best_result = analysis.get_best_trial("loss", "min")
+
+    # Get the best hyperparameters
+    best_hyperparameters = best_result.get_best_config(metric="loss", mode="min")
+    print(f"Best hyperparameters: {best_hyperparameters}")
+
+    # Get the best model
     best_checkpoint = best_result.checkpoint
     model_path = Path(best_checkpoint.path) / "checkpoint.pt"
     print(f"Best checkpoint path: {model_path}")
 
     prediction_config = PredictionConfig(
         calculate_residuals=True,
-        return_numpy=True,
+        return_numpy=False,
         save_predictions=False,
         return_loss=True,
-        device="cpu",
+        device="cuda",
         verbose=False,
     )
 
     dataloader_config = DataLoaderConfig(
         batch_size=10,
-        shuffle=True,
+        shuffle=False,
         num_workers=0,
-        pin_memory=False,
+        pin_memory=True,  # set it to True when device=cuda
         persistent_workers=False,
-        device="cpu",
+        device="cuda",
         multiprocessing_context=None,
     )
 
@@ -176,8 +162,7 @@ def main() -> None:
         run_dir=run_dir,
     )
 
-    print("Test loss:")
-    print(test_loss)
+    print("Test loss:", test_loss)
 
 
 if __name__ == "__main__":

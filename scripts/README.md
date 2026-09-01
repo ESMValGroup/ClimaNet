@@ -17,6 +17,14 @@
 - test loss: 0.036662004509047774
 - hyperparameters of the best model:
 
+## Experiments
+
+### Tuning experiments for SST variable
+
+- datasplit: train set = 2020, validation set = 2021, test set = 2022
+- path of tuning results: `/work/<account_id>/eso4clima/tune/sst_01`.
+- test loss: 0.036662004509047774 (K)
+- hyperparameters of the best model:
   ```
     {'patch_size': 8,
     'overlap': 1,
@@ -26,8 +34,8 @@
     'spatial_depth': 3,
     'spatial_heads': 2,
     'optimizer_lr': 0.001787422899066508,
-    'batch_config': {'accumulation_steps': 2}}
-  ```
+    'batch_config': {'batch_size': 100, 'accumulation_steps': 2}}
+ ```
 
 ### Training experiments
 
@@ -41,3 +49,4 @@ validation loss. Note that the training is done only on one GPU node, including
 4 GPUs.
 
 The results are stored at `/work/<account_id>/eso4clima/train/sst_01/`.
+
