@@ -104,7 +104,7 @@ def main() -> None:
     best_result = analysis.get_best_trial("loss", "min")
 
     # Get the best hyperparameters
-    best_hyperparameters = best_result.get_best_config(metric="loss", mode="min")
+    best_hyperparameters = best_result.config
     print(f"Best hyperparameters: {best_hyperparameters}")
 
     crop_size = (1, 40, 40)
