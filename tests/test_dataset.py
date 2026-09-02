@@ -4,6 +4,7 @@ import torch
 import xarray as xr
 
 from climanet import STDataset
+from climanet.utils import data_preparation
 
 
 def _make_datasets():
@@ -25,6 +26,7 @@ def _make_datasets():
             "lon": np.arange(lon),
         },
     )
+    daily_da.name = "tos"
 
     monthly = np.arange(monthly_time * lat * lon, dtype=np.float32).reshape(
         monthly_time, lat, lon
@@ -39,19 +41,27 @@ def _make_datasets():
             "lon": np.arange(lon),
         },
     )
+    monthly_da.name = "tos"
 
     mask = np.zeros((lat, lon), dtype=bool)
     mask[::2, ::2] = True
     land_mask = xr.DataArray(
         mask, dims=("lat", "lon"), coords={"lat": np.arange(lat), "lon": np.arange(lon)}
     )
+    land_mask.name = "lsm"
     return daily_da, monthly_da, land_mask
 
 
 def test_len_and_shapes():
     daily_da, monthly_da, land_mask = _make_datasets()
+    input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = data_preparation(
+        daily_da, monthly_da, calculate_residuals=False, save_to_zarr=False
+    )
     dataset = STDataset(
-        input_da=daily_da,
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(1, 2, 2),
@@ -73,8 +83,14 @@ def test_len_and_shapes():
 
 def test_index_bounds():
     daily_da, monthly_da, land_mask = _make_datasets()
+    input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = data_preparation(
+        daily_da, monthly_da, calculate_residuals=False, save_to_zarr=False
+    )
     dataset = STDataset(
-        input_da=daily_da,
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(1, 2, 2),
@@ -89,8 +105,14 @@ def test_index_bounds():
 
 def test_index_mapping_and_mask_values():
     daily_da, monthly_da, land_mask = _make_datasets()
+    input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = data_preparation(
+        daily_da, monthly_da, calculate_residuals=False, save_to_zarr=False
+    )
     dataset = STDataset(
-        input_da=daily_da,
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(1, 2, 2),
@@ -105,8 +127,14 @@ def test_index_mapping_and_mask_values():
 
 def test_time_feature_generation():
     daily_da, monthly_da, land_mask = _make_datasets()
+    input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = data_preparation(
+        daily_da, monthly_da, calculate_residuals=False, save_to_zarr=False
+    )
     dataset = STDataset(
-        input_da=daily_da,
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
         monthly_da=monthly_da,
         land_mask=land_mask,
         patch_size=(1, 2, 2),

@@ -1,27 +1,76 @@
 from pathlib import Path
 
 import ray
-import xarray as xr
+from ray.air.config import CheckpointConfig
 from ray.tune.schedulers import ASHAScheduler
 
-from climanet.dataset import STDataset
+from climanet.dataset import DataLoaderConfig, STDataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
-from climanet.train import train_monthly_model
-from climanet.utils import set_seed
+from climanet.train import TrainConfig, train_monthly_model
+from climanet.utils import read_st_data, set_seed
+
+
+def _tune_data_preparation(data_config):
+
+    # read zarr data
+    input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = (
+        read_st_data(
+            data_path=data_config["input_data_dir"], var_name=data_config["var_name"]
+        )
+    )
+
+    return STDataset(
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        monthly_da=monthly_da,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
+        land_mask=ray.get(data_config["land_mask_data"]),
+        patch_size=data_config["patch_size"],  # based on the patch_size in model
+        stride=data_config["stride"],
+        sh_embed_dim=96,
+        sh_order_L=10,
+        verbose=False,
+        load_lazy=data_config["load_lazy"],
+    )
 
 
 def _train(tune_config, static_args):
     """Helper function to train the model with Ray Tune."""
-
-    device = static_args["device"]
-    dataloader_num_workers = static_args["dataloader_num_workers"]
-
     run_dir = static_args["run_dir"]
-    num_epoch = static_args["num_epoch"]
 
-    # dont use ray.put() and ray.get() (i.e. object store) when data is large
-    train_dataset = tune_data_preparation(static_args["data_config_train"])
-    validation_dataset = tune_data_preparation(static_args["data_config_validation"])
+    data_config_train = static_args.get("data_config_train")
+    dataset_train = _tune_data_preparation(data_config_train)
+
+    data_config_validation = static_args.get("data_config_validation")
+    dataset_validation = _tune_data_preparation(data_config_validation)
+
+    use_cuda = static_args["device"] == "cuda"
+    dataloader_config = DataLoaderConfig(
+        batch_size=tune_config["batch_config"]["batch_size"],
+        shuffle=True,
+        num_workers=static_args["dataloader_num_workers"],
+        pin_memory=use_cuda,
+        persistent_workers=static_args["dataloader_persistent_workers"],
+        device=static_args["device"],
+        multiprocessing_context=static_args["dataloader_multiprocessing_context"],
+    )
+
+    training_config = TrainConfig(
+        calculate_residuals=True,
+        num_epoch=static_args["num_epoch"],
+        patience=10,
+        accumulation_steps=tune_config["batch_config"]["accumulation_steps"],
+        optimizer_lr=tune_config["optimizer_lr"],
+        device=static_args["device"],
+        verbose=False,
+        verbose_epoch_interval=20,
+        tune_checkpoint=True,
+        store_model=False,
+        store_logs=False,
+    )
+
+    set_seed()
 
     patch_size = tune_config["patch_size"]
     overlap = tune_config["overlap"]
@@ -30,9 +79,6 @@ def _train(tune_config, static_args):
     hidden = tune_config["hidden"]
     spatial_depth = tune_config["spatial_depth"]
     spatial_heads = tune_config["spatial_heads"]
-
-    set_seed()
-
     model = SpatioTemporalModel(
         patch_size=(1, patch_size, patch_size),
         overlap=overlap,
@@ -43,59 +89,14 @@ def _train(tune_config, static_args):
         spatial_heads=spatial_heads,
     )
 
-    batch_size = tune_config["batch_config"]["batch_size"]
-    accumulation_steps = tune_config["batch_config"]["accumulation_steps"]
-    optimizer_lr = tune_config["optimizer_lr"]
-
     _ = train_monthly_model(
-        model,
-        train_dataset,
-        validation_dataset=validation_dataset,
-        batch_size=batch_size,
-        num_epoch=num_epoch,
-        accumulation_steps=accumulation_steps,
-        optimizer_lr=optimizer_lr,
-        device=device,
+        model=model,
+        dataset_train=dataset_train,
+        dataloader_config=dataloader_config,
+        training_config=training_config,
+        dataset_validation=dataset_validation,
         run_dir=run_dir,
-        dataloader_num_workers=dataloader_num_workers,
-        store_model=False,
-        verbose=False,
-        tune_checkpoint=True,
     )
-
-
-def tune_data_preparation(data_config: dict, is_hourly=True) -> STDataset:
-    """Prepare the data for training and validation."""
-    input_data = xr.open_mfdataset(
-        data_config["input_filenames"], chunks=data_config.get("input_chunks")
-    )
-    monthly_data = xr.open_mfdataset(
-        data_config["monthly_filenames"], chunks=data_config.get("monthly_chunks")
-    )
-    lsm_mask = xr.open_dataset(
-        data_config["landmask_filename"], chunks=data_config.get("landmask_chunks")
-    )
-
-    # calculate residuals as target
-    input_data_averaged = input_data.resample(time="MS").mean(skipna=True)
-    input_data_averaged["time"] = monthly_data["time"]
-
-    # Residuals
-    monthly_data_res = monthly_data - input_data_averaged
-
-    var_name = data_config["var_name"]
-
-    dataset = STDataset(
-        input_da=input_data[var_name],
-        monthly_da=monthly_data_res[var_name],
-        land_mask=lsm_mask["lsm"],
-        patch_size=data_config["patch_size"],
-        stride=data_config["stride"],
-        sh_embed_dim=96,
-        sh_order_L=10,
-        is_hourly=is_hourly,
-    )
-    return dataset
 
 
 def run_tune(tune_config: dict, static_args: dict):
@@ -116,8 +117,23 @@ def run_tune(tune_config: dict, static_args: dict):
     experiment_path = f"{static_args['run_dir']}/{experiment_name}"
     if Path(experiment_path).exists():
         tuner = ray.tune.Tuner.restore(
+            ray.tune.with_resources(
+                ray.tune.with_parameters(_train, static_args=static_args),
+                resources={
+                    "cpu": static_args["cpu_per_trial"],
+                    "gpu": static_args["gpu_per_trial"],
+                },
+            ),
             experiment_path,
+            ray.tune.with_resources(
+                ray.tune.with_parameters(_train, static_args=static_args),
+                resources={
+                    "cpu": static_args["cpu_per_trial"],
+                    "gpu": static_args["gpu_per_trial"],
+                },
+            ),
             resume_errored=True,
+            resume_unfinished=True,
         )
     else:
         tuner = ray.tune.Tuner(
@@ -136,7 +152,15 @@ def run_tune(tune_config: dict, static_args: dict):
                 max_concurrent_trials=static_args["max_concurrent_trials"],
             ),
             param_space=tune_config,
-            run_config=ray.tune.RunConfig(storage_path=static_args["run_dir"], name=experiment_name),
+            run_config=ray.tune.RunConfig(
+                storage_path=static_args["run_dir"],
+                name=experiment_name,
+                checkpoint_config=CheckpointConfig(
+                    num_to_keep=1,
+                    checkpoint_score_attribute="loss",
+                    checkpoint_score_order="min",
+                ),
+            ),
         )
 
     results = tuner.fit()

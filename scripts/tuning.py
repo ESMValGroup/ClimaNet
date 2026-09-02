@@ -3,10 +3,10 @@ import time
 from pathlib import Path
 
 import ray
+import xarray as xr
 from ray import tune
 
 from climanet.tune import run_tune
-from climanet.utils import data_split
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -21,7 +21,12 @@ if __name__ == "__main__":
         default=1,
     )
     parser.add_argument(
-        "--data-dir",
+        "--data-dir-train",
+        type=str,
+        default=Path("./data").resolve(),
+    )
+    parser.add_argument(
+        "--data-dir-validation",
         type=str,
         default=Path("./data").resolve(),
     )
@@ -37,55 +42,47 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    data_folder = Path(args.data_dir).resolve()
+    data_folder_train = Path(args.data_dir_train).resolve()
+    data_folder_validation = Path(args.data_dir_validation).resolve()
     lsm_folder = Path(args.lsm_dir).resolve()
     var_name = "tos"
 
-    hourly_files = data_split(
-        data_folder,
-        filename_pattern=f"*_hr_ERA5dc_masked_{var_name}.nc",
-        train_range=(2020, 2020),
-        validation_range=(2021, 2021),
-        test_range=(2022, 2022),
-    )
-    monthly_files = data_split(
-        data_folder,
-        filename_pattern=f"*_mon_ERA5dc_full_{var_name}.nc",
-        train_range=(2020, 2020),
-        validation_range=(2021, 2021),
-        test_range=(2022, 2022),
-    )
+    land_mask_data = xr.open_dataset(lsm_folder / "era5_lsm_bool.nc")["lsm"]
+
     data_config_train = {
-        "input_filenames": hourly_files["train"],
-        "monthly_filenames": monthly_files["train"],
-        "landmask_filename": lsm_folder / "era5_lsm_bool.nc",
-        "var_name": var_name,
-        "patch_size": (1, 40, 40),  # based on the patch_size in model
-        "stride": (20, 20),  # data agumentation by overlapping patches
+        "input_data_dir": data_folder_train,
+        "land_mask_data": ray.put(land_mask_data),
+        "load_lazy": False,  # one year fits in memory
+        "patch_size": (1, 40, 40),
+        "stride": (20, 20),
     }
+
     data_config_validation = {
-        "input_filenames": hourly_files["validation"],
-        "monthly_filenames": monthly_files["validation"],
-        "landmask_filename": lsm_folder / "era5_lsm_bool.nc",
-        "var_name": var_name,
-        "patch_size": (1, 40, 40),  # based on the patch_size in model
-        "stride": (20, 20),  # data agumentation by overlapping patches
+        "input_data_dir": data_folder_validation,
+        "land_mask_data": ray.put(land_mask_data),
+        "load_lazy": False,  # one year fits in memory
+        "patch_size": (1, 40, 40),
+        "stride": (20, 20),
     }
 
     # dont use ray.put() (i.e. object store) when data is large
     static_args = {
+        "data_config_train": data_config_train,
+        "data_config_validation": data_config_validation,
+        "is_hourly": True,
+        "var_name": var_name,
         "max_num_epochs": 100,
         "num_trials": 50,  # this is num_samples in ray.tune.TuneConfig
         "cpu_per_trial": 10,
         "gpu_per_trial": 1,
         "run_dir": args.storage_path,
         "device": "cuda",
-        "dataloader_num_workers": 4,
-        "data_config_train": data_config_train,
-        "data_config_validation": data_config_validation,
+        "dataloader_num_workers": 1,
+        "dataloader_persistent_workers": True,
+        "dataloader_multiprocessing_context": None,  # load_lazy is False
         "num_epoch": 100,
         "max_concurrent_trials": args.num_nodes * 2,  # less than GPUs per node (4) avoid OOM
-        "experiment_name": "climanet_tune",
+        "experiment_name": "sst_01",
     }
 
     # parameters to tune
@@ -99,9 +96,7 @@ if __name__ == "__main__":
         "spatial_heads": tune.choice([2, 4, 8]),
         "optimizer_lr": tune.loguniform(1e-3, 1e-1),
         "batch_config": tune.grid_search([
-            {"batch_size": 100, "accumulation_steps": 1},
-            {"batch_size": 200, "accumulation_steps": 2},
-            {"batch_size": 400, "accumulation_steps": 2},
+            {"batch_size": 100, "accumulation_steps": 2},
         ]),
     }
 
