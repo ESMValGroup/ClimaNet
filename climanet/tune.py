@@ -26,8 +26,9 @@ def _tune_data_preparation(data_config):
         padded_days_mask=padded_days_mask,
         time_features=time_features,
         land_mask=ray.get(data_config["land_mask_data"]),
-        patch_size=data_config["patch_size"],  # based on the patch_size in model
+        crop_size=data_config["crop_size"],  # based on the patch_size in model
         stride=data_config["stride"],
+        model_patch_size=data_config["model_patch_size"],
         sh_embed_dim=96,
         sh_order_L=10,
         verbose=False,
@@ -38,13 +39,21 @@ def _tune_data_preparation(data_config):
 def _train(tune_config, static_args):
     """Helper function to train the model with Ray Tune."""
     run_dir = static_args["run_dir"]
+    patch_size = tune_config["patch_size"]
 
+    set_seed()
+
+    # Prepare train dataset
     data_config_train = static_args.get("data_config_train")
+    data_config_train["model_patch_size"] = (1, patch_size, patch_size)
     dataset_train = _tune_data_preparation(data_config_train)
 
+    # Prepare validation dataset
     data_config_validation = static_args.get("data_config_validation")
+    data_config_validation["model_patch_size"] = (1, patch_size, patch_size)
     dataset_validation = _tune_data_preparation(data_config_validation)
 
+    # Prepare dataloader configuration
     use_cuda = static_args["device"] == "cuda"
     dataloader_config = DataLoaderConfig(
         batch_size=tune_config["batch_config"]["batch_size"],
@@ -56,6 +65,7 @@ def _train(tune_config, static_args):
         multiprocessing_context=static_args["dataloader_multiprocessing_context"],
     )
 
+    # Prepare training configuration
     training_config = TrainConfig(
         calculate_residuals=True,
         num_epoch=static_args["num_epoch"],
@@ -70,25 +80,18 @@ def _train(tune_config, static_args):
         store_logs=False,
     )
 
-    set_seed()
-
-    patch_size = tune_config["patch_size"]
-    overlap = tune_config["overlap"]
+    # Set the model
     embed_dim = tune_config["embed_dim"]
     dropout = tune_config["dropout"]
     hidden = tune_config["hidden"]
-    spatial_depth = tune_config["spatial_depth"]
-    spatial_heads = tune_config["spatial_heads"]
     model = SpatioTemporalModel(
         patch_size=(1, patch_size, patch_size),
-        overlap=overlap,
         embed_dim=embed_dim,
         dropout=dropout,
         hidden=hidden,
-        spatial_depth=spatial_depth,
-        spatial_heads=spatial_heads,
     )
 
+    # Train the model
     _ = train_monthly_model(
         model=model,
         dataset_train=dataset_train,

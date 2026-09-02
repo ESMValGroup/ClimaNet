@@ -44,17 +44,17 @@ def _move_batch_to_device(batch: dict, device: str):
 def _run_one_batch(model: torch.nn.Module, batch: dict, device):
     batch = _move_batch_to_device(batch, device)
     pred = model(
-        batch["daily_patch"],
-        batch["daily_mask_patch"],
-        batch["daily_timef_patch"],
-        batch["land_mask_patch"],
-        batch["geo_pos_embedding_patch"],
-        batch["scale_feature_patch"],
+        batch["input_data"],
+        batch["input_data_mask"],
+        batch["input_data_timef"],
+        batch["land_mask"],
+        batch["geo_pos_embedding"],
+        batch["scale_feature"],
         batch["padded_days_mask"],
     )  # (B, M, H, W)
 
     # Compute masked loss
-    return compute_masked_loss(pred, batch["monthly_patch"], batch["land_mask_patch"])
+    return compute_masked_loss(pred, batch["monthly_data"], batch["land_mask"])
 
 
 def _load_checkpoint(model, optimizer, loaded_checkpoint):
@@ -182,6 +182,10 @@ def train_monthly_model(
                 run_dir=run_dir,
             )
             avg_epoch_loss = avg_val_loss
+
+            # after validation, switch back to training mode because the model
+            # was set to eval mode during validation
+            model.train()
 
             if training_config.store_logs:
                 writer.add_scalar("Loss/validation", avg_val_loss, epoch)

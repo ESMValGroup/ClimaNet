@@ -15,8 +15,9 @@ def _build_dataset(
     years: list[int],
     var_name: str,
     land_mask: xr.DataArray,
-    patch_size: tuple[int, int, int],
+    crop_size: tuple[int, int, int],
     stride: tuple[int, int],
+    model_patch_size: tuple[int, int, int],
 ) -> STDataset:
 
     data = [read_st_data(data_path=f"{prepared_data_dir}/{year}", var_name=var_name) for year in years]
@@ -35,8 +36,9 @@ def _build_dataset(
         padded_days_mask=padded_days_mask,
         time_features=time_features,
         land_mask=land_mask,
-        patch_size=patch_size,
+        crop_size=crop_size,
         stride=stride,
+        model_patch_size=model_patch_size,
         sh_embed_dim=96,
         sh_order_L=10,
         verbose=False,
@@ -87,8 +89,9 @@ if __name__ == "__main__":
     lsm_file_path = lsm_dir / "era5_lsm_bool.nc"
     lsm_mask = xr.open_dataset(lsm_file_path)["lsm"]  # make sure is dask array
 
-    dataset_patch_size = (1, 40, 40)
+    dataset_crop_size = (1, 40, 40)
     dataset_stride = (20, 20)
+    model_patch_size = (1, best_config["patch_size"], best_config["patch_size"])
 
     train_years = [2018, 2019, 2020]
     dataset_train = _build_dataset(
@@ -96,8 +99,9 @@ if __name__ == "__main__":
         years=train_years,
         var_name=var_name,
         land_mask=lsm_mask,
-        patch_size=dataset_patch_size,
+        crop_size=dataset_crop_size,
         stride=dataset_stride,
+        model_patch_size=model_patch_size,
     )
 
     validation_year = [2021]
@@ -106,8 +110,9 @@ if __name__ == "__main__":
         years=validation_year,
         var_name=var_name,
         land_mask=lsm_mask,
-        patch_size=dataset_patch_size,
+        crop_size=dataset_crop_size,
         stride=dataset_stride,
+        model_patch_size=model_patch_size,
     )
 
     # Build the dataloader config
@@ -124,22 +129,15 @@ if __name__ == "__main__":
     )
 
     # Build the model with the best hyperparameters from tuning
-    patch_size = (1, best_config["patch_size"], best_config["patch_size"])
-    overlap = best_config["overlap"]
     embed_dim = best_config["embed_dim"]
     dropout = best_config["dropout"]
     hidden = best_config["hidden"]
-    spatial_depth = best_config["spatial_depth"]
-    spatial_heads = best_config["spatial_heads"]
 
     model = SpatioTemporalModel(
-        patch_size=patch_size,
-        overlap=overlap,
+        patch_size=model_patch_size,
         embed_dim=embed_dim,
         dropout=dropout,
         hidden=hidden,
-        spatial_depth=spatial_depth,
-        spatial_heads=spatial_heads,
     )
 
     # move the model to GPU and configure compute resources
@@ -159,7 +157,7 @@ if __name__ == "__main__":
         optimizer_lr=best_config["optimizer_lr"],
         device=device,
         verbose=True,
-        verbose_epoch_interval=20,
+        verbose_epoch_interval=10,
         tune_checkpoint=False,
         store_model=True,
         store_logs=True,
