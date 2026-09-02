@@ -39,13 +39,21 @@ def _tune_data_preparation(data_config):
 def _train(tune_config, static_args):
     """Helper function to train the model with Ray Tune."""
     run_dir = static_args["run_dir"]
+    patch_size = tune_config["patch_size"]
 
+    set_seed()
+
+    # Prepare train dataset
     data_config_train = static_args.get("data_config_train")
+    data_config_train["model_patch_size"] = (1, patch_size, patch_size)
     dataset_train = _tune_data_preparation(data_config_train)
 
+    # Prepare validation dataset
     data_config_validation = static_args.get("data_config_validation")
+    data_config_validation["model_patch_size"] = (1, patch_size, patch_size)
     dataset_validation = _tune_data_preparation(data_config_validation)
 
+    # Prepare dataloader configuration
     use_cuda = static_args["device"] == "cuda"
     dataloader_config = DataLoaderConfig(
         batch_size=tune_config["batch_config"]["batch_size"],
@@ -57,6 +65,7 @@ def _train(tune_config, static_args):
         multiprocessing_context=static_args["dataloader_multiprocessing_context"],
     )
 
+    # Prepare training configuration
     training_config = TrainConfig(
         calculate_residuals=True,
         num_epoch=static_args["num_epoch"],
@@ -71,9 +80,7 @@ def _train(tune_config, static_args):
         store_logs=False,
     )
 
-    set_seed()
-
-    patch_size = tune_config["patch_size"]
+    # Set the model
     embed_dim = tune_config["embed_dim"]
     dropout = tune_config["dropout"]
     hidden = tune_config["hidden"]
@@ -84,6 +91,7 @@ def _train(tune_config, static_args):
         hidden=hidden,
     )
 
+    # Train the model
     _ = train_monthly_model(
         model=model,
         dataset_train=dataset_train,

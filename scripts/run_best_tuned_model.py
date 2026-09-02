@@ -100,12 +100,15 @@ def main() -> None:
 
     lsm_mask = xr.open_dataset(lsm_file_path)
 
-    num_patches = (10, 10)
-    patch_size = (1, 40, 40)
-    spatial_patch_size = (
-        patch_size[1] * num_patches[0],
-        patch_size[2] * num_patches[1],
-    )
+    analysis = tune.ExperimentAnalysis(str(experiment_path))
+    best_result = analysis.get_best_trial("loss", "min")
+
+    # Get the best hyperparameters
+    best_hyperparameters = best_result.get_best_config(metric="loss", mode="min")
+    print(f"Best hyperparameters: {best_hyperparameters}")
+
+    crop_size = (1, 40, 40)
+    model_patch_size = (1, best_hyperparameters["patch_size"], best_hyperparameters["patch_size"])
 
     dataset_test = STDataset(
         input_da=input_da,
@@ -114,21 +117,15 @@ def main() -> None:
         padded_days_mask=padded_days_mask,
         time_features=time_features,
         land_mask=lsm_mask["lsm"],
-        patch_size=(1, *spatial_patch_size),
+        patch_size=crop_size,
         stride=None,
+        model_patch_size=model_patch_size,
         sh_embed_dim=96,
         sh_order_L=10,
         verbose=True,
         load_lazy=False,
     )
     print(f"Created test dataset with {len(dataset_test)} patches.")
-
-    analysis = tune.ExperimentAnalysis(str(experiment_path))
-    best_result = analysis.get_best_trial("loss", "min")
-
-    # Get the best hyperparameters
-    best_hyperparameters = best_result.get_best_config(metric="loss", mode="min")
-    print(f"Best hyperparameters: {best_hyperparameters}")
 
     # Get the best model
     best_checkpoint = best_result.checkpoint
