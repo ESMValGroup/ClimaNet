@@ -49,20 +49,22 @@ if __name__ == "__main__":
 
     land_mask_data = xr.open_dataset(lsm_folder / "era5_lsm_bool.nc")["lsm"]
 
+    data_crop_size = (1, 40, 40)
+    data_stride = (20, 20)
     data_config_train = {
         "input_data_dir": data_folder_train,
         "land_mask_data": ray.put(land_mask_data),
         "load_lazy": False,  # one year fits in memory
-        "patch_size": (1, 40, 40),
-        "stride": (20, 20),
+        "crop_size": data_crop_size,
+        "stride": data_stride,
     }
 
     data_config_validation = {
         "input_data_dir": data_folder_validation,
         "land_mask_data": ray.put(land_mask_data),
         "load_lazy": False,  # one year fits in memory
-        "patch_size": (1, 40, 40),
-        "stride": (20, 20),
+        "crop_size": data_crop_size,
+        "stride": data_stride,
     }
 
     # dont use ray.put() (i.e. object store) when data is large
@@ -87,13 +89,10 @@ if __name__ == "__main__":
 
     # parameters to tune
     tune_config = {
-        "patch_size": tune.choice([2, 4, 8]),
-        "overlap": tune.choice([0, 1, 2]),
+        "patch_size": tune.choice([4, 8, 10]),
         "embed_dim": tune.choice([32, 64, 128]),
         "dropout": tune.choice([0.0, 0.1, 0.2]),
         "hidden": tune.choice([32, 64, 128]),
-        "spatial_depth": tune.choice([1, 2, 3]),
-        "spatial_heads": tune.choice([2, 4, 8]),
         "optimizer_lr": tune.loguniform(1e-3, 1e-1),
         "batch_config": tune.grid_search([
             {"batch_size": 100, "accumulation_steps": 2},

@@ -10,20 +10,14 @@ from climanet.train import _run_one_batch
 def dummy_batch():
     # a dummy batch for testing
     return {
-        "daily_patch": torch.rand(1, 1, 2, 31, 40, 40),
-        "monthly_patch": torch.rand(1, 2, 40, 40),
-        "daily_mask_patch": torch.rand(1, 1, 2, 31, 40, 40) > 0.5,  # boolean mask
-        "land_mask_patch": torch.rand(1, 40, 40) > 0.5,  # boolean mask
-        "daily_timef_patch": torch.rand(1, 2, 31, 3),
+        "input_data": torch.rand(1, 1, 2, 31, 40, 40),
+        "monthly_data": torch.rand(1, 2, 40, 40),
+        "input_data_mask": torch.rand(1, 1, 2, 31, 40, 40) > 0.5,  # boolean mask
+        "land_mask": torch.rand(1, 40, 40) > 0.5,  # boolean mask
+        "input_data_timef": torch.rand(1, 2, 31, 3),
         "padded_days_mask": torch.rand(1, 2, 31) > 0.5,  # boolean mask
-        "scale_feature_patch": torch.rand(1, 10),
-        "geo_pos_embedding_patch": torch.rand(1, 96),
-        "sh_embed_dim": torch.rand(1),
-        "harmonic_order": torch.rand(1),
-        "scale_f_dim": torch.rand(1),
-        "coords": torch.rand(1, 2),
-        "lat_patch": torch.rand(1, 40),
-        "lon_patch": torch.rand(1, 40),
+        "scale_feature": torch.rand(1, 100, 10),
+        "geo_pos_embedding": torch.rand(1, 100, 96),
     }
 
 
@@ -36,7 +30,6 @@ def test_model_meta_device(dummy_batch):
     """
     model = SpatioTemporalModel(
         patch_size=(1, 4, 4),
-        overlap=2,
         embed_dim=64,
         dropout=0.2,
         hidden=64,
@@ -64,7 +57,6 @@ def test_model_fake_tensor(dummy_batch):
     """
     model = SpatioTemporalModel(
         patch_size=(1, 4, 4),
-        overlap=2,
         embed_dim=64,
         dropout=0.2,
         hidden=64,
