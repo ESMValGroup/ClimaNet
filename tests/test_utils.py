@@ -2,7 +2,7 @@ import numpy as np
 import xarray as xr
 from tbparse import SummaryReader
 
-from climanet.utils import data_preparation, setup_logging, lsm_sst2wv
+from climanet.utils import data_preparation, lsm_sst2wv, setup_logging
 
 
 def test_setup_logging(tmp_path):
