@@ -789,7 +789,9 @@ def data_preparation(
 
     # rechunk data
     input_da = input_da.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
-    input_da_nan_mask = input_da_nan_mask.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
+    input_da_nan_mask = input_da_nan_mask.chunk(
+        {"M": 1, "T": -1, "lat": 100, "lon": 100}
+    )
     monthly_da = monthly_da.chunk({"M": 1, "lat": 100, "lon": 100})
     padded_days_mask = padded_days_mask.chunk({"M": 1})
     time_features = time_features.chunk({"M": 1})
@@ -891,3 +893,26 @@ def read_st_data(data_path=".", var_name="tos"):
 
     # if one of the datasets is None, we need to compute them
     return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
+
+
+def lsm_sst2wv(lsm_sst: xr.DataArray, coarse_factor: int = 2, threshold: float = 0.5):
+    """Convert land-sea mask from sea surface temperature to watervapor mask.
+
+    Args:
+        lsm_sst (xarray.DataArray): Land-sea mask derived from sea surface temperature.
+        coarse_factor (int, optional): Factor by which to coarsen the resolution. Defaults to 2.
+        threshold (float, optional): Threshold for determining water vapor presence. Defaults to 0.5.
+
+    Returns:
+        xarray.DataArray: Water vapor mask.
+    """
+    lsm_watervapor = lsm_sst.coarsen(
+        lat=coarse_factor, lon=coarse_factor, boundary="trim"
+    ).mean()
+
+    # Apply threshold to determine water vapor presence
+    lsm_watervapor = lsm_watervapor.where(lsm_watervapor >= threshold, False)
+    lsm_watervapor = lsm_watervapor.where(lsm_watervapor < threshold, True)
+    lsm_watervapor = lsm_watervapor.astype(bool)
+
+    return lsm_watervapor
