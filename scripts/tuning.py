@@ -85,7 +85,8 @@ if __name__ == "__main__":
         "dataloader_persistent_workers": True,
         "dataloader_multiprocessing_context": None,  # load_lazy is False
         "num_epoch": 100,
-        "max_concurrent_trials": args.num_nodes * 2,  # less than GPUs per node (4) avoid OOM
+        "max_concurrent_trials": args.num_nodes
+        * 2,  # less than GPUs per node (4) avoid OOM
         "experiment_name": "sst_01",
     }
 
@@ -96,9 +97,11 @@ if __name__ == "__main__":
         "dropout": tune.choice([0.0, 0.1, 0.2]),
         "hidden": tune.choice([32, 64, 128]),
         "optimizer_lr": tune.loguniform(1e-3, 1e-1),
-        "batch_config": tune.grid_search([
-            {"batch_size": 100, "accumulation_steps": 2},
-        ]),
+        "batch_config": tune.grid_search(
+            [
+                {"batch_size": 100, "accumulation_steps": 2},
+            ]
+        ),
     }
 
     # Start Ray Tune for distributed training on several nodes
