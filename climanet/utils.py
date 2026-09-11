@@ -895,10 +895,12 @@ def read_st_data(data_path=".", var_name="tos"):
     return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
 
 
-def coarsen_land_mask(input_lsm: xr.DataArray |  xr.Dataset, coarse_factor: int = 2, threshold: float = 0.5):
+def coarsen_land_mask(
+    input_lsm: xr.DataArray | xr.Dataset, coarse_factor: int = 2, threshold: float = 0.5
+):
     """Coarsen spatial resolution of land mask data by coarse_factor.
-    
-    It also applies a threshold to values outside of [0,1]. 
+
+    It also applies a threshold to values outside of [0,1].
     see https://confluence.ecmwf.int/spaces/FUG/pages/673550380/Section+2A.1.3.1+Land-Sea+mask
 
     Args:
@@ -916,4 +918,4 @@ def coarsen_land_mask(input_lsm: xr.DataArray |  xr.Dataset, coarse_factor: int 
     # Apply threshold
     coarse_lsm = coarse_lsm >= threshold
 
-    return coars_lsm
+    return coarse_lsm
