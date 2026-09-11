@@ -895,24 +895,25 @@ def read_st_data(data_path=".", var_name="tos"):
     return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
 
 
-def lsm_sst2wv(lsm_sst: xr.DataArray, coarse_factor: int = 2, threshold: float = 0.5):
-    """Convert land-sea mask from sea surface temperature to watervapor mask.
+def coarsen_land_mask(input_lsm: xr.DataArray |  xr.Dataset, coarse_factor: int = 2, threshold: float = 0.5):
+    """Coarsen spatial resolution of land mask data by coarse_factor.
+    
+    It also applies a threshold to values outside of [0,1]. 
+    see https://confluence.ecmwf.int/spaces/FUG/pages/673550380/Section+2A.1.3.1+Land-Sea+mask
 
     Args:
-        lsm_sst (xarray.DataArray): Land-sea mask derived from sea surface temperature.
+        input_lsm (xarray.DataArray): Land-sea mask from ERA5-Land data.
         coarse_factor (int, optional): Factor by which to coarsen the resolution. Defaults to 2.
-        threshold (float, optional): Threshold for determining water vapor presence. Defaults to 0.5.
+        threshold (float, optional): Threshold for determining mask value. Defaults to 0.5.
 
     Returns:
-        xarray.DataArray: Water vapor mask.
+        xarray.DataArray | xarray.Dataset : Coarse land-sea mask.
     """
-    lsm_watervapor = lsm_sst.coarsen(
+    coarse_lsm = input_lsm.coarsen(
         lat=coarse_factor, lon=coarse_factor, boundary="trim"
     ).mean()
 
-    # Apply threshold to determine water vapor presence
-    lsm_watervapor = lsm_watervapor.where(lsm_watervapor >= threshold, False)
-    lsm_watervapor = lsm_watervapor.where(lsm_watervapor < threshold, True)
-    lsm_watervapor = lsm_watervapor.astype(bool)
+    # Apply threshold
+    coarse_lsm = coarse_lsm >= threshold
 
-    return lsm_watervapor
+    return coars_lsm
