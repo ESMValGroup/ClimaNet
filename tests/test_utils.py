@@ -2,7 +2,7 @@ import numpy as np
 import xarray as xr
 from tbparse import SummaryReader
 
-from climanet.utils import data_preparation, lsm_sst2wv, setup_logging
+from climanet.utils import data_preparation, coarsen_land_mask, setup_logging
 
 
 def test_setup_logging(tmp_path):
@@ -136,7 +136,7 @@ def test_data_preparation_from_zarr(tmp_path):
     assert isinstance(time_features, xr.Dataset)
 
 
-def test_lsm_sst2wv():
+def test_coarsen_land_mask():
     """Downsample a mock lsm with a factor of 2."""
     mask_values = np.zeros((1, 8, 4))  # Mock values for the land-sea mask
     mask_values[0, 0:2, 0:2] = 0.7  # Set 4 values to be above 0.5
@@ -151,7 +151,7 @@ def test_lsm_sst2wv():
         },
         name="lsm",
     )
-    lsm_mask_05 = lsm_sst2wv(lsm_mask_025_mock)
+    lsm_mask_05 = coarsen_land_mask(lsm_mask_025_mock)
 
     assert np.all(
         lsm_mask_05.values[0, 0:1, 0:1]  # after downsampling 0:2 -> 0:1
