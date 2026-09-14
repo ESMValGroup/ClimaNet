@@ -789,7 +789,9 @@ def data_preparation(
 
     # rechunk data
     input_da = input_da.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
-    input_da_nan_mask = input_da_nan_mask.chunk({"M": 1, "T": -1, "lat": 100, "lon": 100})
+    input_da_nan_mask = input_da_nan_mask.chunk(
+        {"M": 1, "T": -1, "lat": 100, "lon": 100}
+    )
     monthly_da = monthly_da.chunk({"M": 1, "lat": 100, "lon": 100})
     padded_days_mask = padded_days_mask.chunk({"M": 1})
     time_features = time_features.chunk({"M": 1})
@@ -891,3 +893,29 @@ def read_st_data(data_path=".", var_name="tos"):
 
     # if one of the datasets is None, we need to compute them
     return input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features
+
+
+def coarsen_land_mask(
+    input_lsm: xr.DataArray | xr.Dataset, coarse_factor: int = 2, threshold: float = 0.5
+):
+    """Coarsen spatial resolution of land mask data by coarse_factor.
+
+    It also applies a threshold to values outside of [0,1].
+    see https://confluence.ecmwf.int/spaces/FUG/pages/673550380/Section+2A.1.3.1+Land-Sea+mask
+
+    Args:
+        input_lsm (xarray.DataArray): Land-sea mask from ERA5-Land data.
+        coarse_factor (int, optional): Factor by which to coarsen the resolution. Defaults to 2.
+        threshold (float, optional): Threshold for determining mask value. Defaults to 0.5.
+
+    Returns:
+        xarray.DataArray | xarray.Dataset : Coarse land-sea mask.
+    """
+    coarse_lsm = input_lsm.coarsen(
+        lat=coarse_factor, lon=coarse_factor, boundary="trim"
+    ).mean()
+
+    # Apply threshold
+    coarse_lsm = coarse_lsm >= threshold
+
+    return coarse_lsm
