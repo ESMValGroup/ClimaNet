@@ -85,8 +85,7 @@ if __name__ == "__main__":
         "dataloader_persistent_workers": True,
         "dataloader_multiprocessing_context": None,  # load_lazy is False
         "num_epoch": 100,
-        "max_concurrent_trials": args.num_nodes
-        * 2,  # less than GPUs per node (4) avoid OOM
+        "max_concurrent_trials": args.num_nodes * 2,  # less than GPUs per node (4) avoid OOM
         "experiment_name": "sst_01",
     }
 
