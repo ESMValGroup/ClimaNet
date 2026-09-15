@@ -3,6 +3,7 @@ from pathlib import Path
 
 import ray
 import xarray as xr
+import numpy as np
 
 from climanet.dataset import DataLoaderConfig, STDataset
 from climanet.predict import PredictionConfig, predict_monthly_var
@@ -31,6 +32,11 @@ if __name__ == "__main__":
         type=str,
         default=Path("./data").resolve(),
     )
+    parser.add_argument(
+        "--raw-data-folder",
+        type=str,
+        default=Path("./data").resolve(),
+    )
     args = parser.parse_args()
 
     var_name = "tos"
@@ -39,6 +45,7 @@ if __name__ == "__main__":
     lsm_dir = Path(args.lsm_dir).resolve()
     train_dir = Path(args.train_dir).resolve()
     run_dir = Path(args.run_dir).resolve()
+    raw_data_folder = Path(args.raw_data_folder).resolve()
 
     # set the random seed for reproducibility
     set_seed()
@@ -79,7 +86,7 @@ if __name__ == "__main__":
     dataloader_num_workers = 10  # adjust if needed
     use_cuda = device == "cuda"
     dataloader_config = DataLoaderConfig(
-        batch_size=100, # adjust if OOM issue
+        batch_size=1, # adjust if OOM issue, monthly batch
         shuffle=False,  # for prediction and reconstruction, it should be False
         num_workers=dataloader_num_workers,
         pin_memory=use_cuda,
@@ -107,6 +114,7 @@ if __name__ == "__main__":
         store_logs=False,
     )
 
+    # Predict residuals
     predictions = predict_monthly_var(
         model=model,
         dataset=dataset_test,
@@ -114,3 +122,25 @@ if __name__ == "__main__":
         prediction_config=prediction_config,
         run_dir=run_dir,
     )
+
+    # add residuals to the averaged monthly data
+    # load hourly data
+    files = sorted(raw_data_folder.glob(f"{predict_year}*_hr_ERA5dc_masked_{var_name}.nc"))
+    input_data = xr.open_mfdataset(files)
+
+    # load prediction residuals
+    files = sorted(run_dir.glob(f"{predict_year}*_{var_name}_prediction_residual.nc"))
+    predictions_res = xr.open_mfdataset(files)
+
+    # add residuals to the averaged monthly data
+    input_data_averaged = input_data.resample({"time": "MS"}).mean(skipna=True)
+    input_data_averaged["time"] = predictions_res["time"]
+    adjusted_data = input_data_averaged[var_name] + predictions_res
+
+    # save the adjusted data to a new NetCDF file, one file per month
+    times = adjusted_data.coords["time"].values
+
+    for t in times:
+        time_str = np.datetime_as_string(t, unit="M").replace("-", "")
+        file_name = f"{run_dir}/{time_str}_{var_name}_prediction.nc"
+        adjusted_data.sel(time=[t]).to_netcdf(file_name)

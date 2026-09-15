@@ -8,7 +8,7 @@
 #SBATCH --gpus-per-task=4
 #SBATCH --exclusive
 #SBATCH --mem=0
-#SBATCH --time=12:00:00
+#SBATCH --time=1:00:00
 #SBATCH --account=bd0854
 #SBATCH --output=prediction_%j.out
 
@@ -26,12 +26,14 @@ RUN_DIR="/scratch/b/$USER/predict"
 PREPARED_DATA_DIR="/scratch/b/$USER/data"
 TRAIN_DIR="/scratch/b/$USER/train"
 LSM_DIR="/scratch/b/$USER/data"
+RAW_DATA_FOLDER="/scratch/b/$USER/output/sst/concatenated"
 
 echo "Starting prediction.py script..."
 python -u $HOME/ClimaNet/scripts/prediction.py \
   --run-dir "$RUN_DIR" \
   --prepared-data-dir "$PREPARED_DATA_DIR" \
   --train-dir "$TRAIN_DIR" \
-  --lsm-dir "$LSM_DIR"
+  --lsm-dir "$LSM_DIR"\
+  --raw-data-folder "$RAW_DATA_FOLDER"
 
 echo "**********Prediction script completed.************"
