@@ -1,14 +1,17 @@
 import argparse
 from pathlib import Path
 
-import ray
-import xarray as xr
 import numpy as np
+import xarray as xr
 
 from climanet.dataset import DataLoaderConfig, STDataset
 from climanet.predict import PredictionConfig, predict_monthly_var
-from climanet.utils import configure_compute_resources, load_model, read_st_data, set_seed
-
+from climanet.utils import (
+    configure_compute_resources,
+    load_model,
+    read_st_data,
+    set_seed,
+)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
