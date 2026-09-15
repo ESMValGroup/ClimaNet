@@ -25,7 +25,7 @@ def _tune_data_preparation(data_config):
         monthly_da=monthly_da,
         padded_days_mask=padded_days_mask,
         time_features=time_features,
-        land_mask=ray.get(data_config["land_mask_data"]),
+        land_mask=data_config["land_mask_data"],
         crop_size=data_config["crop_size"],  # based on the patch_size in model
         stride=data_config["stride"],
         model_patch_size=data_config["model_patch_size"],

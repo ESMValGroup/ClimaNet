@@ -53,7 +53,7 @@ if __name__ == "__main__":
     data_stride = (20, 20)
     data_config_train = {
         "input_data_dir": data_folder_train,
-        "land_mask_data": ray.put(land_mask_data),
+        "land_mask_data": land_mask_data,  # dont use ray.put()
         "load_lazy": False,  # one year fits in memory
         "crop_size": data_crop_size,
         "stride": data_stride,
@@ -62,7 +62,7 @@ if __name__ == "__main__":
 
     data_config_validation = {
         "input_data_dir": data_folder_validation,
-        "land_mask_data": ray.put(land_mask_data),
+        "land_mask_data": land_mask_data,  # dont use ray.put()
         "load_lazy": False,  # one year fits in memory
         "crop_size": data_crop_size,
         "stride": data_stride,
