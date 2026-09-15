@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     predict_year = 2022
     data = read_st_data(data_path=f"{prepared_data_dir}/{predict_year}", var_name=var_name)
-    input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = zip(*data)
+    input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = data
 
     monthly_shape = monthly_da.shape[1:]  # the whole dataset
     crop_size = (1, *monthly_shape)
