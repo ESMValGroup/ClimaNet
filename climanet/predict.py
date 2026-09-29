@@ -132,7 +132,7 @@ def predict_monthly_var(
     dataloader = DataLoader(
         dataset,
         batch_size=dataloader_config.batch_size,
-        shuffle=dataloader_config.shuffle,
+        shuffle=False,  # no shuffling during prediction/validation
         pin_memory=use_cuda,
         num_workers=dataloader_config.num_workers,  # for data loading
         persistent_workers=dataloader_config.persistent_workers,  # keep workers alive between epochs
