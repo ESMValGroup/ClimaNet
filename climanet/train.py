@@ -1,3 +1,4 @@
+import copy
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -196,6 +197,7 @@ def train_monthly_model(
             ):
                 gap = avg_val_loss - avg_train_loss
                 print(f"Epoch {epoch}: gap between train and val loss: {gap:.6f}")
+                print(f"Epoch {epoch}: train loss = {avg_train_loss:.6f}, val loss = {avg_val_loss:.6f}")
 
         # Step scheduler
         scheduler.step(avg_epoch_loss)
@@ -204,7 +206,7 @@ def train_monthly_model(
         # Consider improvement only if loss decreases more than a small threshold
         if avg_epoch_loss < best_loss - 1e-4:
             best_loss = avg_epoch_loss
-            best_state_dict = {k: v.detach() for k, v in model.state_dict().items()}
+            best_state_dict = copy.deepcopy(model.state_dict())
             counter = 0
         else:
             counter += 1
