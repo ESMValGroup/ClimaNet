@@ -67,7 +67,7 @@ def _train(tune_config, static_args):
 
     # Prepare training configuration
     training_config = TrainConfig(
-        calculate_residuals=True,
+        calculate_residuals=False,
         num_epoch=static_args["num_epoch"],
         patience=10,
         accumulation_steps=tune_config["batch_config"]["accumulation_steps"],
@@ -84,11 +84,13 @@ def _train(tune_config, static_args):
     embed_dim = tune_config["embed_dim"]
     dropout = tune_config["dropout"]
     hidden = tune_config["hidden"]
+    decoder_residual_scale = tune_config["decoder_residual_scale"]
     model = SpatioTemporalModel(
         patch_size=(1, patch_size, patch_size),
         embed_dim=embed_dim,
         dropout=dropout,
         hidden=hidden,
+        decoder_residual_scale=decoder_residual_scale,
     )
 
     # Train the model
