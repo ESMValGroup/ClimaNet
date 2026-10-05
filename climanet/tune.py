@@ -72,6 +72,7 @@ def _train(tune_config, static_args):
         patience=10,
         accumulation_steps=tune_config["batch_config"]["accumulation_steps"],
         optimizer_lr=tune_config["optimizer_lr"],
+        optimizer_weight_decay=tune_config["optimizer_weight_decay"],
         device=static_args["device"],
         verbose=False,
         verbose_epoch_interval=20,
