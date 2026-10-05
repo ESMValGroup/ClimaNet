@@ -111,7 +111,7 @@ if __name__ == "__main__":
         var_name=var_name,
         land_mask=lsm_mask,
         crop_size=dataset_crop_size,
-        stride=dataset_stride,
+        stride=None,  # no overlap for validation
         model_patch_size=model_patch_size,
     )
 
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     use_cuda = device == "cuda"
     dataloader_config = DataLoaderConfig(
         batch_size=100, # adjust if OOM issue
-        shuffle=True,
+        shuffle=True,  # this is only for training and not for validation
         num_workers=dataloader_num_workers,
         pin_memory=use_cuda,
         persistent_workers=True,
@@ -150,10 +150,10 @@ if __name__ == "__main__":
 
     # Training configuration
     training_config = TrainConfig(
-        calculate_residuals=True,
+        calculate_residuals=False,
         num_epoch=101,
         patience=10,
-        accumulation_steps=2,
+        accumulation_steps=1,
         optimizer_lr=best_config["optimizer_lr"],
         device=device,
         verbose=True,
