@@ -404,6 +404,7 @@ class MonthlyConvDecoder(nn.Module):
         # Number of progressive x2 upsampling stages.
         n_upsample = int(math.log2(patch_h))
 
+
         # Mix channel features on the patch grid (Hp, Wp)
         # Input shape: (B, embed_dim, Hp, Wp) → Output shape: (B, hidden, Hp, Wp)
         # here kernel_size=1 means we are mixing features at each patch location
@@ -451,10 +452,6 @@ class MonthlyConvDecoder(nn.Module):
 
         # Final conv head to map to single-channel output
         self.head = nn.Conv2d(channels, 1, kernel_size=1)
-
-        # Start from zero residual
-        nn.init.zeros_(self.head.weight)
-        nn.init.zeros_(self.head.bias)
 
     def forward(self, latent, M, out_H, out_W, land_mask=None):
         """Reconstruct 2D maps from latent patch tokens.
@@ -782,18 +779,4 @@ class SpatioTemporalModel(nn.Module):
         else:
             monthly_res_pred = self.decoder(x, M, H, W, land_mask_patch)  # (B, M, H, W)
 
-        # Add residuals to monthly mean
-        masked_data = input_data.masked_fill(daily_mask, float("nan"))
-        mean_data = torch.nanmean(masked_data, dim=3)
-        all_missing = daily_mask.all(dim=3)
-        mean_data = mean_data.masked_fill(all_missing, float("nan"))
-
-        # Apply land mask
-        mean_data = mean_data.masked_fill(
-            land_mask_patch[:, None, None, :, :],
-            float("nan"),
-        )
-        mean_data = mean_data.squeeze(1)  # (B, M, H, W)
-        monthly_pred = monthly_res_pred + mean_data
-
-        return monthly_pred
+        return monthly_res_pred
