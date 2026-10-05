@@ -81,7 +81,7 @@ if __name__ == "__main__":
         "gpu_per_trial": 1,
         "run_dir": args.storage_path,
         "device": "cuda",
-        "dataloader_num_workers": 1,
+        "dataloader_num_workers": 4,
         "dataloader_persistent_workers": True,
         "dataloader_multiprocessing_context": None,  # load_lazy is False
         "num_epoch": 100,
@@ -91,12 +91,13 @@ if __name__ == "__main__":
 
     # parameters to tune
     tune_config = {
-        "patch_size": tune.choice([4, 8, 10]),
+        "patch_size": tune.choice([4, 8]),
         "embed_dim": tune.choice([32, 64, 128]),
         "dropout": tune.choice([0.0, 0.1, 0.2]),
         "hidden": tune.choice([32, 64, 128]),
         "decoder_residual_scale": tune.choice([0.1, 0.5, 1.0]),
         "optimizer_lr": tune.loguniform(1e-3, 1e-1),
+        "optimizer_weight_decay": tune.loguniform(1e-5, 1e-1),
         "batch_config": tune.grid_search(
             [
                 {"batch_size": 100, "accumulation_steps": 1},

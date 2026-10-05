@@ -132,12 +132,14 @@ if __name__ == "__main__":
     embed_dim = best_config["embed_dim"]
     dropout = best_config["dropout"]
     hidden = best_config["hidden"]
+    decoder_residual_scale = best_config["decoder_residual_scale"]
 
     model = SpatioTemporalModel(
         patch_size=model_patch_size,
         embed_dim=embed_dim,
         dropout=dropout,
         hidden=hidden,
+        decoder_residual_scale=decoder_residual_scale,
     )
 
     # move the model to GPU and configure compute resources
@@ -155,6 +157,7 @@ if __name__ == "__main__":
         patience=10,
         accumulation_steps=1,
         optimizer_lr=best_config["optimizer_lr"],
+        optimizer_weight_decay=best_config["optimizer_weight_decay"],
         device=device,
         verbose=True,
         verbose_epoch_interval=10,
