@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from climanet.dataset import DataLoaderConfig
 from climanet.predict import PredictionConfig, predict_monthly_var
 from climanet.utils import (
-    compute_masked_loss,
+    run_one_batch,
     save_model,
     setup_logging,
 )
@@ -35,27 +35,6 @@ class TrainConfig:
     tune_checkpoint: bool = False
     store_model: bool = True
     store_logs: bool = True
-
-
-def _move_batch_to_device(batch: dict, device: str):
-    use_cuda = device == "cuda"
-    return {k: v.to(device, non_blocking=use_cuda) for k, v in batch.items()}
-
-
-def _run_one_batch(model: torch.nn.Module, batch: dict, device):
-    batch = _move_batch_to_device(batch, device)
-    pred = model(
-        batch["input_data"],
-        batch["input_data_mask"],
-        batch["input_data_timef"],
-        batch["land_mask"],
-        batch["geo_pos_embedding"],
-        batch["scale_feature"],
-        batch["padded_days_mask"],
-    )  # (B, M, H, W)
-
-    # Compute masked loss
-    return compute_masked_loss(pred, batch["monthly_data"], batch["land_mask"])
 
 
 def _load_checkpoint(model, optimizer, loaded_checkpoint):
@@ -137,7 +116,7 @@ def train_monthly_model(
         optimizer.zero_grad()
 
         for i, batch in enumerate(dataloader):
-            loss = _run_one_batch(model, batch, device)
+            loss, _ = run_one_batch(model, batch, device, return_predictions=False)
 
             # Scale loss for gradient accumulation
             scaled_loss = loss * (1.0 / training_config.accumulation_steps)
