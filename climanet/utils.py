@@ -305,7 +305,9 @@ def run_one_batch(
     monthly_pred = monthly_res_pred + mean_data
 
     # Compute masked loss
-    loss = compute_masked_loss(monthly_res_pred, monthly_res, batch["land_mask"])
+    monthly_res_norm = monthly_res / batch["res_std"]
+    monthly_res_pred_norm = monthly_res_pred / batch["res_std"]
+    loss = compute_masked_loss(monthly_res_pred_norm, monthly_res_norm, batch["land_mask"])
 
     return (loss, monthly_pred) if return_predictions else (loss, None)
 
