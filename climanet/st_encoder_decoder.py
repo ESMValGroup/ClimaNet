@@ -453,6 +453,11 @@ class MonthlyConvDecoder(nn.Module):
         # Final conv head to map to single-channel output
         self.head = nn.Conv2d(channels, 1, kernel_size=1)
 
+        # Initialize the final conv head weights and biases to zero for stable
+        # training
+        nn.init.zeros_(self.head.weight)
+        nn.init.zeros_(self.head.bias)
+
     def forward(self, latent, M, out_H, out_W, land_mask=None):
         """Reconstruct 2D maps from latent patch tokens.
         Args:
