@@ -72,12 +72,8 @@ if __name__ == "__main__":
     mean_monthly_da["M"] = monthly_da["M"]
     monthly_residuals = monthly_da - mean_monthly_da
     monthly_std = monthly_residuals.groupby("M.month").std(dim=["M", "lat", "lon"], skipna=True)
-    res_std_train = (
-        monthly_std
-        .rename({"month": "M"})
-        .assign_coords(M=monthly_residuals["M"].isel(M=slice(0, 12)).values)
-        .broadcast_like(monthly_residuals.isel(M=slice(0, 12)))
-    )
+    monthly_std = monthly_std.sel(month=monthly_residuals["M.month"])
+    res_std_train = monthly_std.broadcast_like(monthly_residuals)
 
     dataset_train = STDataset(
         input_da=input_da,
@@ -106,13 +102,14 @@ if __name__ == "__main__":
     padded_days_mask = xr.concat(padded_days_masks, dim="M")
     time_features = xr.concat(time_features_list, dim="M")
 
+    res_std_val =res_std_train.isel(M=slice(0, 12))
     dataset_validation = STDataset(
         input_da=input_da,
         input_da_nan_mask=input_da_nan_mask,
         monthly_da=monthly_da,
         padded_days_mask=padded_days_mask,
         time_features=time_features,
-        res_std=res_std_train, # use the training residual std for validation
+        res_std=res_std_val, # use the training residual std for validation
         land_mask=lsm_mask,
         crop_size=dataset_crop_size,
         stride=None, # no overlap for validation
