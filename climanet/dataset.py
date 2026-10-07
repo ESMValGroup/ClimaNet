@@ -44,6 +44,7 @@ class STDataset(Dataset):
         monthly_da: xr.DataArray,
         padded_days_mask: xr.DataArray,
         time_features: xr.DataArray,
+        res_std: xr.DataArray,
         land_mask: xr.DataArray = None,
         model_patch_size: tuple[int, int, int] = (1, 4, 4),  # (Month, lat, lon)
         spatial_dims: tuple[str, str] = ("lat", "lon"),
@@ -151,6 +152,7 @@ class STDataset(Dataset):
         self.geo_pos_t = calculate_sh_geo_pos_embeddings(
             self.lat_coords, self.lon_coords, self.sh_order_L, self.sh_embed_dim
         )
+        self.res_std_t = torch.from_numpy(res_std.to_numpy()).contiguous()
 
     def _compute_crop_indices(self, M: int, H: int, W: int) -> list:
         """Generate crop start indices with coverage warning (overlap support)."""
@@ -322,6 +324,7 @@ class STDataset(Dataset):
         # compute geo_pos_embedding and scale_feature for each model patch within the dataset crop
         geo_pos_embedding_t = self._compute_patch_geo_pos_embedding(i, j)  # (Hp*Wp, sh_embed_dim)
         scale_feature_t = self._compute_patch_scale_features(i, j)  # (Hp*Wp, scale_dim)
+        res_std_t = self.res_std_t[m : m + pm, i : i + ph, j : j + pw]
 
         # Convert to dictionary
         return {
@@ -338,6 +341,7 @@ class STDataset(Dataset):
             "coords": torch.tensor([m, i, j]),
             "lat": lat_crop,  # (pH,)
             "lon": lon_crop,  # (pW,)
+            "res_std": res_std_t,  # (pm, pH, pW)
         }
 
     def __getitems__(self, indices):

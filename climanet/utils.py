@@ -265,24 +265,72 @@ def setup_logging(log_dir: str) -> SummaryWriter:
     return SummaryWriter(log_dir, filename_suffix=f"_UTC{timestamp_utc}")
 
 
+
+def move_batch_to_device(batch: dict, device: str):
+    use_cuda = device == "cuda"
+    return {k: v.to(device, non_blocking=use_cuda) for k, v in batch.items()}
+
+
+def run_one_batch(
+        model: torch.nn.Module, batch: dict, device: str, return_predictions: bool = True
+    ):
+    batch = move_batch_to_device(batch, device)
+    monthly_res_pred = model(
+        batch["input_data"],
+        batch["input_data_mask"],
+        batch["input_data_timef"],
+        batch["land_mask"],
+        batch["geo_pos_embedding"],
+        batch["scale_feature"],
+        batch["padded_days_mask"],
+    )  # (B, M, H, W)
+
+    # Add residuals to monthly mean
+    input_data = batch["input_data"]
+    daily_mask = batch["input_data_mask"]
+    land_mask_patch = batch["land_mask"]
+    masked_data = input_data.masked_fill(daily_mask, float("nan"))
+    mean_data = torch.nanmean(masked_data, dim=3)
+    all_missing = daily_mask.all(dim=3)
+    mean_data = mean_data.masked_fill(all_missing, float("nan"))
+
+    # Apply land mask
+    mean_data = mean_data.masked_fill(
+        land_mask_patch[:, None, None, :, :],
+        float("nan"),
+    )
+    mean_data = mean_data.squeeze(1)  # (B, M, H, W)
+
+    monthly_res = batch["monthly_data"] - mean_data
+    monthly_pred = monthly_res_pred + mean_data
+
+    # Compute masked loss
+    monthly_res_norm = monthly_res / batch["res_std"]
+    monthly_res_pred_norm = monthly_res_pred / batch["res_std"]
+    loss = compute_masked_loss(monthly_res_pred_norm, monthly_res_norm, batch["land_mask"])
+
+    return (loss, monthly_pred) if return_predictions else (loss, None)
+
+
 def compute_masked_loss(
     pred: torch.Tensor, target: torch.Tensor, land_mask: torch.Tensor
 ) -> torch.Tensor:
     """Compute L1 loss masked to ocean pixels only."""
     ocean = (~land_mask).to(pred.device).unsqueeze(1)
 
-    # Mask for valid (non-NaN) target values
-    valid = ~torch.isnan(target)
+    # Mask for valid (non-NaN) values
+    valid = ~torch.isnan(target) & ~torch.isnan(pred)
     target = torch.nan_to_num(target, nan=0.0)
+    pred = torch.nan_to_num(pred, nan=0.0)
 
+    loss = torch.nn.functional.mse_loss(pred, target, reduction="none")
     mask = ocean & valid
-    loss = torch.nn.functional.l1_loss(pred, target, reduction="none")
     loss = loss * mask
-
     num = loss.sum(dim=(-2, -1))
     denom = mask.sum(dim=(-2, -1)).clamp_min(1)
+    loss = (num / denom).mean()
 
-    return (num / denom).mean()
+    return loss
 
 
 def save_model(

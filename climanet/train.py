@@ -1,3 +1,4 @@
+import copy
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,7 +11,7 @@ from torch.utils.data import DataLoader
 from climanet.dataset import DataLoaderConfig
 from climanet.predict import PredictionConfig, predict_monthly_var
 from climanet.utils import (
-    compute_masked_loss,
+    run_one_batch,
     save_model,
     setup_logging,
 )
@@ -34,27 +35,6 @@ class TrainConfig:
     tune_checkpoint: bool = False
     store_model: bool = True
     store_logs: bool = True
-
-
-def _move_batch_to_device(batch: dict, device: str):
-    use_cuda = device == "cuda"
-    return {k: v.to(device, non_blocking=use_cuda) for k, v in batch.items()}
-
-
-def _run_one_batch(model: torch.nn.Module, batch: dict, device):
-    batch = _move_batch_to_device(batch, device)
-    pred = model(
-        batch["input_data"],
-        batch["input_data_mask"],
-        batch["input_data_timef"],
-        batch["land_mask"],
-        batch["geo_pos_embedding"],
-        batch["scale_feature"],
-        batch["padded_days_mask"],
-    )  # (B, M, H, W)
-
-    # Compute masked loss
-    return compute_masked_loss(pred, batch["monthly_data"], batch["land_mask"])
 
 
 def _load_checkpoint(model, optimizer, loaded_checkpoint):
@@ -136,7 +116,7 @@ def train_monthly_model(
         optimizer.zero_grad()
 
         for i, batch in enumerate(dataloader):
-            loss = _run_one_batch(model, batch, device)
+            loss, _ = run_one_batch(model, batch, device, return_predictions=False)
 
             # Scale loss for gradient accumulation
             scaled_loss = loss * (1.0 / training_config.accumulation_steps)
@@ -196,6 +176,7 @@ def train_monthly_model(
             ):
                 gap = avg_val_loss - avg_train_loss
                 print(f"Epoch {epoch}: gap between train and val loss: {gap:.6f}")
+                print(f"Epoch {epoch}: train loss = {avg_train_loss:.6f}, val loss = {avg_val_loss:.6f}")
 
         # Step scheduler
         scheduler.step(avg_epoch_loss)
@@ -204,7 +185,7 @@ def train_monthly_model(
         # Consider improvement only if loss decreases more than a small threshold
         if avg_epoch_loss < best_loss - 1e-4:
             best_loss = avg_epoch_loss
-            best_state_dict = {k: v.detach() for k, v in model.state_dict().items()}
+            best_state_dict = copy.deepcopy(model.state_dict())
             counter = 0
         else:
             counter += 1

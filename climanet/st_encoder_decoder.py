@@ -6,6 +6,7 @@ The main model class is SpatioTemporalModel.
 import torch
 from torch import nn
 from torch.utils.checkpoint import checkpoint
+import math
 
 
 class VideoEncoder(nn.Module):
@@ -41,6 +42,7 @@ class VideoEncoder(nn.Module):
             2 * in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
         )
 
+
     def forward(self, x, mask):
         """Forward pass with masking support via an additional validity channel.
         Args:
@@ -66,7 +68,6 @@ class VideoEncoder(nn.Module):
         x = x.contiguous(memory_format=torch.channels_last_3d)
         x = self.proj(x)
         x = x.flatten(2).transpose(1, 2)
-
         return x
 
 
@@ -381,6 +382,7 @@ class MonthlyConvDecoder(nn.Module):
         patch_w=4,
         hidden=128,
         dropout=0.0,
+        residual_scale=0.5,
     ):
         """
         Args:
@@ -392,46 +394,69 @@ class MonthlyConvDecoder(nn.Module):
             hidden: Hidden dimension in the decoder for mixing channel features.
                 The default is 128, which can be tuned.
             dropout: Dropout rate for regularization in the refinement block. Default is 0.0.
+            residual_scale: Scaling factor for the residual connection in the refinement block. Default is 0.5.
         """
         super().__init__()
         self.patch_h = patch_h
         self.patch_w = patch_w
+        self.residual_scale = residual_scale
+
+        # Number of progressive x2 upsampling stages.
+        n_upsample = int(math.log2(patch_h))
+
 
         # Mix channel features on the patch grid (Hp, Wp)
         # Input shape: (B, embed_dim, Hp, Wp) → Output shape: (B, hidden, Hp, Wp)
         # here kernel_size=1 means we are mixing features at each patch location
         # without spatial interaction
         in_channels, out_channels = embed_dim, hidden
-        self.proj = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+        self.proj = nn.Sequential(
+            nn.Conv2d(embed_dim, hidden, kernel_size=1),
+            nn.GroupNorm(8, hidden),
+            nn.GELU(),
+        )
+
+        # Spatial processing before upsampling
+        self.spatial_mix = nn.Sequential(
+            nn.Conv2d(hidden, hidden, kernel_size=3, padding=1),
+            nn.GroupNorm(8, hidden),
+            nn.GELU(),
+        )
 
         # Upsample to full resolution
-        in_channels, out_channels = hidden, hidden // 2
-        self.deconv = nn.ConvTranspose2d(
-            in_channels,
-            out_channels,
-            kernel_size=(patch_h, patch_w),
-            stride=(patch_h, patch_w),
-            padding=0,
-        )
+        channels = hidden
+        self.deconv = nn.ModuleList()
+
+        for i in range(n_upsample):
+            # Gradually reduce channels as spatial resolution increases
+            next_channels = max(hidden // (2 ** (i + 1)), 16)
+            block = nn.Sequential(
+                nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
+                nn.Conv2d(channels, next_channels, kernel_size=3, padding=1),
+                nn.GroupNorm(min(8, next_channels), next_channels),
+                nn.GELU(),
+                nn.Dropout2d(dropout),
+            )
+            self.deconv.append(block)
+            channels = next_channels
 
         # Final conv head to get single channel output kernel_size=3 is the most
         # common choice for spatial convolutions; it's the smallest kernel that
         # captures spatial context in all directions
-        in_channels, out_channels = hidden // 2, hidden // 2
-
         # Refinement block: a small conv layers to smooth patch boundaries
         self.refine = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.GroupNorm(num_groups=8, num_channels=out_channels),
-            nn.GELU(),
-            nn.Dropout2d(dropout),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.GroupNorm(num_groups=8, num_channels=out_channels),
+            nn.Conv2d(channels, channels, kernel_size=3, padding=1),
+            nn.GroupNorm(min(8, channels), channels),
             nn.GELU(),
         )
 
         # Final conv head to map to single-channel output
-        self.head = nn.Conv2d(out_channels, 1, kernel_size=1)
+        self.head = nn.Conv2d(channels, 1, kernel_size=1)
+
+        # Initialize the final conv head weights and biases to zero for stable
+        # training
+        nn.init.zeros_(self.head.weight)
+        nn.init.zeros_(self.head.bias)
 
     def forward(self, latent, M, out_H, out_W, land_mask=None):
         """Reconstruct 2D maps from latent patch tokens.
@@ -459,8 +484,13 @@ class MonthlyConvDecoder(nn.Module):
         # Apply 1x1 convolution to mix features
         out = self.proj(out)  # (B*M, hidden, Hp, Wp)
 
-        # Use transposed convolution to upsample
-        out = self.deconv(out)  # (B*M, hidden//2, H, W)
+        # Spatial interaction before upsampling
+        residual = self.spatial_mix(out)
+        out = out + residual
+
+        # Progressive x2 upsampling
+        for block in self.deconv:
+            out = block(out)
 
         # Refinement CNN to smooth boundaries
         refine_input = out
@@ -469,6 +499,10 @@ class MonthlyConvDecoder(nn.Module):
 
         # Apply final conv head to get single channel output
         out = self.head(out)  # (B*M, 1, H, W)
+
+        # Apply residual scaling and non-linearity
+        out = self.residual_scale * torch.tanh(out)
+
         out = out.view(B, M, out_H, out_W)  # (B, M, H, W)
 
         # Mask out land areas if land_mask is provided
@@ -589,6 +623,7 @@ class SpatioTemporalModel(nn.Module):
         sh_dim=96,
         scale_dim=10,
         use_checkpoint=True,
+        decoder_residual_scale=0.5,
     ):
         """Initialize the Spatio-Temporal Model.
 
@@ -633,6 +668,7 @@ class SpatioTemporalModel(nn.Module):
             patch_w=patch_size[2],
             hidden=hidden,
             dropout=dropout,
+            residual_scale=decoder_residual_scale,
         )
         self.patch_size = patch_size
 
@@ -742,9 +778,10 @@ class SpatioTemporalModel(nn.Module):
         # decoder input shape is (B, M*Hp*Wp, C), C: embedding dimension
         # decoder output shape is (B, M, H, W)
         if self.use_checkpoint:
-            monthly_pred = checkpoint(
+            monthly_res_pred = checkpoint(
                 self.decoder, x, M, H, W, land_mask_patch, use_reentrant=False
             )  # (B, M, H, W)
         else:
-            monthly_pred = self.decoder(x, M, H, W, land_mask_patch)  # (B, M, H, W)
-        return monthly_pred
+            monthly_res_pred = self.decoder(x, M, H, W, land_mask_patch)  # (B, M, H, W)
+
+        return monthly_res_pred
