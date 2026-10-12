@@ -93,6 +93,7 @@ def train_monthly_model(
     )
 
     best_loss = float("inf")
+    ref_loss = float("inf")
     counter = 0
     best_state_dict = None  # Store best model state
 
@@ -183,9 +184,12 @@ def train_monthly_model(
 
         # Early stopping check
         # Consider improvement only if loss decreases more than a small threshold
-        if avg_epoch_loss < best_loss - 1e-4:
+        if avg_epoch_loss < best_loss:
             best_loss = avg_epoch_loss
             best_state_dict = copy.deepcopy(model.state_dict())
+
+        if avg_epoch_loss < ref_loss * (1 - 1e-3):
+            ref_loss = avg_epoch_loss
             counter = 0
         else:
             counter += 1
