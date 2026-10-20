@@ -83,13 +83,14 @@ def train_monthly_model(
         persistent_workers=dataloader_config.persistent_workers,  # keep workers alive between epochs
         multiprocessing_context=dataloader_config.multiprocessing_context,
     )
-    num_batches = len(dataloader)
+    num_batches = len(dataset_train)
 
     # Set the optimizer
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=training_config.optimizer_lr,
         weight_decay=training_config.optimizer_weight_decay,
+        betas=(0.9, 0.95),
     )
 
     best_loss = float("inf")
@@ -124,7 +125,8 @@ def train_monthly_model(
             scaled_loss.backward()
 
             # Track unscaled loss for logging
-            epoch_loss += loss.detach()
+            batch_size = batch["input_data"].shape[0]
+            epoch_loss += loss.detach() * batch_size
 
             # Update weights every accumulation_steps batches
             if (i + 1) % training_config.accumulation_steps == 0:

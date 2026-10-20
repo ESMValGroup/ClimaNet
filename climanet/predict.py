@@ -116,7 +116,7 @@ def predict_monthly_var(
         persistent_workers=dataloader_config.persistent_workers,  # keep workers alive between epochs
         multiprocessing_context=dataloader_config.multiprocessing_context,
     )
-    num_batches = len(dataloader)
+    num_batches = len(dataset)
 
     # Set up logging
     if prediction_config.store_logs:
@@ -137,7 +137,8 @@ def predict_monthly_var(
         average_loss = 0.0
         for i, batch in enumerate(dataloader):
             loss, predictions = run_one_batch(model, batch, device)
-            average_loss += loss.detach()
+            batch_size = batch["input_data"].shape[0]
+            average_loss += loss.detach() * batch_size
 
             all_predictions[idx : idx + predictions.size(0)] = predictions.detach()
             idx += predictions.size(0)
