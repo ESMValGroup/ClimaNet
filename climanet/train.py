@@ -140,12 +140,12 @@ def train_monthly_model(
 
         # Calculate average epoch loss
         avg_train_loss = epoch_loss.item() / num_batches
-        avg_epoch_loss = avg_train_loss  # Initially use training loss
 
         if training_config.store_logs:
             writer.add_scalar("Loss/train", avg_train_loss, epoch)
 
         # Validation loss (optional)
+        # only for logging and monitoring generalization performance
         if dataset_validation is not None:
             prediction_config = PredictionConfig(
                 calculate_residuals=training_config.calculate_residuals,
@@ -164,7 +164,6 @@ def train_monthly_model(
                 prediction_config=prediction_config,
                 run_dir=run_dir,
             )
-            avg_epoch_loss = avg_val_loss
 
             # after validation, switch back to training mode because the model
             # was set to eval mode during validation
@@ -182,16 +181,16 @@ def train_monthly_model(
                 print(f"Epoch {epoch}: train loss = {avg_train_loss:.6f}, val loss = {avg_val_loss:.6f}")
 
         # Step scheduler
-        scheduler.step(avg_epoch_loss)
+        scheduler.step(avg_train_loss)
 
         # Early stopping check
         # Consider improvement only if loss decreases more than a small threshold
-        if avg_epoch_loss < best_loss:
-            best_loss = avg_epoch_loss
+        if avg_train_loss < best_loss:
+            best_loss = avg_train_loss
             best_state_dict = copy.deepcopy(model.state_dict())
 
-        if avg_epoch_loss < ref_loss * (1 - 1e-3):
-            ref_loss = avg_epoch_loss
+        if avg_train_loss < ref_loss * (1 - 1e-3):
+            ref_loss = avg_train_loss
             counter = 0
         else:
             counter += 1
