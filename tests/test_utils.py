@@ -2,7 +2,7 @@ import numpy as np
 import xarray as xr
 from tbparse import SummaryReader
 
-from climanet.utils import coarsen_land_mask, data_preparation, setup_logging
+from climanet.utils import coarsen_land_mask, compute_anom_scale, data_preparation, setup_logging
 
 
 def test_setup_logging(tmp_path):
@@ -161,3 +161,18 @@ def test_coarsen_land_mask():
     )  # all values below 0.5 should be False
     assert lsm_mask_05.shape == (1, 4, 2)  # By default downsample with a factor of 2
     assert lsm_mask_05.dtype == bool  # Mask should be of boolean type
+
+
+def test_compute_anom_scale():
+    M, T, H, W = 1, 24*2, 4, 4  # 2 days of hourly data
+    data = np.random.rand(M, T, H, W)
+    nan_mask = np.zeros_like(data, dtype=bool)
+    land_mask = np.zeros((M, H, W), dtype=bool)
+
+    input_da = xr.DataArray(data, dims=["M", "T", "H", "W"])
+    input_nan_mask = xr.DataArray(nan_mask, dims=["M", "T", "H", "W"])
+    land_mask_da = xr.DataArray(land_mask, dims=["M", "H", "W"])
+
+    scale = compute_anom_scale(input_da, input_nan_mask, land_mask_da)
+    assert isinstance(scale, float)
+    assert scale >= 0
