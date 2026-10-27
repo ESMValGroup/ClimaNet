@@ -9,9 +9,17 @@ import torch
 from torch import nn
 from torch.utils.checkpoint import checkpoint
 
+from climanet.spatial_context import (
+    MaskedSpatialMix,
+    NeighborFill,
+    PatchStats,
+    PixelFeatures,
+    token_validity,
+)
+
 
 class VideoEncoder(nn.Module):
-    """Video Encoder with spatio-temporal patch embedding.
+    """Video Encoder + extra context channels that are not zeroed at missing pixels.
 
     This module converts an input video into a sequence of non-overlapping
     spatio-temporal patch embeddings using a 3D convolution.
@@ -25,7 +33,7 @@ class VideoEncoder(nn.Module):
     https://arxiv.org/abs/2203.12602
     """
 
-    def __init__(self, in_chans=1, embed_dim=128, proj_dim=64, patch_size=(1, 4, 4), dropout=0.0):
+    def __init__(self, in_chans=1, embed_dim=128, proj_dim=64, patch_size=(1, 4, 4), dropout=0.0, context_chans=4):
         """
         Args:
             in_chans: Number of input channels (1 for SST)
@@ -36,25 +44,25 @@ class VideoEncoder(nn.Module):
                 This allows control over the size of the patch embeddings before the final embedding.
             patch_size: Tuple of (T, H, W) patch size. Default is (1, 4, 4).
             dropout: Dropout rate applied after the patch embedding and expansion.
+            context_chans: Number of extra context channels that are not zeroed at missing pixels.
         """
         super().__init__()
         self.patch_size = patch_size
 
-        # proj is a Conv3d with kernel and stride = patch_size to create non-overlapping patches
-        # 2 * in_chans because we add a validity channel
-        self.proj = nn.Conv3d(
-            2 * in_chans, proj_dim, kernel_size=patch_size, stride=patch_size, bias=False
-        )
+        self.proj = nn.Conv3d(2 * in_chans + context_chans, proj_dim,
+                              kernel_size=patch_size, stride=patch_size, bias=False)
+
         self.expand = nn.Linear(proj_dim, embed_dim, bias=False)
         self.drop = nn.Dropout(dropout)
         self.norm = nn.LayerNorm(embed_dim)
 
-    def forward(self, x, mask):
+    def forward(self, x, mask, context):
         """Forward pass with masking support via an additional validity channel.
         Args:
             x: Input video tensor of shape (B, C, T, H, W)
             mask: Boolean mask tensor of shape (B, C, T, H, W), where True
             indicates masked pixels
+            context: Extra context channels of shape (B, context_chans, T, H, W)
 
         Returns:
             Embedded patches of shape (B, N_patches, embed_dim)
@@ -64,20 +72,14 @@ class VideoEncoder(nn.Module):
             as an additional input channel
         """
         valid = (~mask).to(dtype=x.dtype)
-
-        if valid.shape != x.shape:
-            valid = valid.expand_as(x)
-
         x = x.masked_fill(mask, 0.0)
-        x = torch.cat((x, valid), dim=1)
-
+        x = torch.cat((x, valid, context.to(x.dtype)), dim=1)
         x = x.contiguous(memory_format=torch.channels_last_3d)
         x = self.proj(x)
         x = x.flatten(2).transpose(1, 2)
         x = self.expand(x)
         x = self.norm(x)
-        x = self.drop(x)
-        return x
+        return self.drop(x)
 
 
 class RelTimeEmbedding(nn.Module):
@@ -231,15 +233,22 @@ class TemporalAttentionAggregator(nn.Module):
         return out
 
 
+class _ResBlock(nn.Module):
+    def __init__(self, c, dilation=1):
+        super().__init__()
+        self.n = nn.Identity()
+        self.c1 = nn.Conv2d(c, c, 3, padding=dilation, dilation=dilation)
+        self.c2 = nn.Conv2d(c, c, 3, padding=1)
+
+    def forward(self, x):
+        return x + self.c2(torch.nn.functional.gelu(self.c1(self.n(x))))
+
+
 class MonthlyConvDecoder(nn.Module):
     """Decoder to reconstruct 2D maps from patch tokens.
 
-    The MonthlyConvDecoder converts latent patch tokens back to pixel space:
-        - Applies a 1*1 convolution to mix features on the patch grid.
-        - Uses a transposed convolution (deconvolution) to upsample tokens to the original spatial resolution.
-        - Applies a convolutional refinement block to smooth patch boundaries.
-        - Applies a small convolutional head to produce the final single-channel output.
-        - Optionally masks out land regions using a boolean mask.
+    The MonthlyConvDecoder converts latent patch tokens back to pixel space via
+    coarse tokens (bilinear) + pixel path, with a linear prior skip.
     """
 
     def __init__(
@@ -248,6 +257,11 @@ class MonthlyConvDecoder(nn.Module):
         patch_h=4,
         patch_w=4,
         hidden=128,
+        n_pix_feat=53,
+        delta_idx=49,
+        n_sigmas=2,
+        anom_scale=0.1,
+        target_scale=1.0,
     ):
         """
         Args:
@@ -258,39 +272,49 @@ class MonthlyConvDecoder(nn.Module):
             patch_w: Patch width
             hidden: Hidden dimension in the decoder for mixing channel features.
                 The default is 128, which can be tuned.
+            n_pix_feat: Number of per-pixel features. The default is 53.
+            delta_idx: Index of the first delta-estimate channel. The default is 49 (24 + 24 + 1).
+            n_sigmas: Number of sigma channels for the delta estimates. The default is 2.
+            anom_scale: Scale of the anomaly features. The default is 0.1.
+            target_scale: Scale of the target variable. The default is 1.0.
+
         """
         super().__init__()
+
         self.patch_h = patch_h
         self.patch_w = patch_w
+        self.delta_idx = delta_idx
+        self.n_sigmas = n_sigmas
 
-        # Mix channel features on the patch grid (Hp, Wp)
-        # Input shape: (B, embed_dim, Hp, Wp) → Output shape: (B, hidden, Hp, Wp)
-        # here kernel_size=1 means we are mixing features at each patch location
-        # without spatial interaction
-        in_channels, out_channels = embed_dim, hidden
-        self.proj = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+        # Number of residual blocks in the decoder
+        n_res = 2
 
-        # Spatial processing before upsampling
-        self.spatial_mix = nn.Conv2d(hidden, hidden, kernel_size=3, padding=1)
+        self.proj = nn.Conv2d(embed_dim, hidden, 1)
+        self.spatial_mix = nn.Conv2d(hidden, hidden, 3, padding=1)
+        # bilinear (align_corners=False) keeps token centers aligned with patch centers
+        self.up = nn.Upsample(scale_factor=(patch_h, patch_w), mode="bilinear", align_corners=False)
 
-        # Upsample to full resolution
-        in_channels, out_channels = hidden, hidden // 2
-        self.deconv = nn.ConvTranspose2d(
-            in_channels,
-            out_channels,
-            kernel_size=(patch_h, patch_w),
-            stride=(patch_h, patch_w),
-            padding=0,
-        )
+        c = hidden // 2
+        self.coarse = nn.Conv2d(hidden, c, 3, padding=1)
+        self.pix = nn.Sequential(nn.Conv2d(n_pix_feat, c, 1), nn.GELU(), nn.Conv2d(c, c, 1))
+        self.fuse = nn.Conv2d(2 * c, c, 1)
+        self.blocks = nn.ModuleList(_ResBlock(c, dilation=1 if i % 2 == 0 else 2) for i in range(n_res))
+        self.head = nn.Conv2d(c, 1, 1)
 
-        # Refinement block: a small conv layers to smooth patch boundaries
-        in_channels, out_channels = hidden // 2, hidden // 2
-        self.refine = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+        # linear skip from pixel features; initialised to the physical prior:
+        # pred (normalised units) ~= delta_raw / target_scale = feature * anom_scale / target_scale
+        self.prior_scale = anom_scale / target_scale   # feature units -> normalized target units
 
-        # Final conv head to map to single-channel output
-        self.head = nn.Conv2d(out_channels, 1, kernel_size=1)
+        # per-pixel gate: sees conf, frac, diurnal stats -> how much to trust the prior here
+        self.gate = nn.Conv2d(n_pix_feat, 1, 1)
+        nn.init.zeros_(self.gate.weight)
+        nn.init.constant_(self.gate.bias, 2.0) # sigmoid(2) ≈ 0.88: starts near "trust the prior"
 
-    def forward(self, latent, out_H, out_W, land_mask=None):
+        # small head so the network starts at the prior but still receives gradient
+        nn.init.normal_(self.head.weight, std=1e-3)
+        nn.init.zeros_(self.head.bias)
+
+    def forward(self, latent, out_H, out_W, pix_feat, land_mask=None):
         """Reconstruct 2D maps from latent patch tokens.
         Args:
             latent: Tensor of shape (B, M*Hp*Wp, E) where E is the embedding dimension.
@@ -303,40 +327,29 @@ class MonthlyConvDecoder(nn.Module):
             Tensor of shape (B, M, out_H, out_W) representing the monthly variable e.g. SST.
         """
         B, M, Np, E = latent.shape
-        Hp = out_H // self.patch_h
-        Wp = out_W // self.patch_w
+        patch_h, patch_w = self.up.scale_factor
+        Hp, Wp = out_H // int(patch_h), out_W // int(patch_w)
         assert Np == Hp * Wp, f"Token mismatch: got {Np}, expected {Hp * Wp}"
 
-        # transforms the latent tensor from sequence format to image format for
-        # convolution operations;
-        out = latent.reshape(B, M, Hp, Wp, E)
-        out = out.permute(0, 1, 4, 2, 3).contiguous()
-        out = out.reshape(B * M, E, Hp, Wp)
+        embeded = latent.reshape(B, M, Hp, Wp, E).permute(0, 1, 4, 2, 3).reshape(B * M, E, Hp, Wp)
+        embeded = torch.nn.functional.gelu(self.proj(embeded))
+        embeded = torch.nn.functional.gelu(self.spatial_mix(embeded))
+        embeded = torch.nn.functional.gelu(self.coarse(self.up(embeded)))
 
-        # Apply 1x1 convolution to mix features
-        out = self.proj(out)  # (B*M, hidden, Hp, Wp)
+        p = self.pix(pix_feat)
+        h = self.fuse(torch.cat([embeded, p], dim=1))
+        for block in self.blocks:
+            h = block(h)
 
-        # Spatial interaction before upsampling
-        out = self.spatial_mix(out)
+        prior = pix_feat[:, self.delta_idx:self.delta_idx + self.n_sigmas].mean(1, keepdim=True) * self.prior_scale
+        prior = prior.clamp(-5.0, 5.0)
+        g = torch.sigmoid(self.gate(pix_feat))
+        out = self.head(torch.nn.functional.gelu(h)) + g * prior
 
-        # Use transposed convolution to upsample
-        out = self.deconv(out)  # (B*M, hidden//2, H, W)
-
-        # Refinement CNN to smooth boundaries
-        refine_input = out
-        out = self.refine(out)  # (B*M, hidden//2, H, W)
-        out = out + refine_input  # Residual connection to preserve original features
-
-        # Apply final conv head to get single channel output
-        out = self.head(out)  # (B*M, 1, H, W)
-
-        out = out.view(B, M, out_H, out_W)  # (B, M, H, W)
-
-        # Mask out land areas if land_mask is provided
+        out = out.view(B, M, out_H, out_W)
         if land_mask is not None:
             out = out.masked_fill(land_mask.bool()[:, None, :, :], 0.0)
-        return out  # (B, M, out_H, out_W)
-
+        return out
 
 class SpatioTemporalModel(nn.Module):
     """Spatio-Temporal Model for Monthly Prediction.
@@ -367,6 +380,9 @@ class SpatioTemporalModel(nn.Module):
         hidden=256,
         dropout=0.0,
         anom_scale=0.1,
+        target_scale=1.0,
+        fill_sigmas=(2.0, 5.0),
+        mix_dilations=(1, 2),
         use_checkpoint=True,
     ):
         """Initialize the Spatio-Temporal Model.
@@ -379,6 +395,9 @@ class SpatioTemporalModel(nn.Module):
             hidden: Hidden dimension used in the decoder
             dropout: Dropout rate for regularization in various components. Increase it if there is overfitting.
             anom_scale: Scaling factor for anomaly computation in patch statistics.
+            target_scale: Scaling factor for the target in the decoder.
+            fill_sigmas: Tuple of sigma values used in the NeighborFill module for estimating missing values.
+            mix_dilations: Tuple of dilation rates used in the MaskedSpatialMix module for spatial mixing.
             use_checkpoint: Whether to use gradient checkpointing to save memory during training.
         """
         super().__init__()
@@ -390,26 +409,41 @@ class SpatioTemporalModel(nn.Module):
 
         self.use_checkpoint = use_checkpoint
 
+        context_chans = 2 * len(fill_sigmas)
         self.encoder = VideoEncoder(
             in_chans=in_chans,
             embed_dim=embed_dim,
             proj_dim=encoder_proj_dim,
             patch_size=patch_size,
             dropout=dropout,
+            context_chans=context_chans,
         )
         self.temporal = TemporalAttentionAggregator(
             embed_dim=embed_dim,
             dropout=dropout,
         )
+        self.fill = NeighborFill(fill_sigmas, anom_scale=anom_scale)
+        self.spatial_mix = MaskedSpatialMix(embed_dim, mix_dilations)
 
+        self.pix_feat = PixelFeatures(anom_scale, len(fill_sigmas))
         self.decoder = MonthlyConvDecoder(
             embed_dim=embed_dim,
             patch_h=patch_size[1],
             patch_w=patch_size[2],
             hidden=hidden,
+            n_pix_feat=self.pix_feat.n_feat,
+            delta_idx=self.pix_feat.delta_idx,
+            n_sigmas=len(fill_sigmas),
+            anom_scale=anom_scale,
+            target_scale=target_scale,
         )
         self.patch_size = patch_size
         self.stats = PatchStats(embed_dim=embed_dim, patch_size=patch_size, anom_scale=anom_scale)
+
+    def _run(self, fn, *args):
+        if self.use_checkpoint:
+            return checkpoint(fn, *args, use_reentrant=False)
+        return fn(*args)
 
     def forward(
         self,
@@ -462,130 +496,26 @@ class SpatioTemporalModel(nn.Module):
         input_data_reshaped = input_data_norm.reshape(B * M, C, T, H, W)
         daily_mask_reshaped = daily_mask.reshape(B * M, C, T, H, W)
 
-        if self.use_checkpoint:
-            latent = checkpoint(
-                self.encoder,
-                input_data_reshaped,
-                daily_mask_reshaped,
-                use_reentrant=False,
-            )
-        else:
-            latent = self.encoder(
-                input_data_reshaped, daily_mask_reshaped,
-            )
+        context = self.fill(input_data_norm, daily_mask, land_mask_patch)
 
-        # Step 2: Aggregate temporal information for each spatial patch
-        embed_dim = latent.shape[-1]
-        latent = latent.view(B, M, Tp, Hp, Wp, embed_dim)
+        latent = self._run(
+            self.encoder, input_data_reshaped, daily_mask_reshaped, context
+        )
+        latent = latent.view(B, M, Tp, Hp, Wp, -1)
 
-        if self.use_checkpoint:
-            x_averaged = checkpoint(
-                self.temporal,
-                latent,
-                daily_timef,
-                padded_days_mask,
-                use_reentrant=False,
-            )
-        else:
-            x_averaged = self.temporal(
-                latent, daily_timef, padded_days_mask
-            )
+        # Step 2: Spatial mixing
+        tok_v = token_validity(daily_mask, land_mask_patch, self.patch_size)
+        latent = self._run(self.spatial_mix, latent, tok_v)
+
+        # Step 3: Aggregate temporal information for each spatial patch
+        x_averaged = self._run(self.temporal, latent, daily_timef, padded_days_mask)
 
         # # Step 3: Add explicit statistics per patch
         stat_embed = self.stats(input_data_norm, daily_mask, land_mask_patch, padded_days_mask)
         x = x_averaged + stat_embed
 
         # Step 4: Decode to full-resolution 2D map
-        if self.use_checkpoint:
-            monthly_res_pred = checkpoint(
-                self.decoder, x, H, W, land_mask_patch, use_reentrant=False
-            )
-        else:
-            monthly_res_pred = self.decoder(x, H, W, land_mask_patch)
+        pixel_features = self.pix_feat(input_data_norm, daily_mask, land_mask_patch, padded_days_mask, context)
+        monthly_res_pred = self.decoder(x, H, W, pixel_features, land_mask_patch)
 
         return monthly_res_pred   # (B, M, H, W)
-
-
-class PatchStats(nn.Module):
-    """Explicit gap/diurnal statistics per patch, computed from data + mask.
-
-    Per pixel and hour-of-day bin (24 bins):
-      - share of observations falling in that bin (the sampling distribution)
-      - mean anomaly of that bin relative to the pixel's observed mean (diurnal shape)
-    Plus the overall observed fraction. Then pooled to the patch grid (ocean only)
-    and projected to embed_dim.
-    """
-
-    def __init__(self, embed_dim, patch_size, anom_scale=0.1):
-        """
-        Args:
-            embed_dim (int): Dimension of the embedding.
-            patch_size (tuple): Size of the spatial patch (C, H, W).
-            anom_scale (float, optional): Scaling factor for anomalies. Defaults to 0.1.
-                This is used to scale the anomalies computed from the input data
-                using the `compute_anom_scale` function.
-        """
-        super().__init__()
-
-        self.ph, self.pw = patch_size[1], patch_size[2]
-        self.anom_scale = anom_scale
-
-        in_dim = 24 + 24 + 1  # 24 bin anomalies + 24 bin shares + overall fraction
-        hidden = 2 * embed_dim
-
-        self.mlp = nn.Sequential(
-            nn.Linear(in_dim, hidden),
-            nn.GELU(),
-            nn.Linear(hidden, hidden),
-            nn.GELU(),
-            nn.Linear(hidden, embed_dim),
-        )
-
-    def forward(self, x_norm, mask, land, padded_days_mask):
-        """
-        Args:
-            x_norm (torch.Tensor): Normalized input data of shape (B, 1, M, T, H, W).
-            mask (torch.Tensor): Mask indicating missing values, same shape as x_norm.
-            land (torch.Tensor): Land mask of shape (B, 1, H, W), True for land pixels.
-            padded_days_mask (torch.Tensor): Mask indicating padded days, shape (B, M, nd, 24, H, W).
-
-        Returns:
-            torch.Tensor: Patch-level statistics of shape (B, M, Hp*Wp, embed_dim).
-        """
-        # x_norm: (B, 1, M, T, H, W) anomaly input (gaps = 0); mask: same shape, True = missing
-        B, C, M, T, H, W = x_norm.shape
-
-        assert C == 1 and T % 24 == 0, "Input tensor must have 1 channel and T must be divisible by 24"
-
-        nd = T // 24
-        x, mask = x_norm[:, 0], mask[:, 0]
-
-        # Compute observed values
-        obs = (~mask).to(x.dtype)
-        xv = x.reshape(B, M, nd, 24, H, W)  # gaps are already 0
-        ov = obs.reshape(B, M, nd, 24, H, W)
-        cnt = ov.sum(2)
-        tot = cnt.sum(2)
-
-        # Compute bin-level anomalies and shares
-        bin_anom = xv.sum(2) / cnt.clamp(min=1) / self.anom_scale   # empty bins -> 0
-        share = cnt / tot[:, :, None].clamp(min=1) * 24
-
-        n_valid = (~padded_days_mask).sum(-1).clamp(min=1)
-        frac = tot / n_valid[:, :, None, None]
-
-        features = torch.cat([bin_anom, share, frac[:, :, None]], dim=2)
-        F_ = features.shape[2]
-        features = features.reshape(B * M, F_, H, W).permute(0, 2, 3, 1)
-
-        # Apply MLP to features
-        embeded_features = self.mlp(features).permute(0, 3, 1, 2)
-
-        # Pool over ocean regions only
-        ocean = (~land).to(x.dtype)[:, None].repeat_interleave(M, dim=0)
-        num = torch.nn.functional.avg_pool2d(embeded_features * ocean, (self.ph, self.pw))
-        den = torch.nn.functional.avg_pool2d(ocean, (self.ph, self.pw)).clamp(min=1e-6)
-        pooled = num / den
-
-        Hp, Wp = pooled.shape[-2:]
-        return pooled.permute(0, 2, 3, 1).reshape(B, M, Hp * Wp, -1)
