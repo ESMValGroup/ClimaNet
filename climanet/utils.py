@@ -13,7 +13,7 @@ from matplotlib.colors import TwoSlopeNorm
 from tbparse import SummaryReader
 from torch.utils.tensorboard import SummaryWriter
 
-from climanet.pixel_path import SpatioTemporalModelPix
+from .st_encoder_decoder import SpatioTemporalModel
 
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
@@ -338,7 +338,7 @@ def save_model(
 def load_model(model_path: str, device: str):
     """Helper function to load a model from a checkpoint."""
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-    model = SpatioTemporalModelPix(**checkpoint["model_config"])
+    model = SpatioTemporalModel(**checkpoint["model_config"])
     model.load_state_dict(checkpoint["model_state_dict"])
     return model.to(device)
 
