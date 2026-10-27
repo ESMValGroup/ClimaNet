@@ -13,7 +13,7 @@ from matplotlib.colors import TwoSlopeNorm
 from tbparse import SummaryReader
 from torch.utils.tensorboard import SummaryWriter
 
-from climanet.st_encoder_decoder import SpatioTemporalModel
+from climanet.pixel_path import SpatioTemporalModelPix
 
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
@@ -275,41 +275,20 @@ def run_one_batch(
         model: torch.nn.Module, batch: dict, device: str, return_predictions: bool = True
     ):
     batch = move_batch_to_device(batch, device)
+
     monthly_res_pred = model(
         batch["input_data"],
         batch["input_data_mask"],
         batch["input_data_timef"],
         batch["land_mask"],
-        batch["geo_pos_embedding"],
-        batch["scale_feature"],
-        batch["padded_days_mask"],
+        batch["padded_days_mask"]
     )  # (B, M, H, W)
 
-    # Add residuals to monthly mean
-    input_data = batch["input_data"]
-    daily_mask = batch["input_data_mask"]
-    land_mask_patch = batch["land_mask"]
-    masked_data = input_data.masked_fill(daily_mask, float("nan"))
-    mean_data = torch.nanmean(masked_data, dim=3)
-    all_missing = daily_mask.all(dim=3)
-    mean_data = mean_data.masked_fill(all_missing, float("nan"))
-
-    # Apply land mask
-    mean_data = mean_data.masked_fill(
-        land_mask_patch[:, None, None, :, :],
-        float("nan"),
-    )
-    mean_data = mean_data.squeeze(1)  # (B, M, H, W)
-
-    monthly_res = batch["monthly_data"] - mean_data
-    monthly_pred = monthly_res_pred + mean_data
-
     # Compute masked loss
-    monthly_res_norm = monthly_res / batch["res_std"]
-    monthly_res_pred_norm = monthly_res_pred / batch["res_std"]
-    loss = compute_masked_loss(monthly_res_pred_norm, monthly_res_norm, batch["land_mask"])
+    monthly_res = batch["monthly_data"]
+    loss, num, denom = compute_masked_loss(monthly_res_pred, monthly_res, batch["land_mask"])
 
-    return (loss, monthly_pred) if return_predictions else (loss, None)
+    return (loss, num, denom, monthly_res_pred) if return_predictions else (loss, num, denom, None)
 
 
 def compute_masked_loss(
@@ -326,11 +305,11 @@ def compute_masked_loss(
     loss = torch.nn.functional.mse_loss(pred, target, reduction="none")
     mask = ocean & valid
     loss = loss * mask
-    num = loss.sum(dim=(-2, -1))
-    denom = mask.sum(dim=(-2, -1)).clamp_min(1)
-    loss = (num / denom).mean()
+    num = loss.sum()
+    denom = mask.sum()
+    loss = (num / denom.clamp_min(1)).mean()
 
-    return loss
+    return loss, num, denom
 
 
 def save_model(
@@ -359,7 +338,7 @@ def save_model(
 def load_model(model_path: str, device: str):
     """Helper function to load a model from a checkpoint."""
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-    model = SpatioTemporalModel(**checkpoint["model_config"])
+    model = SpatioTemporalModelPix(**checkpoint["model_config"])
     model.load_state_dict(checkpoint["model_state_dict"])
     return model.to(device)
 
@@ -807,6 +786,7 @@ def data_preparation(
 
     if calculate_residuals:
         input_data_averaged = input_data.resample({time_dim: "MS"}).mean(skipna=True)
+        input_data_averaged = input_data_averaged.dropna(dim="time", how="all")
         input_data_averaged[time_dim] = monthly_data[time_dim]
         monthly_data_res = monthly_data - input_data_averaged
     else:
@@ -967,3 +947,59 @@ def coarsen_land_mask(
     coarse_lsm = coarse_lsm >= threshold
 
     return coarse_lsm
+
+
+def compute_anom_scale(input_da, input_nan_mask, land_mask):
+    """Compute the standard deviation of binned anomalies for the input data.
+
+    The function first reshapes the input data into daily bins, computes the
+    mean over each day, and then calculates the anomaly by subtracting the
+    overall mean. The standard deviation of these anomalies is computed over
+    valid ocean points.
+    This is used in class `ExplicitStats`.
+
+    Args:
+        input_da (xarray.DataArray): Input data array with shape (M, T, H, W).
+        input_nan_mask (xarray.DataArray): Boolean mask indicating NaN values in the input data.
+        land_mask (xarray.DataArray): Boolean mask indicating land areas.
+
+    Returns:
+        float: Standard deviation of binned anomalies over valid ocean points.
+    """
+
+    obs = ~ input_nan_mask
+    _, T, _, _ = input_da.shape  # M, T, H, W
+    nd = T // 24  # number of days in the input data
+
+    x = input_da.isel({input_da.dims[1]: slice(0, nd * 24)})
+    obs = obs.isel({obs.dims[1]: slice(0, nd * 24)})
+
+    time_dim = x.dims[1]
+    day_dim = "day"
+    hour_dim = "hour"
+
+    x = x.assign_coords({time_dim: range(nd * 24)})
+    obs = obs.assign_coords({time_dim: range(nd * 24)})
+
+    # Reshape the input data into daily bins (24 hours per day)
+    x = x.coarsen({time_dim: 24}, boundary="trim").construct(
+        {time_dim: (day_dim, hour_dim)}
+    )
+    obs = obs.coarsen({time_dim: 24}, boundary="trim").construct(
+        {time_dim: (day_dim, hour_dim)}
+    )
+
+    # Compute anomalies by subtracting the mean over each day
+    x_observed = x.where(obs, 0)
+
+    no_obs = obs.astype(x.dtype).sum(day_dim)
+    x_observed_sum = x_observed.sum(day_dim)
+    tot = no_obs.sum(hour_dim)
+
+    mean_obs = x_observed_sum.sum(hour_dim) / tot.clip(min=1)
+    bin_anom = x_observed_sum / no_obs.clip(min=1) - mean_obs
+
+    valid = no_obs > 0 # Only consider bins with at least one observation
+    valid = valid & (~land_mask)
+
+    return bin_anom.where(valid).std(skipna=True).compute().item()
