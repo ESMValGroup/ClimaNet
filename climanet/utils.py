@@ -13,7 +13,7 @@ from matplotlib.colors import TwoSlopeNorm
 from tbparse import SummaryReader
 from torch.utils.tensorboard import SummaryWriter
 
-from climanet.st_encoder_decoder import SpatioTemporalModel
+from .st_encoder_decoder import SpatioTemporalModel
 
 
 def regrid_to_boundary_centered_grid(da: xr.DataArray, roll=False) -> xr.DataArray:
@@ -265,24 +265,51 @@ def setup_logging(log_dir: str) -> SummaryWriter:
     return SummaryWriter(log_dir, filename_suffix=f"_UTC{timestamp_utc}")
 
 
+
+def move_batch_to_device(batch: dict, device: str):
+    use_cuda = device == "cuda"
+    return {k: v.to(device, non_blocking=use_cuda) for k, v in batch.items()}
+
+
+def run_one_batch(
+        model: torch.nn.Module, batch: dict, device: str, return_predictions: bool = True
+    ):
+    batch = move_batch_to_device(batch, device)
+
+    monthly_res_pred = model(
+        batch["input_data"],
+        batch["input_data_mask"],
+        batch["input_data_timef"],
+        batch["land_mask"],
+        batch["padded_days_mask"]
+    )  # (B, M, H, W)
+
+    # Compute masked loss
+    monthly_res = batch["monthly_data"]
+    loss, num, denom = compute_masked_loss(monthly_res_pred, monthly_res, batch["land_mask"])
+
+    return (loss, num, denom, monthly_res_pred) if return_predictions else (loss, num, denom, None)
+
+
 def compute_masked_loss(
     pred: torch.Tensor, target: torch.Tensor, land_mask: torch.Tensor
 ) -> torch.Tensor:
     """Compute L1 loss masked to ocean pixels only."""
     ocean = (~land_mask).to(pred.device).unsqueeze(1)
 
-    # Mask for valid (non-NaN) target values
-    valid = ~torch.isnan(target)
+    # Mask for valid (non-NaN) values
+    valid = ~torch.isnan(target) & ~torch.isnan(pred)
     target = torch.nan_to_num(target, nan=0.0)
+    pred = torch.nan_to_num(pred, nan=0.0)
 
+    loss = torch.nn.functional.mse_loss(pred, target, reduction="none")
     mask = ocean & valid
-    loss = torch.nn.functional.l1_loss(pred, target, reduction="none")
     loss = loss * mask
+    num = loss.sum()
+    denom = mask.sum()
+    loss = (num / denom.clamp_min(1)).mean()
 
-    num = loss.sum(dim=(-2, -1))
-    denom = mask.sum(dim=(-2, -1)).clamp_min(1)
-
-    return (num / denom).mean()
+    return loss, num, denom
 
 
 def save_model(
@@ -759,6 +786,7 @@ def data_preparation(
 
     if calculate_residuals:
         input_data_averaged = input_data.resample({time_dim: "MS"}).mean(skipna=True)
+        input_data_averaged = input_data_averaged.dropna(dim="time", how="all")
         input_data_averaged[time_dim] = monthly_data[time_dim]
         monthly_data_res = monthly_data - input_data_averaged
     else:
@@ -919,3 +947,59 @@ def coarsen_land_mask(
     coarse_lsm = coarse_lsm >= threshold
 
     return coarse_lsm
+
+
+def compute_anom_scale(input_da, input_nan_mask, land_mask):
+    """Compute the standard deviation of binned anomalies for the input data.
+
+    The function first reshapes the input data into daily bins, computes the
+    mean over each day, and then calculates the anomaly by subtracting the
+    overall mean. The standard deviation of these anomalies is computed over
+    valid ocean points.
+    This is used in class `ExplicitStats`.
+
+    Args:
+        input_da (xarray.DataArray): Input data array with shape (M, T, H, W).
+        input_nan_mask (xarray.DataArray): Boolean mask indicating NaN values in the input data.
+        land_mask (xarray.DataArray): Boolean mask indicating land areas.
+
+    Returns:
+        float: Standard deviation of binned anomalies over valid ocean points.
+    """
+
+    obs = ~ input_nan_mask
+    _, T, _, _ = input_da.shape  # M, T, H, W
+    nd = T // 24  # number of days in the input data
+
+    x = input_da.isel({input_da.dims[1]: slice(0, nd * 24)})
+    obs = obs.isel({obs.dims[1]: slice(0, nd * 24)})
+
+    time_dim = x.dims[1]
+    day_dim = "day"
+    hour_dim = "hour"
+
+    x = x.assign_coords({time_dim: range(nd * 24)})
+    obs = obs.assign_coords({time_dim: range(nd * 24)})
+
+    # Reshape the input data into daily bins (24 hours per day)
+    x = x.coarsen({time_dim: 24}, boundary="trim").construct(
+        {time_dim: (day_dim, hour_dim)}
+    )
+    obs = obs.coarsen({time_dim: 24}, boundary="trim").construct(
+        {time_dim: (day_dim, hour_dim)}
+    )
+
+    # Compute anomalies by subtracting the mean over each day
+    x_observed = x.where(obs, 0)
+
+    no_obs = obs.astype(x.dtype).sum(day_dim)
+    x_observed_sum = x_observed.sum(day_dim)
+    tot = no_obs.sum(hour_dim)
+
+    mean_obs = x_observed_sum.sum(hour_dim) / tot.clip(min=1)
+    bin_anom = x_observed_sum / no_obs.clip(min=1) - mean_obs
+
+    valid = no_obs > 0 # Only consider bins with at least one observation
+    valid = valid & (~land_mask)
+
+    return bin_anom.where(valid).std(skipna=True).compute().item()

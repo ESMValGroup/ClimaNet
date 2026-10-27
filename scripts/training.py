@@ -10,42 +10,6 @@ from climanet.train import TrainConfig, train_monthly_model
 from climanet.utils import configure_compute_resources, read_st_data, set_seed
 
 
-def _build_dataset(
-    prepared_data_dir: Path,
-    years: list[int],
-    var_name: str,
-    land_mask: xr.DataArray,
-    crop_size: tuple[int, int, int],
-    stride: tuple[int, int],
-    model_patch_size: tuple[int, int, int],
-) -> STDataset:
-
-    data = [read_st_data(data_path=f"{prepared_data_dir}/{year}", var_name=var_name) for year in years]
-    input_das, input_da_nan_masks, monthly_das, padded_days_masks, time_features_list = zip(*data)
-
-    input_da = xr.concat(input_das, dim="M")
-    input_da_nan_mask = xr.concat(input_da_nan_masks, dim="M")
-    monthly_da = xr.concat(monthly_das, dim="M")
-    padded_days_mask = xr.concat(padded_days_masks, dim="M")
-    time_features = xr.concat(time_features_list, dim="M")
-
-    return STDataset(
-        input_da=input_da,
-        input_da_nan_mask=input_da_nan_mask,
-        monthly_da=monthly_da,
-        padded_days_mask=padded_days_mask,
-        time_features=time_features,
-        land_mask=land_mask,
-        crop_size=crop_size,
-        stride=stride,
-        model_patch_size=model_patch_size,
-        sh_embed_dim=96,
-        sh_order_L=10,
-        verbose=False,
-        load_lazy=True,
-    )
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -94,25 +58,66 @@ if __name__ == "__main__":
     model_patch_size = (1, best_config["patch_size"], best_config["patch_size"])
 
     train_years = [2018, 2019, 2020]
-    dataset_train = _build_dataset(
-        prepared_data_dir=prepared_data_dir,
-        years=train_years,
-        var_name=var_name,
+    data = [read_st_data(data_path=f"{prepared_data_dir}/{year}", var_name=var_name) for year in train_years]
+    input_das, input_da_nan_masks, monthly_das, padded_days_masks, time_features_list = zip(*data)
+
+    input_da = xr.concat(input_das, dim="M")
+    input_da_nan_mask = xr.concat(input_da_nan_masks, dim="M")
+    monthly_da = xr.concat(monthly_das, dim="M")
+    padded_days_mask = xr.concat(padded_days_masks, dim="M")
+    time_features = xr.concat(time_features_list, dim="M")
+
+    # calculate std of res
+    mean_monthly_da = input_da.where(~input_da_nan_mask).mean(dim="T", skipna=True)
+    mean_monthly_da["M"] = monthly_da["M"]
+    monthly_residuals = monthly_da - mean_monthly_da
+    monthly_std = monthly_residuals.groupby("M.month").std(dim=["M", "lat", "lon"], skipna=True)
+    monthly_std = monthly_std.sel(month=monthly_residuals["M.month"])
+    res_std_train = monthly_std.broadcast_like(monthly_residuals)
+
+    dataset_train = STDataset(
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        monthly_da=monthly_da,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
+        res_std=res_std_train,
         land_mask=lsm_mask,
         crop_size=dataset_crop_size,
         stride=dataset_stride,
         model_patch_size=model_patch_size,
+        sh_embed_dim=96,
+        sh_order_L=10,
+        verbose=False,
+        load_lazy=True,
     )
 
     validation_year = [2021]
-    dataset_validation = _build_dataset(
-        prepared_data_dir=prepared_data_dir,
-        years=validation_year,
-        var_name=var_name,
+    data = [read_st_data(data_path=f"{prepared_data_dir}/{year}", var_name=var_name) for year in validation_year]
+    input_das, input_da_nan_masks, monthly_das, padded_days_masks, time_features_list = zip(*data)
+
+    input_da = xr.concat(input_das, dim="M")
+    input_da_nan_mask = xr.concat(input_da_nan_masks, dim="M")
+    monthly_da = xr.concat(monthly_das, dim="M")
+    padded_days_mask = xr.concat(padded_days_masks, dim="M")
+    time_features = xr.concat(time_features_list, dim="M")
+
+    res_std_val =res_std_train.isel(M=slice(0, 12))
+    dataset_validation = STDataset(
+        input_da=input_da,
+        input_da_nan_mask=input_da_nan_mask,
+        monthly_da=monthly_da,
+        padded_days_mask=padded_days_mask,
+        time_features=time_features,
+        res_std=res_std_val, # use the training residual std for validation
         land_mask=lsm_mask,
         crop_size=dataset_crop_size,
-        stride=dataset_stride,
+        stride=None, # no overlap for validation
         model_patch_size=model_patch_size,
+        sh_embed_dim=96,
+        sh_order_L=10,
+        verbose=False,
+        load_lazy=True,
     )
 
     # Build the dataloader config
@@ -120,7 +125,7 @@ if __name__ == "__main__":
     use_cuda = device == "cuda"
     dataloader_config = DataLoaderConfig(
         batch_size=100, # adjust if OOM issue
-        shuffle=True,
+        shuffle=True,  # this is only for training and not for validation
         num_workers=dataloader_num_workers,
         pin_memory=use_cuda,
         persistent_workers=True,
@@ -132,12 +137,14 @@ if __name__ == "__main__":
     embed_dim = best_config["embed_dim"]
     dropout = best_config["dropout"]
     hidden = best_config["hidden"]
+    decoder_residual_scale = best_config["decoder_residual_scale"]
 
     model = SpatioTemporalModel(
         patch_size=model_patch_size,
         embed_dim=embed_dim,
         dropout=dropout,
         hidden=hidden,
+        decoder_residual_scale=decoder_residual_scale,
     )
 
     # move the model to GPU and configure compute resources
@@ -150,11 +157,12 @@ if __name__ == "__main__":
 
     # Training configuration
     training_config = TrainConfig(
-        calculate_residuals=True,
+        calculate_residuals=False,
         num_epoch=101,
         patience=10,
-        accumulation_steps=2,
+        accumulation_steps=1,
         optimizer_lr=best_config["optimizer_lr"],
+        optimizer_weight_decay=best_config["optimizer_weight_decay"],
         device=device,
         verbose=True,
         verbose_epoch_interval=10,

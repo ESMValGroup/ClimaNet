@@ -1,16 +1,11 @@
 import warnings
 from dataclasses import dataclass
 
+import dask
 import numpy as np
 import torch
 import xarray as xr
 from torch.utils.data import Dataset
-
-from .geo_embedding_utils import (
-    calculate_sh_geo_pos_embeddings,
-    compute_patch_geo_pos_embedding,
-    compute_patch_scale_features,
-)
 
 
 @dataclass
@@ -49,10 +44,13 @@ class STDataset(Dataset):
         spatial_dims: tuple[str, str] = ("lat", "lon"),
         crop_size: tuple[int, int, int] = (1, 16, 16),  # (Month, lat, lon)
         stride: tuple[int, int] = None,
-        sh_embed_dim: int = 96,  # sh_embed_dim should <= (sh_order_L + 1)**2
-        sh_order_L: int = 10,
         verbose: bool = False,
         load_lazy: bool = False,
+        augment: bool = False,
+        p_aug: float = 0.5,
+        drop_range=(0.1, 0.7),
+        min_obs=6,
+        target_scale=1.0,
     ):
         """Initialize the dataset with daily and monthly data, and optional land mask.
 
@@ -77,6 +75,12 @@ class STDataset(Dataset):
             verbose: If True, print dataset creation details.
             load_lazy: If True, use data lazily with zarr backend. This may slow down getitem but saves memory.
         """
+        self.augment = augment
+        self.p_aug = p_aug
+        self.drop_range = drop_range
+        self.min_obs = min_obs
+        self.target_scale = target_scale
+
         self.spatial_dims = spatial_dims
         self.crop_size = crop_size
         self.input_da = input_da
@@ -89,8 +93,6 @@ class STDataset(Dataset):
 
         self.stride = stride if stride is not None else (crop_size[1], crop_size[2])
 
-        self.sh_embed_dim = sh_embed_dim
-        self.sh_order_L = sh_order_L
         self.verbose = verbose
         self.load_lazy = load_lazy
 
@@ -145,12 +147,6 @@ class STDataset(Dataset):
         M, H, W = self.input_da.shape[0], self.input_da.shape[2], self.input_da.shape[3]
         self.crop_indices = self._compute_crop_indices(M, H, W)
 
-        self.sh_embed_dim_t = torch.tensor(self.sh_embed_dim)
-        self.harmonic_order_t = torch.tensor(self.sh_order_L)
-
-        self.geo_pos_t = calculate_sh_geo_pos_embeddings(
-            self.lat_coords, self.lon_coords, self.sh_order_L, self.sh_embed_dim
-        )
 
     def _compute_crop_indices(self, M: int, H: int, W: int) -> list:
         """Generate crop start indices with coverage warning (overlap support)."""
@@ -229,6 +225,14 @@ class STDataset(Dataset):
         return len(self.crop_indices)
 
     def __getitem__(self, idx):
+        """Use dask to synchronously get the item.
+
+        This ensures that any lazy computations are executed immediately.
+        """
+        with dask.config.set(scheduler="synchronous"):
+            return self._getitem_impl(idx)
+
+    def _getitem_impl(self, idx):
         """Get a spatiotemporal crop sample based on the index."""
 
         if idx < 0 or idx >= len(self.crop_indices):
@@ -314,14 +318,15 @@ class STDataset(Dataset):
         daily_mask_t_crop = daily_nan_mask_t_crop & (
             ~land_t_crop.unsqueeze(0).unsqueeze(0).unsqueeze(0)
         )
+        if self.augment and torch.rand(1).item() < self.p_aug:
+            m_new, monthly_t_crop = self._apply_gap_aug(
+                daily_t_crop[0], daily_mask_t_crop[0], land_t_crop, monthly_t_crop
+            )
+            daily_mask_t_crop = m_new.unsqueeze(0)
 
         # Extract lat/lon coordinates for this crop
         lat_crop = self.lat_coords[i : i + ph]  # (H,) -> (pH,)
         lon_crop = self.lon_coords[j : j + pw]  # (W,) -> (pW,)
-
-        # compute geo_pos_embedding and scale_feature for each model patch within the dataset crop
-        geo_pos_embedding_t = self._compute_patch_geo_pos_embedding(i, j)  # (Hp*Wp, sh_embed_dim)
-        scale_feature_t = self._compute_patch_scale_features(i, j)  # (Hp*Wp, scale_dim)
 
         # Convert to dictionary
         return {
@@ -331,10 +336,6 @@ class STDataset(Dataset):
             "land_mask": land_t_crop,  # (pH,pW) True=Land
             "input_data_timef": daily_timef_crop,  # (pm, T=31, 3)
             "padded_days_mask": padded_days_mask_crop,  # (pm, T=31) True=padded
-            "scale_feature": scale_feature_t,  # (Hp*Wp, scale_dim)
-            "geo_pos_embedding": geo_pos_embedding_t,  # (Hp*Wp, sh_embed_dim)
-            "sh_embed_dim": self.sh_embed_dim_t,
-            "harmonic_order": self.harmonic_order_t,
             "coords": torch.tensor([m, i, j]),
             "lat": lat_crop,  # (pH,)
             "lon": lon_crop,  # (pW,)
@@ -343,48 +344,57 @@ class STDataset(Dataset):
     def __getitems__(self, indices):
         return [self.__getitem__(i) for i in indices]
 
-    def _compute_patch_geo_pos_embedding(self, i: int, j: int):
-        _, ph, pw = self.crop_size
-        _, model_patch_h, model_patch_w = self.model_patch_size
-        Hp = ph // model_patch_h
-        Wp = pw // model_patch_w
+    def _extra_gaps(self, M, T, H, W):
+        """Return bool tensor (M,T,H,W), True = additionally hide."""
+        nd = T // 24 # number of days in the input data
 
-        geo_pos_embeddings_list = []
-        for hi in range(Hp):
-            for wi in range(Wp):
-                # Geo embedding for this model patch within the dataset patch
-                h_start = i + hi * model_patch_h
-                h_end = h_start + model_patch_h
-                w_start = j + wi * model_patch_w
-                w_end = w_start + model_patch_w
+        # Sample a random drop probability within the specified range
+        drop_prob = torch.empty(1).uniform_(*self.drop_range).item()
 
-                patch_geo = compute_patch_geo_pos_embedding(
-                    self.geo_pos_t[h_start:h_end, w_start:w_end],
-                    self.lat_coords[h_start:h_end],
+        extra = torch.zeros(M, T, H, W, dtype=torch.bool)
+        modes = torch.randperm(3)[: torch.randint(1, 3, (1,)).item()]  # 1-2 modes
+        for mode in modes.tolist():
+            if mode == 0:  # independent hours (weak, but cheap)
+                extra |= torch.rand(M, T, H, W) < drop_prob * 0.5
+            elif mode == 1: # spatially coherent whole-day outages (cloud-like)
+                rand_mask = torch.rand(M * nd, 1, max(H // 8, 2), max(W // 8, 2))
+                rand_mask = torch.nn.functional.interpolate(
+                    rand_mask, size=(H, W), mode="bilinear", align_corners=False
                 )
-                geo_pos_embeddings_list.append(patch_geo)
+                day = (rand_mask < torch.quantile(rand_mask, drop_prob)).view(M, nd, H, W)
+                extra |= day.repeat_interleave(24, dim=1)
+            else:  # drop a set of hours-of-day (diurnal sampling bias)
+                nbins = torch.randint(4, 13, (1,)).item()
+                bins = torch.zeros(24, dtype=torch.bool)
+                bins[torch.randperm(24)[:nbins]] = True
+                extra |= bins.repeat(nd).view(1, T, 1, 1).expand(M, T, H, W)
+        return extra
 
-        # Shape: (Hp*Wp, sh_embed_dim)
-        return torch.stack(geo_pos_embeddings_list)
+    def _apply_gap_aug(self, x, mask, land, target):
+        """Apply gap augmentation to the input data.
 
-    def _compute_patch_scale_features(self, i: int, j: int):
-        _, ph, pw = self.crop_size
-        _, model_patch_h, model_patch_w = self.model_patch_size
-        Hp = ph // model_patch_h
-        Wp = pw // model_patch_w
+        Args:
+            x (torch.Tensor): Input data of shape (M, T, H, W).
+            mask (torch.Tensor): Boolean mask indicating missing values.
+            land (torch.Tensor): Boolean mask indicating land areas.
+            target (torch.Tensor): Target data of shape (M, H, W) already normalized.
 
-        scale_features_list = []
-        for hi in range(Hp):
-            for wi in range(Wp):
-                h_start = i + hi * model_patch_h
-                h_end = h_start + model_patch_h
-                w_start = j + wi * model_patch_w
-                w_end = w_start + model_patch_w
+        Returns:
+            tuple: Updated mask and new target after applying gap augmentation.
+        """
+        # x, mask: (M,T,H,W); land: (H,W); target: (M,H,W) already normalized
+        M, T, H, W = x.shape
+        ocean = ~land
+        obs = ~mask
+        mean0 = (x * obs).sum(1) / obs.sum(1).clamp(min=1)
+        anom = (x - mean0[:, None]) * obs
 
-                patch_scale = compute_patch_scale_features(
-                    self.lat_coords[h_start:h_end],
-                    self.lon_coords[w_start:w_end],
-                )
-                scale_features_list.append(patch_scale)
+        extra = self._extra_gaps(M, T, H, W) & ocean & obs
+        keep = obs & ~extra
+        cnt = keep.sum(1)
 
-        return torch.stack(scale_features_list)  # (Hp*Wp, scale_dim)
+        delta = -(anom * keep).sum(1) / cnt.clamp(min=1)
+        new_target = target + delta / self.target_scale
+        new_target = torch.where(cnt >= self.min_obs, new_target,
+                                 torch.full_like(new_target, float("nan")))
+        return mask | extra, new_target

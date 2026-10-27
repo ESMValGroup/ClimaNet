@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader, Dataset
 
 from climanet.dataset import DataLoaderConfig
 from climanet.utils import (
-    compute_masked_loss,
     load_model,
+    run_one_batch,
     setup_logging,
 )
 
@@ -74,28 +74,6 @@ def _save_netcdf(
         ds_pred.sel(time=[t]).to_netcdf(file_name)
 
 
-def _move_batch_to_device(batch: dict, device: str):
-    use_cuda = device == "cuda"
-    return {k: v.to(device, non_blocking=use_cuda) for k, v in batch.items()}
-
-
-def _run_one_batch(model: torch.nn.Module, batch: dict, device: str):
-    batch = _move_batch_to_device(batch, device)
-    pred = model(
-        batch["input_data"],
-        batch["input_data_mask"],
-        batch["input_data_timef"],
-        batch["land_mask"],
-        batch["geo_pos_embedding"],
-        batch["scale_feature"],
-        batch["padded_days_mask"],
-    )  # (B, M, H, W)
-
-    # Compute masked loss
-    loss = compute_masked_loss(pred, batch["monthly_data"], batch["land_mask"])
-    return loss, pred
-
-
 def predict_monthly_var(
     model: torch.nn.Module | str,
     dataset: Dataset,
@@ -121,6 +99,7 @@ def predict_monthly_var(
     if isinstance(model, str | Path):
         model = load_model(model, device)
 
+    model = model.module if hasattr(model, "module") else model
     model.to(device)
     model.eval()
 
@@ -132,7 +111,7 @@ def predict_monthly_var(
     dataloader = DataLoader(
         dataset,
         batch_size=dataloader_config.batch_size,
-        shuffle=dataloader_config.shuffle,
+        shuffle=False,  # no shuffling during prediction/validation
         pin_memory=use_cuda,
         num_workers=dataloader_config.num_workers,  # for data loading
         persistent_workers=dataloader_config.persistent_workers,  # keep workers alive between epochs
@@ -150,16 +129,15 @@ def predict_monthly_var(
     M, H, W = base_dataset.crop_size
     all_predictions = torch.empty(len(dataset), M, H, W, device=device)
 
-    # Set up logging
-    if prediction_config.store_logs:
-        writer = setup_logging(run_dir)
-
     with torch.inference_mode():
         idx = 0
         average_loss = 0.0
+        total_num = 0.0
+        total_denom = 0
         for i, batch in enumerate(dataloader):
-            loss, predictions = _run_one_batch(model, batch, device)
-            average_loss += loss.detach()
+            loss, num, denom, predictions = run_one_batch(model, batch, device)
+            total_num += num.detach()
+            total_denom += denom.detach()
 
             all_predictions[idx : idx + predictions.size(0)] = predictions.detach()
             idx += predictions.size(0)
@@ -169,7 +147,7 @@ def predict_monthly_var(
                     f"Processed batch {i + 1}/{num_batches}, with loss: {loss.item():.4f}"
                 )
 
-        average_loss = average_loss.item() / num_batches
+        average_loss = (total_num / total_denom.clamp_min(1)).item()
 
     if prediction_config.verbose:
         print(f"Average loss over all batches: {average_loss:.4f}")

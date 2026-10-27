@@ -1,5 +1,10 @@
-from climanet import st_encoder_decoder
 from climanet.dataset import STDataset
+from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.utils import regrid_to_boundary_centered_grid
 
-__all__ = ["STDataset", "regrid_to_boundary_centered_grid", "st_encoder_decoder"]
+__all__ = [
+    "STDataset",
+    "SpatioTemporalModel",
+    "SpatioTemporalModelPix",
+    "regrid_to_boundary_centered_grid",
+]
