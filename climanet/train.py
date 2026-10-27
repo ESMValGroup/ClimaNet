@@ -1,5 +1,6 @@
 import copy
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -82,8 +83,8 @@ def train_monthly_model(
         num_workers=dataloader_config.num_workers,  # for data loading
         persistent_workers=dataloader_config.persistent_workers,  # keep workers alive between epochs
         multiprocessing_context=dataloader_config.multiprocessing_context,
+        drop_last=True,
     )
-    num_batches = len(dataset_train)
 
     # Set the optimizer
     optimizer = torch.optim.AdamW(
@@ -114,32 +115,42 @@ def train_monthly_model(
 
     model.train()
     for epoch in range(training_config.num_epoch):
-        epoch_loss = 0.0
+        # for timing purposes, synchronize CUDA if using GPU
+        if device == "cuda":
+            torch.cuda.synchronize()
+
+        start_time = time.perf_counter()
+
         optimizer.zero_grad()
 
+        epoch_loss_numerator = 0.0
+        epoch_loss_denominator = 0
+        window_denom = 0
+
         for i, batch in enumerate(dataloader):
-            loss, _ = run_one_batch(model, batch, device, return_predictions=False)
+            _, num, denom, _ = run_one_batch(model, batch, device, return_predictions=False)
 
             # Scale loss for gradient accumulation
-            scaled_loss = loss * (1.0 / training_config.accumulation_steps)
-            scaled_loss.backward()
+            num.backward()
+            window_denom += denom.detach()
 
             # Track unscaled loss for logging
-            batch_size = batch["input_data"].shape[0]
-            epoch_loss += loss.detach() * batch_size
+            epoch_loss_numerator += num.detach()
+            epoch_loss_denominator += denom.detach()
 
-            # Update weights every accumulation_steps batches
-            if (i + 1) % training_config.accumulation_steps == 0:
+            is_window_end = (i + 1) % training_config.accumulation_steps == 0
+            is_last_batch = (i + 1) == len(dataloader)
+            if is_window_end or is_last_batch:
+                for p in model.parameters():
+                    if p.grad is not None:
+                        p.grad.div_(window_denom.clamp_min(1))
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
-
-        # Handle remaining gradients if num_batches is not divisible by accumulation_steps
-        if (i + 1) % training_config.accumulation_steps != 0:
-            optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
+                window_denom = 0
 
         # Calculate average epoch loss
-        avg_train_loss = epoch_loss.item() / num_batches
+        avg_train_loss = (epoch_loss_numerator / epoch_loss_denominator.clamp_min(1)).item()
+        avg_epoch_loss = avg_train_loss
 
         if training_config.store_logs:
             writer.add_scalar("Loss/train", avg_train_loss, epoch)
@@ -180,17 +191,19 @@ def train_monthly_model(
                 print(f"Epoch {epoch}: gap between train and val loss: {gap:.6f}")
                 print(f"Epoch {epoch}: train loss = {avg_train_loss:.6f}, val loss = {avg_val_loss:.6f}")
 
+            avg_epoch_loss = avg_val_loss
+
         # Step scheduler
-        scheduler.step(avg_train_loss)
+        scheduler.step(avg_epoch_loss)
 
         # Early stopping check
         # Consider improvement only if loss decreases more than a small threshold
-        if avg_train_loss < best_loss:
-            best_loss = avg_train_loss
+        if avg_epoch_loss < best_loss:
+            best_loss = avg_epoch_loss
             best_state_dict = copy.deepcopy(model.state_dict())
 
-        if avg_train_loss < ref_loss * (1 - 1e-3):
-            ref_loss = avg_train_loss
+        if avg_epoch_loss < ref_loss * (1 - 1e-3):
+            ref_loss = avg_epoch_loss
             counter = 0
         else:
             counter += 1
@@ -204,6 +217,7 @@ def train_monthly_model(
             and epoch % training_config.verbose_epoch_interval == 0
         ):
             print(f"Epoch {epoch}: best_loss = {best_loss:.6f}")
+            print(f"Epoch {epoch}: time elapsed = {time.perf_counter() - start_time:.2f}s")
 
         # Only stop if LR is at minimum AND no improvement
         current_lr = optimizer.param_groups[0]["lr"]
