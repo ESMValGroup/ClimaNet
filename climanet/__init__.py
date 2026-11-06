@@ -5,6 +5,5 @@ from climanet.utils import regrid_to_boundary_centered_grid
 __all__ = [
     "STDataset",
     "SpatioTemporalModel",
-    "SpatioTemporalModelPix",
     "regrid_to_boundary_centered_grid",
 ]
