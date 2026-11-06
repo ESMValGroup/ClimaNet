@@ -100,6 +100,10 @@ def predict_monthly_var(
         model = load_model(model, device)
 
     model = model.module if hasattr(model, "module") else model
+
+    # Standard deviation used for target normalization during training
+    target_scale = float(model.config["target_scale"])
+
     model.to(device)
     model.eval()
 
@@ -139,7 +143,7 @@ def predict_monthly_var(
             total_num += num.detach()
             total_denom += denom.detach()
 
-            all_predictions[idx : idx + predictions.size(0)] = predictions.detach()
+            all_predictions[idx : idx + predictions.size(0)] = predictions.detach() * target_scale
             idx += predictions.size(0)
 
             if prediction_config.verbose:
