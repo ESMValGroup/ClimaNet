@@ -7,7 +7,7 @@ from ray.tune.schedulers import ASHAScheduler
 from climanet.dataset import DataLoaderConfig, STDataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import TrainConfig, train_monthly_model
-from climanet.utils import read_st_data, set_seed, compute_anom_scale
+from climanet.utils import read_st_data, set_seed
 
 
 def _train(tune_config, static_args):
