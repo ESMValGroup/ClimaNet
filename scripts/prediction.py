@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
     # Training configuration# create prediction config
     prediction_config = PredictionConfig(
-        calculate_residuals=True,
+        calculate_residuals=False,
         return_numpy=False,
         save_predictions=True,
         return_loss=False,
@@ -125,25 +125,3 @@ if __name__ == "__main__":
         prediction_config=prediction_config,
         run_dir=run_dir,
     )
-
-    # add residuals to the averaged monthly data
-    # load hourly data
-    files = sorted(raw_data_folder.glob(f"{predict_year}*_hr_ERA5dc_masked_{var_name}.nc"))
-    input_data = xr.open_mfdataset(files)
-
-    # load prediction residuals
-    files = sorted(run_dir.glob(f"{predict_year}*_{var_name}_prediction_residual.nc"))
-    predictions_res = xr.open_mfdataset(files)
-
-    # add residuals to the averaged monthly data
-    input_data_averaged = input_data.resample({"time": "MS"}).mean(skipna=True)
-    input_data_averaged["time"] = predictions_res["time"]
-    adjusted_data = input_data_averaged[var_name] + predictions_res
-
-    # save the adjusted data to a new NetCDF file, one file per month
-    times = adjusted_data.coords["time"].values
-
-    for t in times:
-        time_str = np.datetime_as_string(t, unit="M").replace("-", "")
-        file_name = f"{run_dir}/{time_str}_{var_name}_prediction.nc"
-        adjusted_data.sel(time=[t]).to_netcdf(file_name)
