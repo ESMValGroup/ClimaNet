@@ -69,11 +69,13 @@ class STDataset(Dataset):
                 reshaped internally to have a month dimension, and the data crops are
                 extracted accordingly.
             stride: Tuple of (stride_height, stride_width) in pixels. If None, defaults to crop_size (non-overlapping data crops).
-            sh_pos_table: Optional path to precomputed spherical harmonics position embeddings.
-            sh_embed_dim: Dimension of the spherical harmonics embedding.
-            sh_order_L: Order of the spherical harmonics.
             verbose: If True, print dataset creation details.
             load_lazy: If True, use data lazily with zarr backend. This may slow down getitem but saves memory.
+            augment: If True, apply data augmentation during training.
+            p_aug: Probability of applying augmentation.
+            drop_range: Tuple specifying the range of values to drop for augmentation.
+            min_obs: Minimum number of observations required for a valid crop.
+            target_scale: Scaling factor for the target variable.
         """
         self.augment = augment
         self.p_aug = p_aug

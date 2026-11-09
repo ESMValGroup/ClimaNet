@@ -21,8 +21,10 @@ from climanet.spatial_context import (
 class VideoEncoder(nn.Module):
     """Video Encoder + extra context channels that are not zeroed at missing pixels.
 
-    This module converts an input video into a sequence of non-overlapping
-    spatio-temporal patch embeddings using a 3D convolution.
+    It reads the raw hourly maps and translates them into a compact internal
+    description that the rest of the model can work with, one summary for each
+    small area at each hour. It also keeps track of which values were actually
+    observed and which were missing.
 
     Masking is handled by:
     - zeroing out masked (missing) pixels
@@ -151,13 +153,11 @@ class HourEmbedding(nn.Module):
 class TemporalAttentionAggregator(nn.Module):
     """Temporal attention-based aggregator.
 
-    This module aggregates temporal information for each spatial patch by
-    applying attention across the temporal dimension.
-    Steps:
-        1. Compute hour and relative time embeddings.
-        2. Apply token MLP to combine data and time embeddings.
-        3. Compute day attention scores and aggregate temporal tokens.
-        4. Return aggregated spatio-temporal tokens.
+    This module aggregates temporal information for each spatial patch.
+    It decides which hours of the month matter most for each area and combines
+    them into one monthly summary, like a weighted average where the model
+    learns the weights (for example, trusting hours that are typical of the day
+    over odd ones).
     """
 
     def __init__(self, embed_dim=128, dropout=0.0):
@@ -247,8 +247,9 @@ class _ResBlock(nn.Module):
 class MonthlyConvDecoder(nn.Module):
     """Decoder to reconstruct 2D maps from patch tokens.
 
-    The MonthlyConvDecoder converts latent patch tokens back to pixel space via
-    coarse tokens (bilinear) + pixel path, with a linear prior skip.
+    It turns the coarse monthly summaries back into a detailed map. It combines
+    the broad picture from the tokens with the pixel-level detail, and decides,
+    pixel by pixel, how much to rely on the neighbor-based guess.
     """
 
     def __init__(
@@ -321,6 +322,7 @@ class MonthlyConvDecoder(nn.Module):
                 M: Number of months (temporal patches)
             out_H: Target output height (must be divisible by patch_h)
             out_W: Target output width (must be divisible by patch_w)
+            pix_feat: Per-pixel features such as confidence, fraction, and diurnal statistics.
             land_mask: Optional boolean tensor of shape (B, out_H, out_W). Values set to True
                 will be masked out (set to 0) in the output (only ocean pixels exist).
         Returns:
@@ -510,11 +512,11 @@ class SpatioTemporalModel(nn.Module):
         # Step 3: Aggregate temporal information for each spatial patch
         x_averaged = self._run(self.temporal, latent, daily_timef, padded_days_mask)
 
-        # # Step 3: Add explicit statistics per patch
+        # Step 4: Add explicit statistics per patch
         stat_embed = self.stats(input_data_norm, daily_mask, land_mask_patch, padded_days_mask)
         x = x_averaged + stat_embed
 
-        # Step 4: Decode to full-resolution 2D map
+        # Step 5: Decode to full-resolution 2D map
         pixel_features = self.pix_feat(input_data_norm, daily_mask, land_mask_patch, padded_days_mask, context)
         monthly_res_pred = self.decoder(x, H, W, pixel_features, land_mask_patch)
 

@@ -20,7 +20,10 @@ from torch import nn
 class NeighborFill(torch.nn.Module):
     """What do the neighbors say about this pixel at this hour.
 
-    For each hour-frame: fill = G*(anom * obs) / G*(obs), conf = G*(obs).
+    It gives the model a first guess of what a pixel would have seen during the
+    hours it missed, by borrowing from nearby pixels that were observed at that
+    time, and it says how much that guess can be trusted. For each hour-frame:
+    fill = G*(anom * obs) / G*(obs), conf = G*(obs).
 
     Land is never counted as observed (in the model, land is not "missing", and
     would otherwise inject zeros near coasts). Output: (B*M, 2*S, T, H, W),
@@ -115,7 +118,11 @@ def token_validity(mask, land, patch_size):
 
 
 class MaskedSpatialMix(torch.nn.Module):
-    """Masked spatial mixing module for latent tokens."""
+    """Masked spatial mixing module for latent tokens.
+
+    It lets each area "look at its neighbors" at the same hour, so a gap in one
+    place can be informed by what was seen right next to it.
+    """
     def __init__(self, embed_dim=128, dilations=(1, 2), kernel_size=3):
         """Initialize the masked spatial mixing module.
         Args:
@@ -173,6 +180,10 @@ class MaskedSpatialMix(torch.nn.Module):
 
 class PatchStats(torch.nn.Module):
     """Explicit gap/diurnal statistics per patch, computed from data + mask.
+
+    It tells the model how the gaps look in each area, such as how many
+    observations there were and at which times of day, because the sampling
+    pattern alone says a lot about how biased the plain average is.
 
     Per pixel and hour-of-day bin (24 bins):
       - share of observations falling in that bin (the sampling distribution)
@@ -257,11 +268,25 @@ class PatchStats(torch.nn.Module):
 
 
 class PixelFeatures(nn.Module):
-    """Returns (B*M, F, H, W) with channels:
+    """Builds full-resolution per-pixel inputs for the decoder.
+
+    It keeps the fine, pixel-level detail
+    about the gaps that would otherwise be lost when pixels are grouped into
+    patches. It also provides a direct estimate of how much the missing hours
+    would change the monthly average.
+
+    Returns (B*M, F, H, W) with channels:
        [24 hour-bin mean anomaly | 24 hour-bin share | observed fraction |
         S delta estimates | S confidences of those estimates]
     """
     def __init__(self, anom_scale=0.1, n_sigmas=2):
+        """
+        Initialize the PixelFeatures module.
+
+        Args:
+            anom_scale: Scale of the anomaly features. The default is 0.1.
+            n_sigmas: Number of sigma channels for the delta estimates. The default is 2.
+        """
         super().__init__()
         self.anom_scale = anom_scale
         self.n_sigmas = n_sigmas
