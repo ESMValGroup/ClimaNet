@@ -4,28 +4,16 @@
 
 - `data_preparation.*`: Scripts for preparing the data for training, tuning and evaluation and saving them to Zarr storage with specific chunking strategies.
 - `tuning.*`: Scripts for hyperparameter tuning.
-- `run_best_tuned_model.*`: Scripts for running the best tuned model on the test set.
 - `training.*`: Scripts for training the model with the best hyperparameters found in the tuning experiments.
+- `prediction.*`: Scripts for running predictions using the trained model.
 
 ## Experiments
 
 ### Tuning experiments for SST variable
 
-- datasplit: train set = 2020, validation set = 2021, test set = 2022
+- data split for training: train set = 2018-2020, validation set = 2021, test set = 2022
+- data split for tuning: train set = 2018, validation set = 2019
 - path of tuning results: `/work/<account_id>/eso4clima/tune/sst_01`.
-- test loss: 0.036662004509047774 (K)
-- hyperparameters of the best model:
-  ```
-    {'patch_size': 8,
-    'overlap': 1,
-    'embed_dim': 64,
-    'dropout': 0.2,
-    'hidden': 32,
-    'spatial_depth': 3,
-    'spatial_heads': 2,
-    'optimizer_lr': 0.001787422899066508,
-    'batch_config': {'batch_size': 100, 'accumulation_steps': 2}}
- ```
 
 ### Training experiments
 
@@ -39,4 +27,3 @@ validation loss. Note that the training is done only on one GPU node, including
 4 GPUs.
 
 The results are stored at `/work/<account_id>/eso4clima/train/sst_01/`.
-

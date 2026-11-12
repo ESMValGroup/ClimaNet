@@ -57,6 +57,8 @@ if __name__ == "__main__":
     model_path = train_dir / "best_model.pth"
     model = load_model(model_path, device)
     model_patch_size = model.config["patch_size"]
+    STD_TRAIN = float(model.config["target_scale"])
+    print(f"STD_TRAIN: {STD_TRAIN}")
 
     # Build dataset for training and validation
     lsm_file_path = lsm_dir / "era5_lsm_bool.nc"
@@ -66,21 +68,21 @@ if __name__ == "__main__":
     data = read_st_data(data_path=f"{prepared_data_dir}/{predict_year}", var_name=var_name)
     input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = data
 
+    monthly_da_norm = monthly_da / STD_TRAIN
     monthly_shape = monthly_da.shape[1:]  # the whole dataset
-    crop_size = (1, *monthly_shape)
+    # crop_size = (1, *monthly_shape)  # this gives gpu oom
+    crop_size = (1, monthly_da.shape[1], monthly_da.shape[2] // 2)
 
     dataset_test = STDataset(
         input_da=input_da,
         input_da_nan_mask=input_da_nan_mask,
-        monthly_da=monthly_da,
+        monthly_da=monthly_da_norm,
         padded_days_mask=padded_days_mask,
         time_features=time_features,
         land_mask=lsm_mask,
         crop_size=crop_size,
         stride=None,  # no overlap for prediction
         model_patch_size=model_patch_size,
-        sh_embed_dim=96,
-        sh_order_L=10,
         verbose=False,
         load_lazy=False,  # load all data into memory for prediction 1 year
     )
@@ -118,7 +120,7 @@ if __name__ == "__main__":
     )
 
     # Predict residuals
-    predictions = predict_monthly_var(
+    predictions_res = predict_monthly_var(
         model=model,
         dataset=dataset_test,
         dataloader_config=dataloader_config,

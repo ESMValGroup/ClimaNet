@@ -2,7 +2,7 @@
 #SBATCH --job-name=tuning
 #SBATCH --partition=gpu
 #SBATCH --constraint=a100_80
-#SBATCH --nodes=20
+#SBATCH --nodes=10
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=128
 #SBATCH --gpus-per-task=4
@@ -15,12 +15,12 @@
 set -euo pipefail
 ulimit -s 204800
 
-# Activate uv env with python 3.11
-UV_ENV="$HOME/climanet_py311"
+# Activate uv env
+UV_ENV="$HOME/climanet_py314"
 source "$UV_ENV/bin/activate"
 
 # Set the scratch directory because they are avialable to all nodes
-SCRATCH="/scratch/b/$USER/tune"
+RUN_DIR="/scratch/b/$USER/tune"
 
 # data directory (adjust this path to your data location)
 DATA_DIR_TRAIN="$HOME/scratch/b/$USER/data"
@@ -70,7 +70,7 @@ srun --nodes=1 --ntasks=1 -w "$head_node" \
         --num-cpus=128 \
         --num-gpus=4 \
         --object-store-memory 5000000000 \
-        --temp-dir "$SCRATCH/log" \
+        --temp-dir "/tmp/ray_${SLURM_JOB_ID}" \
         --block
     " &
 
@@ -87,7 +87,7 @@ for node in "${nodes_array[@]:1}"; do
             --num-cpus=128 \
             --num-gpus=4 \
             --object-store-memory 5000000000 \
-            --temp-dir "$SCRATCH/log" \
+            --temp-dir "/tmp/ray_${SLURM_JOB_ID}" \
             --block
         " &
 
@@ -99,7 +99,7 @@ sleep 10
 
 echo "Starting tuning.py script..."
 python -u $HOME/ClimaNet/scripts/tuning.py \
-    --storage-path "$SCRATCH" \
+    --storage-path "$RUN_DIR" \
     --num-nodes "$SLURM_NNODES" \
     --ray-address "$head_node_ip" \
     --data-dir-train "$DATA_DIR_TRAIN" \

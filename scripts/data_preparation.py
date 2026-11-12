@@ -67,7 +67,7 @@ if __name__ == "__main__":
                 input_data_year,
                 monthly_data_year,
                 run_dir=run_dir_year,
-                calculate_residuals=True,
+                calculate_residuals=False,
                 is_hourly=True,
                 save_to_zarr=True,
             )
