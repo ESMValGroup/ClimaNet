@@ -57,6 +57,8 @@ if __name__ == "__main__":
     model_path = train_dir / "best_model.pth"
     model = load_model(model_path, device)
     model_patch_size = model.config["patch_size"]
+    STD_TRAIN = float(model.config["target_scale"])
+    print(f"STD_TRAIN: {STD_TRAIN}")
 
     # Build dataset for training and validation
     lsm_file_path = lsm_dir / "era5_lsm_bool.nc"
@@ -66,21 +68,21 @@ if __name__ == "__main__":
     data = read_st_data(data_path=f"{prepared_data_dir}/{predict_year}", var_name=var_name)
     input_da, input_da_nan_mask, monthly_da, padded_days_mask, time_features = data
 
+    monthly_da_norm = monthly_da / STD_TRAIN
     monthly_shape = monthly_da.shape[1:]  # the whole dataset
-    crop_size = (1, *monthly_shape)
+    # crop_size = (1, *monthly_shape)  # this gives gpu oom
+    crop_size = (1, monthly_da.shape[1], monthly_da.shape[2] // 2)
 
     dataset_test = STDataset(
         input_da=input_da,
         input_da_nan_mask=input_da_nan_mask,
-        monthly_da=monthly_da,
+        monthly_da=monthly_da_norm,
         padded_days_mask=padded_days_mask,
         time_features=time_features,
         land_mask=lsm_mask,
         crop_size=crop_size,
         stride=None,  # no overlap for prediction
         model_patch_size=model_patch_size,
-        sh_embed_dim=96,
-        sh_order_L=10,
         verbose=False,
         load_lazy=False,  # load all data into memory for prediction 1 year
     )
@@ -108,7 +110,7 @@ if __name__ == "__main__":
 
     # Training configuration# create prediction config
     prediction_config = PredictionConfig(
-        calculate_residuals=False,
+        calculate_residuals=True,
         return_numpy=False,
         save_predictions=True,
         return_loss=False,
@@ -118,10 +120,32 @@ if __name__ == "__main__":
     )
 
     # Predict residuals
-    predictions = predict_monthly_var(
+    predictions_res = predict_monthly_var(
         model=model,
         dataset=dataset_test,
         dataloader_config=dataloader_config,
         prediction_config=prediction_config,
         run_dir=run_dir,
     )
+
+    # add residuals to the averaged monthly data
+    # load hourly data
+    files = sorted(raw_data_folder.glob(f"{predict_year}*_hr_ERA5dc_masked_{var_name}.nc"))
+    input_data = xr.open_mfdataset(files)
+
+    # load prediction residuals
+    files = sorted(run_dir.glob(f"{predict_year}*_{var_name}_prediction_residual.nc"))
+    predictions_res = xr.open_mfdataset(files)
+
+    # add residuals to the averaged monthly data
+    input_data_averaged = input_data.resample({"time": "MS"}).mean(skipna=True)
+    input_data_averaged["time"] = predictions_res["time"]
+    adjusted_data = input_data_averaged[var_name] + predictions_res
+
+    # save the adjusted data to a new NetCDF file, one file per month
+    times = adjusted_data.coords["time"].values
+
+    for t in times:
+        time_str = np.datetime_as_string(t, unit="M").replace("-", "")
+        file_name = f"{run_dir}/{time_str}_{var_name}_prediction.nc"
+        adjusted_data.sel(time=[t]).to_netcdf(file_name)

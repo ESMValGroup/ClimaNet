@@ -7,8 +7,12 @@ import xarray as xr
 from climanet.dataset import DataLoaderConfig, STDataset
 from climanet.st_encoder_decoder import SpatioTemporalModel
 from climanet.train import TrainConfig, train_monthly_model
-from climanet.utils import configure_compute_resources, read_st_data, set_seed
-
+from climanet.utils import (
+    compute_anom_scale,
+    configure_compute_resources,
+    read_st_data,
+    set_seed,
+)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -54,7 +58,6 @@ if __name__ == "__main__":
     lsm_mask = xr.open_dataset(lsm_file_path)["lsm"]  # make sure is dask array
 
     dataset_crop_size = (1, 40, 40)
-    dataset_stride = (20, 20)
     model_patch_size = (1, best_config["patch_size"], best_config["patch_size"])
 
     train_years = [2018, 2019, 2020]
@@ -67,29 +70,32 @@ if __name__ == "__main__":
     padded_days_mask = xr.concat(padded_days_masks, dim="M")
     time_features = xr.concat(time_features_list, dim="M")
 
-    # calculate std of res
-    mean_monthly_da = input_da.where(~input_da_nan_mask).mean(dim="T", skipna=True)
-    mean_monthly_da["M"] = monthly_da["M"]
-    monthly_residuals = monthly_da - mean_monthly_da
-    monthly_std = monthly_residuals.groupby("M.month").std(dim=["M", "lat", "lon"], skipna=True)
-    monthly_std = monthly_std.sel(month=monthly_residuals["M.month"])
-    res_std_train = monthly_std.broadcast_like(monthly_residuals)
+    # calculate anom_scale
+    anom_scale = compute_anom_scale(input_da, input_da_nan_mask, lsm_mask)
+    print("Anomaly scale:", anom_scale)
+
+    # normalize monthly data for training
+    STD_TRAIN = float(monthly_da.std(skipna=True).compute())
+    monthly_da_norm = monthly_da / STD_TRAIN
+    print(f"STD_TRAIN: {STD_TRAIN}")
 
     dataset_train = STDataset(
         input_da=input_da,
         input_da_nan_mask=input_da_nan_mask,
-        monthly_da=monthly_da,
+        monthly_da=monthly_da_norm,
         padded_days_mask=padded_days_mask,
         time_features=time_features,
-        res_std=res_std_train,
         land_mask=lsm_mask,
         crop_size=dataset_crop_size,
-        stride=dataset_stride,
+        stride=None,
         model_patch_size=model_patch_size,
-        sh_embed_dim=96,
-        sh_order_L=10,
         verbose=False,
         load_lazy=True,
+        augment=True,
+        p_aug=0.5,
+        drop_range=(0.1, 0.5),
+        min_obs=5,
+        target_scale=STD_TRAIN,
     )
 
     validation_year = [2021]
@@ -102,29 +108,28 @@ if __name__ == "__main__":
     padded_days_mask = xr.concat(padded_days_masks, dim="M")
     time_features = xr.concat(time_features_list, dim="M")
 
-    res_std_val =res_std_train.isel(M=slice(0, 12))
+    # normalize monthly data for validation
+    monthly_da_norm = monthly_da / STD_TRAIN
+
     dataset_validation = STDataset(
         input_da=input_da,
         input_da_nan_mask=input_da_nan_mask,
-        monthly_da=monthly_da,
+        monthly_da=monthly_da_norm,
         padded_days_mask=padded_days_mask,
         time_features=time_features,
-        res_std=res_std_val, # use the training residual std for validation
         land_mask=lsm_mask,
         crop_size=dataset_crop_size,
         stride=None, # no overlap for validation
         model_patch_size=model_patch_size,
-        sh_embed_dim=96,
-        sh_order_L=10,
         verbose=False,
         load_lazy=True,
     )
 
     # Build the dataloader config
-    dataloader_num_workers = 32  # adjust if needed
+    dataloader_num_workers = 16  # adjust if needed
     use_cuda = device == "cuda"
     dataloader_config = DataLoaderConfig(
-        batch_size=100, # adjust if OOM issue
+        batch_size=108, # adjust if OOM issue, dividable by length of dataset
         shuffle=True,  # this is only for training and not for validation
         num_workers=dataloader_num_workers,
         pin_memory=use_cuda,
@@ -134,17 +139,14 @@ if __name__ == "__main__":
     )
 
     # Build the model with the best hyperparameters from tuning
-    embed_dim = best_config["embed_dim"]
-    dropout = best_config["dropout"]
-    hidden = best_config["hidden"]
-    decoder_residual_scale = best_config["decoder_residual_scale"]
-
     model = SpatioTemporalModel(
         patch_size=model_patch_size,
-        embed_dim=embed_dim,
-        dropout=dropout,
-        hidden=hidden,
-        decoder_residual_scale=decoder_residual_scale,
+        embed_dim=best_config["embed_dim"],
+        dropout=best_config["dropout"],
+        hidden=best_config["hidden"],
+        encoder_proj_dim=best_config["encoder_proj_dim"],
+        anom_scale=anom_scale,
+        target_scale=STD_TRAIN,
     )
 
     # move the model to GPU and configure compute resources
@@ -159,10 +161,12 @@ if __name__ == "__main__":
     training_config = TrainConfig(
         calculate_residuals=False,
         num_epoch=101,
-        patience=10,
+        patience=20,
         accumulation_steps=1,
         optimizer_lr=best_config["optimizer_lr"],
         optimizer_weight_decay=best_config["optimizer_weight_decay"],
+        scheduler_min_lr=1e-6,
+        scheduler_lr_factor=0.1,
         device=device,
         verbose=True,
         verbose_epoch_interval=10,
